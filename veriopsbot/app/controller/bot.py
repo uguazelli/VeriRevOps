@@ -1,7 +1,9 @@
 """Chatwoot bot controller logic."""
 
+from collections import OrderedDict
 from datetime import date
 import logging
+from time import monotonic
 
 import httpx
 
@@ -15,8 +17,31 @@ from app.rag_engine.rag import handle_input, initial_state
 
 
 SESSIONS: dict[str, dict] = {}
+DEDUP_CACHE: "OrderedDict[str, float]" = OrderedDict()
+DEDUP_MAX_ENTRIES = 2048
+DEDUP_TTL_SECONDS = 3600
 
 logger = logging.getLogger("veriops.bot")
+
+
+def _make_message_key(account_id: int, conversation_id: int, message_id, source_id) -> str:
+    return f"{account_id}:{conversation_id}:{message_id or 0}:{source_id or 'na'}"
+
+
+def _seen_recently(key: str) -> bool:
+    """Return True when we've already processed this webhook payload."""
+    now = monotonic()
+    while DEDUP_CACHE:
+        oldest_key, ts = next(iter(DEDUP_CACHE.items()))
+        if len(DEDUP_CACHE) <= DEDUP_MAX_ENTRIES and now - ts <= DEDUP_TTL_SECONDS:
+            break
+        DEDUP_CACHE.popitem(last=False)
+
+    if key in DEDUP_CACHE:
+        return True
+
+    DEDUP_CACHE[key] = now
+    return False
 
 
 async def process_bot_request(data: dict):
@@ -59,6 +84,22 @@ async def process_bot_request(data: dict):
     conversation_id = data["conversation"]["id"]
     user_id = str(data["sender"]["id"])
     text = data.get("content", "") or ""
+    message_id = data.get("id")
+    source_id = data.get("source_id")
+    dedup_key = _make_message_key(account_id, conversation_id, message_id, source_id)
+    if _seen_recently(dedup_key):
+        logger.info(
+            "Skipping duplicate webhook",
+            extra={
+                "event": "bot_skip",
+                "payload": {
+                    "reason": "duplicate",
+                    "conversation_id": conversation_id,
+                    "message_id": message_id,
+                },
+            },
+        )
+        return {"message": "Duplicate message ignored"}
 
     cfg = await get_params_by_omnichannel_id(account_id)
     logger.info(
