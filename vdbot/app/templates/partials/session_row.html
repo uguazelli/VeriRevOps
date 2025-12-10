@@ -1,0 +1,20 @@
+<tr id="session-{{ session.instance_name }}-{{ session.phone_number }}">
+    <td>{{ session.instance_name }}</td>
+    <td>{{ session.phone_number }}</td>
+    <td style="font-family: monospace; font-size: 0.9em;">{{ session.session_id }}</td>
+    <td>
+        {% if session.is_active %}
+        <span style="color: #4ade80;">● Active</span>
+        {% else %}
+        <span style="color: #facc15;">● Paused</span>
+        {% endif %}
+    </td>
+    <td>{{ session.updated_at.strftime('%Y-%m-%d %H:%M:%S') if session.updated_at else '' }}</td>
+    <td style="text-align: right;">
+        <button class="danger" hx-delete="/admin/sessions/{{ session.instance_name }}/{{ session.phone_number }}"
+            hx-target="#session-{{ session.instance_name }}-{{ session.phone_number }}" hx-swap="outerHTML"
+            onclick="return confirm('Delete this session? The user memory will be reset.')">
+            Reset
+        </button>
+    </td>
+</tr>

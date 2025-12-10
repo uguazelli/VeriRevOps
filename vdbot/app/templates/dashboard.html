@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header">
+    <h1>Tenant Mappings</h1>
+    <div style="display: flex; gap: 1rem;">
+        <a href="/admin/sessions"
+            style="padding: 0.75rem; text-decoration: none; color: var(--text-color); border: 1px solid var(--border-color); border-radius: 0.5rem; background-color: var(--secondary-color);">
+            Sessions →
+        </a>
+        <form action="/admin/logout" method="post" style="margin: 0;">
+            <button type="submit"
+                style="background-color: var(--secondary-color); border: 1px solid var(--border-color);">Logout</button>
+        </form>
+    </div>
+</div>
+
+<form hx-post="/admin/mappings" hx-target="#mappings-body" hx-swap="beforeend" hx-on::after-request="this.reset()">
+    <div class="form-group">
+        <div class="form-control">
+            <label>Instance Name</label>
+            <input type="text" name="instance_name" placeholder="e.g. VeriData" required>
+        </div>
+        <div class="form-control">
+            <label>Tenant ID</label>
+            <input type="text" name="tenant_id" placeholder="UUID" required>
+        </div>
+        <button type="submit">Add Mapping</button>
+    </div>
+</form>
+
+<table>
+    <thead>
+        <tr>
+            <th>Instance Name</th>
+            <th>Tenant ID</th>
+            <th style="text-align: right;">Actions</th>
+        </tr>
+    </thead>
+    <tbody id="mappings-body">
+        {% for mapping in mappings %}
+        {% include "partials/mapping_row.html" %}
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

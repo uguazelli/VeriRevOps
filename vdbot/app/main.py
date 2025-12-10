@@ -1,7 +1,17 @@
 from fastapi import FastAPI, Request
-from app.controller import evolution
+from app.controller import evolution, admin
 
-app = FastAPI()
+from app import database
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await database.init_db()
+    yield
+    await database.close_db()
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(admin.router)
 
 @app.get("/")
 async def root():

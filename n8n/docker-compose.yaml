@@ -1,38 +1,24 @@
-name: veriops
-
 services:
   n8n:
-    image: n8nio/n8n:latest
-    container_name: n8n
-    restart: unless-stopped
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: always
     ports:
-      - "${N8N_PORT:-5678}:5678"
-    env_file:
-      - .env
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
     environment:
-      # Editor/UI URL
-      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL:-http://localhost:5678}
-      # Host/port inside container
-      N8N_HOST: ${N8N_HOST:-localhost}
-      N8N_PORT: ${N8N_PORT:-5678}
-      # Public URL where webhooks will be reached (adjust for your domain in prod)
-      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678}
-      N8N_SECURE_COOKIE: "false"
-      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Sao_Paulo}
-      # Optional auth for the editor (uncomment to protect in dev/prod)
-      # N8N_BASIC_AUTH_ACTIVE: "true"
-      # N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
-      # N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-change-me}
-
-      # --- Tell n8n to use Postgres ---
-      DB_TYPE: postgres
-      DB_POSTGRESDB_HOST: ${POSTGRES_HOST:-localhost}
-      DB_POSTGRESDB_PORT: ${POSTGRES_PORT:-5432}
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DATABASE:-n8n}
-      DB_POSTGRESDB_USER: ${POSTGRES_USERNAME:-n8n_user}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-strong_password_here}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_HOST=${SUBDOMAIN}.${DOMAIN_NAME}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - N8N_RUNNERS_ENABLED=true
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://${SUBDOMAIN}.${DOMAIN_NAME}/
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+      - TZ=${GENERIC_TIMEZONE}
     volumes:
       - n8n_data:/home/node/.n8n
+      - ./local-files:/files
+    env_file:
+      - .env
     networks:
       veridata.network:
         aliases:

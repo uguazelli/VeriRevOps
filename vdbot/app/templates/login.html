@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 4rem auto;">
+    <h1>Admin Login</h1>
+    <form action="/admin/login" method="post" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="form-control">
+            <label>Username</label>
+            <input type="text" name="username" required>
+        </div>
+        <div class="form-control">
+            <label>Password</label>
+            <input type="password" name="password" required>
+        </div>
+        <button type="submit">Log In</button>
+        {% if error %}
+        <p style="color: var(--danger-color); text-align: center;">{{ error }}</p>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}
