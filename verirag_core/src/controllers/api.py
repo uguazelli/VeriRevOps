@@ -19,6 +19,7 @@ async def api_query_rag(
         request.tenant_id,
         request.query,
         use_hyde=request.use_hyde,
-        use_rerank=request.use_rerank
+        use_rerank=request.use_rerank,
+        provider=request.provider
     )
     return QueryResponse(answer=answer)

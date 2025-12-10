@@ -46,7 +46,7 @@
             <form hx-encoding="multipart/form-data" hx-post="/ingest" hx-target="#upload-status" class="space-y-4">
                 <input type="hidden" name="tenant_id" value="{{ selected_tenant.id }}">
                 <div class="flex items-center space-x-4">
-                    <input type="file" name="file" accept=".txt,.md"
+                    <input type="file" name="file" accept=".txt,.md,.jpg,.jpeg,.png,.webp"
                         class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                     <button type="submit"
                         class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium">Upload</button>
@@ -74,6 +74,13 @@
                                 <span>Use Reranking</span>
                             </label>
                             <span class="text-xs text-gray-400 ml-auto italic">Adds ~3-5s latency</span>
+                        </div>
+                        <div class="flex gap-2 mb-2">
+                            <select name="provider"
+                                class="px-3 py-2 border rounded bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="gemini" selected>Gemini 2.0 Flash</option>
+                                <option value="openai">OpenAI GPT-4o</option>
+                            </select>
                         </div>
                         <div class="flex gap-2">
                             <input type="hidden" name="tenant_id" value="{{ selected_tenant.id }}">

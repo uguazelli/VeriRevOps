@@ -6,6 +6,7 @@ class QueryRequest(BaseModel):
     query: str
     use_hyde: bool = False
     use_rerank: bool = False
+    provider: str = "gemini"
 
 class QueryResponse(BaseModel):
     answer: str

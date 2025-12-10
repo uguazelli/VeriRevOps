@@ -71,13 +71,21 @@ async def ingest_file(
     file: Annotated[UploadFile, File()],
     username: str = Depends(get_current_username)
 ):
-    if not file.filename.endswith(('.txt', '.md')):
-        return HTMLResponse('<div class="text-red-500">Only .txt and .md files are supported</div>')
+    if not file.filename.lower().endswith(('.txt', '.md', '.jpg', '.jpeg', '.png', '.webp')):
+        return HTMLResponse('<div class="text-red-500">Supported formats: .txt, .md, .jpg, .png, .webp</div>')
 
     content = await file.read()
     try:
-        text_content = content.decode("utf-8")
-        background_tasks.add_task(ingest_document, tenant_id, file.filename, text_content)
+        # If text, decode it. If image, pass bytes.
+        text_content = None
+        file_bytes = None
+
+        if file.filename.lower().endswith(('.txt', '.md')):
+            text_content = content.decode("utf-8")
+        else:
+            file_bytes = content
+
+        background_tasks.add_task(ingest_document, tenant_id, file.filename, content=text_content, file_bytes=file_bytes)
         return HTMLResponse(
             f'<div class="text-green-500 mb-2">Started processing {file.filename}... check back soon.</div>'
         )
@@ -92,13 +100,15 @@ async def query_rag(
     query: Annotated[str, Form()],
     use_hyde: Annotated[bool, Form()] = False,
     use_rerank: Annotated[bool, Form()] = False,
+    provider: Annotated[str, Form()] = "gemini",
     username: str = Depends(get_current_username)
 ):
     answer = generate_answer(
         tenant_id,
         query,
         use_hyde=use_hyde,
-        use_rerank=use_rerank
+        use_rerank=use_rerank,
+        provider=provider
     )
     return templates.TemplateResponse(
         "partials/chat_response.html",

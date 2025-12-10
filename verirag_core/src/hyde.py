@@ -1,6 +1,6 @@
 import os
 import logging
-from llama_index.llms.gemini import Gemini
+from src.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
 
@@ -12,29 +12,16 @@ HYDE_PROMPT_TEMPLATE = (
     "Passage:"
 )
 
-_hyde_llm = None
-
-def get_hyde_llm():
-    global _hyde_llm
-    if _hyde_llm is None:
-        # We use a fast model for HyDE (1.5-flash is perfect)
-        api_key = os.getenv("GOOGLE_API_KEY")
-        model_name = os.getenv("GEMINI_MODEL", "models/gemini-1.5-flash")
-        _hyde_llm = Gemini(model=model_name, api_key=api_key)
-    return _hyde_llm
-
-def generate_hypothetical_answer(query: str) -> str:
+def generate_hypothetical_answer(query: str, provider: str = "gemini") -> str:
     """
-    Generates a hypothetical document/answer for the given query using HyDE (Hypothetical Document Embeddings).
-    This helps in retrieving documents that are semantically similar to the answer rather than the question.
+    Generates a hypothetical document/answer for the given query.
     """
     try:
-        llm = get_hyde_llm()
+        llm = get_llm(provider)
         response = llm.complete(HYDE_PROMPT_TEMPLATE.format(query=query))
         hypothetical = response.text.strip()
-        logger.info(f"HyDE generated: {hypothetical[:100]}...")
+        logger.info(f"HyDE generated ({provider}): {hypothetical[:100]}...")
         return hypothetical
     except Exception as e:
         logger.error(f"HyDE generation failed: {e}")
-        # Fallback to original query if HyDE fails
         return query
