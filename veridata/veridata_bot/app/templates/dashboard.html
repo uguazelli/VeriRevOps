@@ -18,8 +18,8 @@
 <form hx-post="/admin/mappings" hx-target="#mappings-body" hx-swap="beforeend" hx-on::after-request="this.reset()">
     <div class="form-group">
         <div class="form-control">
-            <label>Evolution Instance Name</label>
-            <input type="text" name="instance_name" placeholder="e.g. VeriData" required>
+            <label>Instance Name OR Telegram Bot Token</label>
+            <input type="text" name="instance_name" placeholder="Evolution Name OR 110201543:AAHdqTcvCH1v..." required>
         </div>
         <div class="form-control">
             <label>VeriData RAG Tenant ID</label>

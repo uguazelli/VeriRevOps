@@ -1,9 +1,9 @@
-<tr id="row-{{ mapping.instance_name }}">
-    <td>{{ mapping.instance_name }}</td>
+<tr>
+    <td style="word-break: break-all;">{{ mapping.instance_name }}</td>
     <td>{{ mapping.tenant_id }}</td>
     <td style="text-align: right;">
-        <button class="danger" hx-delete="/admin/mappings/{{ mapping.instance_name }}"
-            hx-target="#row-{{ mapping.instance_name }}" hx-swap="outerHTML" onclick="return confirm('Are you sure?')">
+        <button class="danger" hx-delete="/admin/mappings/{{ mapping.instance_name }}" hx-target="closest tr"
+            hx-swap="outerHTML" onclick="return confirm('Are you sure?')">
             Delete
         </button>
     </td>

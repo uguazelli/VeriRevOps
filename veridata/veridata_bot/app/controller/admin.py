@@ -65,7 +65,37 @@ async def add_mapping(
     if not user:
         raise HTTPException(status_code=401)
 
+    # Sanitize inputs
+    instance_name = instance_name.strip()
+    tenant_id = tenant_id.strip()
+
     await database.upsert_mapping(instance_name, tenant_id)
+
+    # Check if this looks like a Telegram Token (123456:ABC-DEF...)
+    if ":" in instance_name and " " not in instance_name and len(instance_name) > 20:
+        # Attempt to register webhook
+        # We need the base URL of this server.
+        # 1. Try env var PUBLIC_URL (e.g. from ngrok or production domain)
+        # 2. Fallback to request.base_url (might be localhost if not proxied correctly)
+        base_url = os.getenv("PUBLIC_URL") or os.getenv("VERIDATA_BOT_URL") or str(request.base_url).rstrip("/")
+
+        # Ensure no trailing slash for consistency
+        base_url = base_url.rstrip("/")
+
+        webhook_url = f"{base_url}/telegram/webhook/{instance_name}"
+
+        print(f"🤖 Telegram Token detected. You should ensure the webhook is set to: {webhook_url}")
+
+        # Try to auto-set if we are not on localhost (or if we want to try anyway)
+        # Using httpx to call Telegram
+        try:
+            import httpx
+            tg_url = f"https://api.telegram.org/bot{instance_name}/setWebhook"
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(tg_url, json={"url": webhook_url})
+                print(f"📡 Tuplegram setWebhook response: {resp.text}")
+        except Exception as e:
+            print(f"⚠️ Failed to auto-set Telegram webhook: {e}")
 
     # Return just the new row for HTMX to append
     new_mapping = {"instance_name": instance_name, "tenant_id": tenant_id}
