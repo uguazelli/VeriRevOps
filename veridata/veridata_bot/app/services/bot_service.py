@@ -15,6 +15,7 @@ async def process_message(
     user_id: str,
     text: str,
     reply_callback: Callable[[str], Awaitable[None]],
+    mark_read_callback: Callable[[], Awaitable[None]] = None,
     from_me: bool = False
 ) -> dict:
     """
@@ -58,7 +59,15 @@ async def process_message(
     is_active = await database.get_session_status(instance_id, user_id)
     if not is_active:
         print(f"💤 [BotService] Bot paused for {user_id}. Ignoring message.")
+        # Do NOT mark as read here, so notification triggers on phone
         return {"status": "ignored", "reason": "paused"}
+
+    # Bot is ACTIVE -> Mark message as read to silence notification
+    if mark_read_callback:
+        try:
+            await mark_read_callback()
+        except Exception as e:
+            print(f"⚠️ [BotService] Failed to mark read: {e}")
 
     # 3. DB Lookup: Get Tenant ID
     tenant_id = await database.get_tenant_id(instance_id)
@@ -90,7 +99,14 @@ async def process_message(
         if new_session_id:
             await database.update_session_id(instance_id, user_id, new_session_id)
 
-    # 7. Send Response via Callback
+        # 7. Check for Human Handoff
+        if rag_response.get("requires_human"):
+            print(f"👤 [BotService] Human intervention requested for {user_id}")
+            await database.set_session_active(instance_id, user_id, False)
+            # Response text essentially says "Transferring..."
+            # We send it, then the bot is paused for next messages.
+
+    # 8. Send Response via Callback
     await reply_callback(str(response_text))
 
     return {"status": "processed"}

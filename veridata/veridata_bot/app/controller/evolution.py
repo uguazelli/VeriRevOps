@@ -4,6 +4,30 @@ import os
 EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "")
 EVOLUTION_URL = os.getenv("EVOLUTION_URL", "https://dev-evolution.veridatapro.com")
 
+async def mark_message_read(*, instance: str, message_id: str, phone: str):
+    url = f"{EVOLUTION_URL}/chat/markMessageAsRead/{instance}"
+
+    payload = {
+        "readMessages": [
+            {
+                "remoteJid": phone,
+                "fromMe": False,
+                "id": message_id
+            }
+        ]
+    }
+
+    headers = {
+        "apikey": EVOLUTION_API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(url, json=payload, headers=headers)
+        except Exception as e:
+            print(f"❌ Failed to mark message as read: {str(e)}")
+
 async def message_whatsapp(*, instance: str, phone: str, message: str, delay: int = 5000):
     url = f"{EVOLUTION_URL}/message/sendText/{instance}"
 
@@ -74,11 +98,22 @@ async def process_webhook(payload: dict):
             message=text
         )
 
+    # 3b. Define Callback for Marking Read (Silence)
+    message_id = key.get("id")
+    async def mark_read_callback():
+        if message_id:
+            await mark_message_read(
+                instance=instance,
+                message_id=message_id,
+                phone=remote_jid  # remoteJid includes @s.whatsapp.net
+            )
+
     # 4. Delegate to Bot Service
     return await bot_service.process_message(
         instance_id=instance,
         user_id=phone_number,
         text=user_text,
         reply_callback=reply_to_whatsapp,
+        mark_read_callback=mark_read_callback,
         from_me=from_me
     )
