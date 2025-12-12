@@ -1,5 +1,6 @@
 import httpx
 from app.services import bot_service
+from app import database
 
 TELEGRAM_API_BASE = "https://api.telegram.org/bot"
 
@@ -42,12 +43,16 @@ async def process_webhook(token: str, payload: dict):
     # For now, treat all inputs as user inputs.
     from_me = False
 
-    # 2. Define Reply Callback
-    async def reply_to_telegram(text: str):
-        await send_message(token, chat_id, text)
+    # 2. Look up Platform Token (if Alias is used)
+    platform_token = await database.get_platform_token(token)
+    api_token = platform_token if platform_token else token
 
-    # 3. Delegate to Bot Service
-    # Note: We use the 'token' as the instance_id for lookup in the mappings table.
+    # 3. Define Reply Callback
+    async def reply_to_telegram(text: str):
+        await send_message(api_token, chat_id, text)
+
+    # 4. Delegate to Bot Service
+    # Note: We use the 'token' (Alias) as the instance_id for lookup in the mappings table.
     return await bot_service.process_message(
         instance_id=token,
         user_id=chat_id,

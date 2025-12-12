@@ -38,9 +38,18 @@ async def create_tables():
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS mappings (
                 instance_name TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL
+                tenant_id TEXT NOT NULL,
+                access_key TEXT,
+                platform_token TEXT
             );
         """)
+
+        # Migration: Add columns if not exists
+        try:
+            await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS access_key TEXT;")
+            await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS platform_token TEXT;")
+        except Exception as e:
+            print(f"⚠️ Warning during mappings migration: {e}")
 
         # Table for sessions (memory)
         await conn.execute("""
@@ -72,20 +81,23 @@ async def get_all_mappings() -> list[dict]:
     if not pool:
         return []
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT instance_name, tenant_id FROM mappings ORDER BY instance_name")
+        rows = await conn.fetch("SELECT instance_name, tenant_id, access_key, platform_token FROM mappings ORDER BY instance_name")
         return [dict(row) for row in rows]
 
-async def upsert_mapping(instance_name: str, tenant_id: str):
+async def upsert_mapping(instance_name: str, tenant_id: str, access_key: str = None, platform_token: str = None):
     if not pool:
         print("❌ ERROR: Connection pool is None in upsert_mapping")
         return
-    print(f"🛠️ Upserting mapping: {instance_name} -> {tenant_id}")
+    print(f"🛠️ Upserting mapping: {instance_name} -> {tenant_id} (Key: {access_key}, Token: {platform_token})")
     async with pool.acquire() as conn:
         await conn.execute("""
-            INSERT INTO mappings (instance_name, tenant_id)
-            VALUES ($1, $2)
-            ON CONFLICT (instance_name) DO UPDATE SET tenant_id = EXCLUDED.tenant_id
-        """, instance_name, tenant_id)
+            INSERT INTO mappings (instance_name, tenant_id, access_key, platform_token)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (instance_name) DO UPDATE SET
+                tenant_id = EXCLUDED.tenant_id,
+                access_key = COALESCE(EXCLUDED.access_key, mappings.access_key),
+                platform_token = EXCLUDED.platform_token
+        """, instance_name, tenant_id, access_key, platform_token)
     print("✅ Mapping upserted successfully")
 
 async def delete_mapping(instance_name: str):
@@ -158,3 +170,25 @@ async def delete_session(instance_name: str, phone_number: str):
             instance_name, phone_number
         )
 
+
+async def verify_user_login(instance_name: str, access_key: str) -> bool:
+    if not pool:
+        return False
+    async with pool.acquire() as conn:
+        stored_key = await conn.fetchval(
+            "SELECT access_key FROM mappings WHERE instance_name = $1",
+            instance_name
+        )
+        # Simple comparison. In prod, verify hash if stored hashed.
+        # For this requirement "simple", direct comparison or stored plain text is implied,
+        # but mostly we should assume admin sets a simple password.
+        return stored_key is not None and stored_key == access_key
+
+async def get_platform_token(instance_name: str) -> Optional[str]:
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT platform_token FROM mappings WHERE instance_name = $1",
+            instance_name
+        )

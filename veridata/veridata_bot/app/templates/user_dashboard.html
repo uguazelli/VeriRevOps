@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header">
+    <h1>Dashboard: {{ instance_name }}</h1>
+    <form action="/user/logout" method="post" style="margin: 0;">
+        <button type="submit"
+            style="background-color: var(--secondary-color); border: 1px solid var(--border-color);">Logout</button>
+    </form>
+</div>
+
+<div style="margin-top: 2rem;">
+    <h2>Active Conversations</h2>
+    <p style="color: #888; margin-bottom: 1rem;">
+        Here are the users currently interacting with your bot. Use the toggle to Pause (Human Handoff) or Resume the
+        bot for each user.
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Phone Number</th>
+                <th>Last Active</th>
+                <th style="text-align: center;">Bot Status</th>
+            </tr>
+        </thead>
+        <tbody id="sessions-body">
+            {% for session in sessions %}
+            {% include "partials/user_session_row.html" %}
+            {% else %}
+            <tr>
+                <td colspan="3" style="text-align: center; padding: 2rem; color: #666;">
+                    No active sessions found.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}

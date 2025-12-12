@@ -1,6 +1,16 @@
 <tr>
     <td style="word-break: break-all;">{{ mapping.instance_name }}</td>
+    <td>
+        {% if mapping.platform_token %}
+        <span
+            style="background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">Telegram</span>
+        {% else %}
+        <span
+            style="background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">Evolution</span>
+        {% endif %}
+    </td>
     <td>{{ mapping.tenant_id }}</td>
+    <td>{{ mapping.access_key or '-' }}</td>
     <td style="text-align: right;">
         <button class="danger" hx-delete="/admin/mappings/{{ mapping.instance_name }}" hx-target="closest tr"
             hx-swap="outerHTML" onclick="return confirm('Are you sure?')">

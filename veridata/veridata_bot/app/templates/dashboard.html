@@ -16,24 +16,63 @@
 </div>
 
 <form hx-post="/admin/mappings" hx-target="#mappings-body" hx-swap="beforeend" hx-on::after-request="this.reset()">
-    <div class="form-group">
+    <style>
+        .dashboard-form {
+            background-color: var(--secondary-color);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin-bottom: 2rem;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        @media (min-width: 768px) {
+            .dashboard-form {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .dashboard-form .full-width {
+                grid-column: span 2;
+            }
+        }
+
+        .dashboard-form button {
+            margin-top: 0.5rem;
+        }
+    </style>
+
+    <div class="dashboard-form">
         <div class="form-control">
-            <label>Instance Name OR Telegram Bot Token</label>
-            <input type="text" name="instance_name" placeholder="Evolution Name OR 110201543:AAHdqTcvCH1v..." required>
+            <label>Instance Name (Alias or ID)</label>
+            <input type="text" name="instance_name" placeholder="MyBot OR Evolution Name" required style="width: 100%;">
+        </div>
+        <div class="form-control">
+            <label>Platform Token (Telegram Only - Optional)</label>
+            <input type="text" name="platform_token" placeholder="123456:ABC... (Leave empty for Evolution)"
+                style="width: 100%;">
         </div>
         <div class="form-control">
             <label>VeriData RAG Tenant ID</label>
-            <input type="text" name="tenant_id" placeholder="UUID" required>
+            <input type="text" name="tenant_id" placeholder="UUID" required style="width: 100%;">
         </div>
-        <button type="submit">Add Mapping</button>
+        <div class="form-control">
+            <label>Access Key (User Password)</label>
+            <input type="text" name="access_key" placeholder="Optional User Login Key" style="width: 100%;">
+        </div>
+        <div class="full-width">
+            <button type="submit" style="width: 100%;">Add Mapping</button>
+        </div>
     </div>
 </form>
 
 <table>
     <thead>
         <tr>
-            <th>Evolution Instance Name</th>
-            <th>VeriData RAG Tenant ID</th>
+            <th>Instance Name (Alias)</th>
+            <th>Type</th>
+            <th>Tenant ID</th>
+            <th>Access Key</th>
             <th style="text-align: right;">Actions</th>
         </tr>
     </thead>

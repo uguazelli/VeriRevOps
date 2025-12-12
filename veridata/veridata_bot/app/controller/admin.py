@@ -60,6 +60,8 @@ async def add_mapping(
     request: Request,
     instance_name: str = Form(...),
     tenant_id: str = Form(...),
+    access_key: str = Form(None),
+    platform_token: str = Form(None),
     user: str | None = Depends(get_current_user)
 ):
     if not user:
@@ -69,36 +71,46 @@ async def add_mapping(
     instance_name = instance_name.strip()
     tenant_id = tenant_id.strip()
 
-    await database.upsert_mapping(instance_name, tenant_id)
+    access_key = access_key.strip() if access_key else None
+    platform_token = platform_token.strip() if platform_token else None
 
-    # Check if this looks like a Telegram Token (123456:ABC-DEF...)
-    if ":" in instance_name and " " not in instance_name and len(instance_name) > 20:
-        # Attempt to register webhook
+    # Logic: If platform_token is provided, instance_name is the ALIAS.
+    # Otherwise, instance_name IS the platform ID (Evolution).
+
+    await database.upsert_mapping(instance_name, tenant_id, access_key, platform_token)
+
+    # Telegram Webhook Registration
+    # Condition: It has a platform_token (Explicit Telegram) OR instance_name looks like a token (Old way)
+    telegram_token = platform_token
+    if not telegram_token and ":" in instance_name and len(instance_name) > 20:
+        telegram_token = instance_name
+
+    if telegram_token:
         # We need the base URL of this server.
-        # 1. Try env var PUBLIC_URL (e.g. from ngrok or production domain)
-        # 2. Fallback to request.base_url (might be localhost if not proxied correctly)
         base_url = os.getenv("PUBLIC_URL") or os.getenv("VERIDATA_BOT_URL") or str(request.base_url).rstrip("/")
-
-        # Ensure no trailing slash for consistency
         base_url = base_url.rstrip("/")
 
+        # Webhook URL uses the INSTANCE NAME (Alias), not the token
         webhook_url = f"{base_url}/telegram/webhook/{instance_name}"
 
-        print(f"🤖 Telegram Token detected. You should ensure the webhook is set to: {webhook_url}")
+        print(f"🤖 Telegram Bot detected. Setting webhook for alias '{instance_name}' to: {webhook_url}")
 
-        # Try to auto-set if we are not on localhost (or if we want to try anyway)
-        # Using httpx to call Telegram
         try:
             import httpx
-            tg_url = f"https://api.telegram.org/bot{instance_name}/setWebhook"
+            tg_url = f"https://api.telegram.org/bot{telegram_token}/setWebhook"
             async with httpx.AsyncClient() as client:
                 resp = await client.post(tg_url, json={"url": webhook_url})
-                print(f"📡 Tuplegram setWebhook response: {resp.text}")
+                print(f"📡 Telegram setWebhook response: {resp.text}")
         except Exception as e:
             print(f"⚠️ Failed to auto-set Telegram webhook: {e}")
 
     # Return just the new row for HTMX to append
-    new_mapping = {"instance_name": instance_name, "tenant_id": tenant_id}
+    new_mapping = {
+        "instance_name": instance_name,
+        "tenant_id": tenant_id,
+        "access_key": access_key,
+        "platform_token": platform_token
+    }
     return templates.TemplateResponse("partials/mapping_row.html", {
         "request": request,
         "mapping": new_mapping
@@ -140,3 +152,36 @@ async def delete_session_endpoint(
 
     await database.delete_session(instance_name, phone_number)
     return HTMLResponse(content="")
+
+@router.post("/sessions/toggle/{instance_name}/{phone_number}")
+async def toggle_session_endpoint(
+    request: Request,
+    instance_name: str,
+    phone_number: str,
+    user: str | None = Depends(get_current_user)
+):
+    if not user:
+        raise HTTPException(status_code=401)
+
+    # Get current status to flip it
+    current = await database.get_session_status(instance_name, phone_number)
+    new_status = not current
+
+    await database.set_session_active(instance_name, phone_number, new_status)
+
+    # Re-fetch the updated session to ensure correct timestamp etc.
+    all_sessions = await database.get_all_sessions()
+    updated_session = next((s for s in all_sessions if s['instance_name'] == instance_name and s['phone_number'] == phone_number), None)
+
+    if not updated_session:
+         # Fallback (though unlikely if we just updated it)
+        from datetime import datetime
+        updated_session = {
+            "instance_name": instance_name,
+            "phone_number": phone_number,
+            "is_active": new_status,
+            "updated_at": datetime.now(),
+            "session_id": "..."
+        }
+
+    return templates.TemplateResponse("partials/session_row.html", {"request": request, "session": updated_session})

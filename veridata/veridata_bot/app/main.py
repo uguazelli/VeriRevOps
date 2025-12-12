@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from app.controller import evolution, admin
+from app.controller import evolution, admin, user_settings
 
 from app import database
 from contextlib import asynccontextmanager
@@ -48,12 +48,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(admin.router)
+app.include_router(user_settings.router)
 from app.routers import telegram
 app.include_router(telegram.router)
 
+from fastapi.responses import RedirectResponse
+
 @app.get("/")
 async def root():
-    return {"message": "VeriOps Bot is running"}
+    return RedirectResponse(url="/login")
 
 @app.post("/evolution/webhook")
 async def evolution_webhook_post(request: Request):

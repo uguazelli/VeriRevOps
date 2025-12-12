@@ -1,0 +1,14 @@
+<tr>
+    <td>{{ session.phone_number }}</td>
+    <td>{{ session.updated_at.strftime('%Y-%m-%d %H:%M') if session.updated_at else '-' }}</td>
+    <td style="text-align: center;">
+        <button hx-post="/user/toggle/{{ session.phone_number }}" hx-target="closest tr" hx-swap="outerHTML"
+            class="{% if session.is_active %}success{% else %}danger{% endif %}" style="min-width: 100px;">
+            {% if session.is_active %}
+            🤖 Active
+            {% else %}
+            ⏸️ Paused
+            {% endif %}
+        </button>
+    </td>
+</tr>
