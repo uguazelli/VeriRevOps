@@ -40,7 +40,8 @@ async def create_tables():
                 instance_name TEXT PRIMARY KEY,
                 tenant_id TEXT NOT NULL,
                 access_key TEXT,
-                platform_token TEXT
+                platform_token TEXT,
+                is_active BOOLEAN DEFAULT TRUE
             );
         """)
 
@@ -48,6 +49,7 @@ async def create_tables():
         try:
             await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS access_key TEXT;")
             await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS platform_token TEXT;")
+            await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
         except Exception as e:
             print(f"⚠️ Warning during mappings migration: {e}")
 
@@ -81,7 +83,7 @@ async def get_all_mappings() -> list[dict]:
     if not pool:
         return []
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT instance_name, tenant_id, access_key, platform_token FROM mappings ORDER BY instance_name")
+        rows = await conn.fetch("SELECT instance_name, tenant_id, access_key, platform_token, is_active FROM mappings ORDER BY instance_name")
         return [dict(row) for row in rows]
 
 async def upsert_mapping(instance_name: str, tenant_id: str, access_key: str = None, platform_token: str = None):
@@ -91,12 +93,13 @@ async def upsert_mapping(instance_name: str, tenant_id: str, access_key: str = N
     print(f"🛠️ Upserting mapping: {instance_name} -> {tenant_id} (Key: {access_key}, Token: {platform_token})")
     async with pool.acquire() as conn:
         await conn.execute("""
-            INSERT INTO mappings (instance_name, tenant_id, access_key, platform_token)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO mappings (instance_name, tenant_id, access_key, platform_token, is_active)
+            VALUES ($1, $2, $3, $4, TRUE)
             ON CONFLICT (instance_name) DO UPDATE SET
                 tenant_id = EXCLUDED.tenant_id,
                 access_key = COALESCE(EXCLUDED.access_key, mappings.access_key),
                 platform_token = EXCLUDED.platform_token
+                -- Do NOT overwrite is_active on upsert, keep existing state
         """, instance_name, tenant_id, access_key, platform_token)
     print("✅ Mapping upserted successfully")
 
@@ -191,4 +194,23 @@ async def get_platform_token(instance_name: str) -> Optional[str]:
         return await conn.fetchval(
             "SELECT platform_token FROM mappings WHERE instance_name = $1",
             instance_name
+        )
+
+async def get_instance_status(instance_name: str) -> bool:
+    if not pool:
+        return False
+    async with pool.acquire() as conn:
+        status = await conn.fetchval(
+            "SELECT is_active FROM mappings WHERE instance_name = $1",
+            instance_name
+        )
+        return status if status is not None else True # Default to True if not found
+
+async def set_instance_status(instance_name: str, is_active: bool):
+    if not pool:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE mappings SET is_active = $1 WHERE instance_name = $2",
+            is_active, instance_name
         )

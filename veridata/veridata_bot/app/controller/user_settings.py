@@ -102,10 +102,14 @@ async def dashboard(
     # Filter for this instance
     my_sessions = [s for s in all_sessions if s['instance_name'] == instance_name]
 
+    # Get Global Status
+    is_globally_active = await database.get_instance_status(instance_name)
+
     return templates.TemplateResponse("user_dashboard.html", {
         "request": request,
         "instance_name": instance_name,
-        "sessions": my_sessions
+        "sessions": my_sessions,
+        "is_globally_active": is_globally_active
     })
 
 @router.post("/user/toggle/{phone_number}")
@@ -147,4 +151,26 @@ async def toggle_session(
         updated_session = {"phone_number": phone_number, "is_active": new_status, "instance_name": instance_name, "updated_at": datetime.now()}
 
     return templates.TemplateResponse("partials/user_session_row.html", {"request": request, "session": updated_session})
+
+
+@router.post("/user/toggle_global")
+async def toggle_global(
+    request: Request,
+    instance_name: str | None = Depends(get_current_user_instance)
+):
+    if not instance_name:
+        return Response(status_code=401)
+
+    current_status = await database.get_instance_status(instance_name)
+    new_status = not current_status
+
+    await database.set_instance_status(instance_name, new_status)
+
+    # Return JUST the button to sway via HTMX
+    # We can use an inline template string or a partial.
+    # Let's use a partial for cleanliness.
+    return templates.TemplateResponse("partials/global_toggle_btn.html", {
+        "request": request,
+        "is_globally_active": new_status
+    })
 

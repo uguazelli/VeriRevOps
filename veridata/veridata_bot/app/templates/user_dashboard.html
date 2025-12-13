@@ -3,10 +3,14 @@
 {% block content %}
 <div class="header">
     <h1>Dashboard: {{ instance_name }}</h1>
-    <form action="/user/logout" method="post" style="margin: 0;">
-        <button type="submit"
-            style="background-color: var(--secondary-color); border: 1px solid var(--border-color);">Logout</button>
-    </form>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        {% include "partials/global_toggle_btn.html" %}
+
+        <form action="/user/logout" method="post" style="margin: 0;">
+            <button type="submit"
+                style="background-color: var(--secondary-color); border: 1px solid var(--border-color);">Logout</button>
+        </form>
+    </div>
 </div>
 
 <div style="margin-top: 2rem;">

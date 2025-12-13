@@ -55,7 +55,14 @@ async def process_message(
         print(f"⚠️ [BotService] Ignoring magic command from client: {text}")
         return {"status": "ignored", "reason": "client_command_ignored"}
 
-    # 2. Check Status
+    # 2. Check Status (Global & Session)
+    # A. Global Instance Check
+    is_globally_active = await database.get_instance_status(instance_id)
+    if not is_globally_active:
+        print(f"🛑 [BotService] Instance {instance_id} is globally PAUSED. Ignoring message.")
+        return {"status": "ignored", "reason": "global_paused"}
+
+    # B. Session Check
     is_active = await database.get_session_status(instance_id, user_id)
     if not is_active:
         print(f"💤 [BotService] Bot paused for {user_id}. Ignoring message.")

@@ -1,6 +1,19 @@
 <tr>
     <td style="word-break: break-all;">{{ mapping.instance_name }}</td>
     <td>
+        <button hx-post="/admin/mappings/toggle_global/{{ mapping.instance_name }}" hx-target="closest tr"
+            hx-swap="outerHTML" style="border: none; background: none; cursor: pointer; padding: 0;"
+            title="Toggle Global Bot Status">
+            {% if mapping.is_active is false %}
+            <span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">⛔
+                STOP</span>
+            {% else %}
+            <span style="background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">✅
+                RUN</span>
+            {% endif %}
+        </button>
+    </td>
+    <td>
         {% if mapping.platform_token %}
         <span
             style="background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">Telegram</span>

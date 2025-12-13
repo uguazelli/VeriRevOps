@@ -185,3 +185,33 @@ async def toggle_session_endpoint(
         }
 
     return templates.TemplateResponse("partials/session_row.html", {"request": request, "session": updated_session})
+
+
+@router.post("/mappings/toggle_global/{instance_name}")
+async def toggle_global_mapping(
+    request: Request,
+    instance_name: str,
+    user: str | None = Depends(get_current_user)
+):
+    if not user:
+        raise HTTPException(status_code=401)
+
+    current_status = await database.get_instance_status(instance_name)
+    new_status = not current_status
+
+    await database.set_instance_status(instance_name, new_status)
+
+    # Return updated mapping row partial
+    # We need to construct the mapping object again
+    # Simplest way is refetch all and find it, or just manual dict construction if we trust inputs
+    # Let's refetch to be safe and consistent
+    mappings = await database.get_all_mappings()
+    updated_mapping = next((m for m in mappings if m['instance_name'] == instance_name), None)
+
+    if updated_mapping:
+        return templates.TemplateResponse("partials/mapping_row.html", {
+            "request": request,
+            "mapping": updated_mapping
+        })
+    else:
+        return Response(status_code=404)

@@ -52,6 +52,10 @@ app.include_router(user_settings.router)
 from app.routers import telegram
 app.include_router(telegram.router)
 
+from fastapi.staticfiles import StaticFiles
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 from fastapi.responses import RedirectResponse
 
 @app.get("/")
