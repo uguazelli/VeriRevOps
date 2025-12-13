@@ -1,12 +1,14 @@
 import logging
+import os
+import secrets
 from uuid import UUID
 from typing import Annotated, Optional
-from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, BackgroundTasks, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from src.db import get_db
-from src.auth import get_current_username
+from src.auth import require_auth
 from src.rag import ingest_document, generate_answer
 
 logger = logging.getLogger(__name__)
@@ -26,9 +28,35 @@ def get_tenant_documents(tenant_id: UUID):
             cur.execute("SELECT id, filename, created_at FROM documents WHERE tenant_id = %s ORDER BY created_at DESC", (tenant_id,))
             return cur.fetchall()
 
+# Login Routes
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@router.post("/login", response_class=HTMLResponse)
+async def login_action(request: Request, username: Annotated[str, Form()], password: Annotated[str, Form()]):
+    correct_user = os.getenv("ADMIN_USER", "admin")
+    correct_pass = os.getenv("ADMIN_PASSWORD", "admin")
+
+    # We use a static token secret for simplicity
+    admin_token = os.getenv("ADMIN_TOKEN", "secret-admin-token")
+
+    if secrets.compare_digest(username, correct_user) and secrets.compare_digest(password, correct_pass):
+        response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+        response.set_cookie(key="session_token", value=admin_token, httponly=True)
+        return response
+
+    return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid username or password"}, status_code=401)
+
+@router.get("/logout")
+async def logout(request: Request):
+    response = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    response.delete_cookie("session_token")
+    return response
+
 # Routes
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, username: str = Depends(get_current_username)):
+async def dashboard(request: Request, username: str = Depends(require_auth)):
     tenants = get_tenants()
     return templates.TemplateResponse(
         "index.html",
@@ -36,7 +64,7 @@ async def dashboard(request: Request, username: str = Depends(get_current_userna
     )
 
 @router.post("/tenants", response_class=HTMLResponse)
-async def create_tenant(request: Request, name: Annotated[str, Form()], username: str = Depends(get_current_username)):
+async def create_tenant(request: Request, name: Annotated[str, Form()], username: str = Depends(require_auth)):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("INSERT INTO tenants (name) VALUES (%s) RETURNING id", (name,))
@@ -44,7 +72,7 @@ async def create_tenant(request: Request, name: Annotated[str, Form()], username
     return RedirectResponse(url="/", status_code=303)
 
 @router.get("/tenants/{tenant_id}", response_class=HTMLResponse)
-async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends(get_current_username)):
+async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends(require_auth)):
     tenants = get_tenants()
     documents = get_tenant_documents(tenant_id)
     tenant_name = "Unknown"
@@ -70,7 +98,7 @@ async def ingest_file(
     background_tasks: BackgroundTasks,
     tenant_id: Annotated[UUID, Form()],
     file: Annotated[UploadFile, File()],
-    username: str = Depends(get_current_username)
+    username: str = Depends(require_auth)
 ):
     if not file.filename.lower().endswith(('.txt', '.md', '.jpg', '.jpeg', '.png', '.webp')):
         return HTMLResponse('<div class="text-red-500">Supported formats: .txt, .md, .jpg, .png, .webp</div>')
@@ -105,7 +133,7 @@ async def query_rag(
     use_rerank: Annotated[bool, Form()] = False,
     provider: Annotated[str, Form()] = "gemini",
     session_id: Annotated[Optional[str], Form()] = None,
-    username: str = Depends(get_current_username)
+    username: str = Depends(require_auth)
 ):
     # Create session if needed
     if not session_id:
@@ -125,7 +153,7 @@ async def query_rag(
     )
 
 @router.delete("/documents/{doc_id}", response_class=HTMLResponse)
-async def delete_document(request: Request, doc_id: UUID, username: str = Depends(get_current_username)):
+async def delete_document(request: Request, doc_id: UUID, username: str = Depends(require_auth)):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))

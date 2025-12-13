@@ -26,5 +26,5 @@ app.include_router(web.router)
 # API (JSON) Router - Mounts at /api
 app.include_router(api.router, prefix="/api")
 
-# Static files (if needed in future)
-# app.mount("/static", StaticFiles(directory="static"), name="static")
+# Static files
+app.mount("/static", StaticFiles(directory="src/static"), name="static")

@@ -14,11 +14,61 @@
         // 2. Reload page to trigger the native login prompt (since cached creds are now invalid)
         window.location.href = "/";
     }
+
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebar-backdrop');
+
+        if (sidebar.classList.contains('-translate-x-full')) {
+            // Open sidebar
+            sidebar.classList.remove('-translate-x-full');
+            backdrop.classList.remove('hidden');
+        } else {
+            // Close sidebar
+            sidebar.classList.add('-translate-x-full');
+            backdrop.classList.add('hidden');
+        }
+    }
 </script>
+
+<!-- Mobile Header -->
+<div class="md:hidden bg-gray-900 text-white p-4 flex items-center justify-between border-b border-gray-800">
+    <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
+        <span class="font-bold text-lg">VeriRag</span>
+    </div>
+    {% if selected_tenant %}
+    <span class="text-sm text-gray-400 truncate max-w-[150px]">{{ selected_tenant.name }}</span>
+    {% endif %}
+</div>
+
+<!-- Sidebar Backdrop -->
+<div id="sidebar-backdrop" onclick="toggleSidebar()"
+    class="fixed inset-0 bg-gray-900/50 z-20 hidden md:hidden transition-opacity"></div>
+
 <!-- Sidebar -->
-<div class="w-64 bg-gray-900 text-white flex flex-col flex-shrink-0">
-    <div class="p-4 border-b border-gray-800">
-        <h1 class="text-xl font-bold tracking-tight">VeriRag Core</h1>
+<div id="sidebar"
+    class="fixed inset-y-0 left-0 z-30 w-64 bg-gray-900 text-white flex flex-col transition-transform duration-300 transform -translate-x-full md:relative md:translate-x-0">
+    <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <img src="/static/logo.png" style="height: 32px; width: auto;" alt="Logo">
+            <h1 class="text-xl font-bold tracking-tight">VeriRag</h1>
+        </div>
+        <!-- Close button mobile -->
+        <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        </button>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4 space-y-2">
@@ -54,8 +104,8 @@
                     {{ username or 'User' }}
                 </div>
             </div>
-            <a href="#" onclick="performLogout(); return false;"
-                class="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-800 transition" title="Logout">
+            <a href="/logout" class="text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-800 transition"
+                title="Logout">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -70,12 +120,13 @@
 <!-- Main Content -->
 <main class="flex-1 flex flex-col h-full bg-white overflow-hidden">
     {% if selected_tenant %}
-    <header class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-        <h2 class="text-2xl font-bold text-gray-800">{{ selected_tenant.name }}</h2>
-        <span class="text-xs text-gray-500 font-mono">{{ selected_tenant.id }}</span>
+    <header
+        class="bg-white border-b border-gray-200 px-4 py-4 sm:px-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-800 truncate">{{ selected_tenant.name }}</h2>
+        <span class="text-xs text-gray-500 font-mono break-all sm:break-normal">{{ selected_tenant.id }}</span>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-6 space-y-8">
+    <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 sm:space-y-8">
 
         <!-- Upload Area -->
         <section class="bg-gray-50 rounded-lg p-6 border-2 border-dashed border-gray-300">
@@ -140,25 +191,28 @@
         <!-- Documents List -->
         <section>
             <h3 class="text-lg font-medium text-gray-900 mb-4">Documents</h3>
-            <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-                <table class="min-w-full divide-y divide-gray-300">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900">
-                                Filename</th>
-                            <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Date
-                                Logged</th>
-                            <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                                <span class="sr-only">Delete</span>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 bg-white">
-                        {% include "partials/document_list.html" %}
-                    </tbody>
-                </table>
-            </div>
-        </section>
+            <!-- Documents List -->
+            <section>
+                <h3 class="text-lg font-medium text-gray-900 mb-4">Documents</h3>
+                <div class="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+                    <table class="min-w-full divide-y divide-gray-300">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900">
+                                    Filename</th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Date
+                                    Logged</th>
+                                <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                                    <span class="sr-only">Delete</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white">
+                            {% include "partials/document_list.html" %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
     </div>
 

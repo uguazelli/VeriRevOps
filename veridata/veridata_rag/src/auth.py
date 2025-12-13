@@ -1,27 +1,31 @@
 import os
 import secrets
-from typing import Annotated
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from typing import Annotated, Optional
+from fastapi import Depends, HTTPException, status, Request
+from fastapi.security import APIKeyCookie
 
-security = HTTPBasic()
+security = APIKeyCookie(name="session_token", auto_error=False)
 
-def get_current_username(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
-    correct_username = os.getenv("ADMIN_USER", "admin")
-    correct_password = os.getenv("ADMIN_PASSWORD", "admin")
+def get_current_username(request: Request):
+    token = request.cookies.get("session_token")
+    if not token:
+        # Redirect logic handled in web routes or return None
+        return None
 
-    current_username_bytes = credentials.username.encode("utf8")
-    correct_username_bytes = correct_username.encode("utf8")
-    is_correct_username = secrets.compare_digest(current_username_bytes, correct_username_bytes)
+    # Simple token validation (In real app, use better session management)
+    # Here we just check if the token matches a secret "admin_token"
+    # For simplicity in this "no logic" refactor, we just check a static token
+    correct_token = os.getenv("ADMIN_TOKEN", "secret-admin-token")
 
-    current_password_bytes = credentials.password.encode("utf8")
-    correct_password_bytes = correct_password.encode("utf8")
-    is_correct_password = secrets.compare_digest(current_password_bytes, correct_password_bytes)
+    if not secrets.compare_digest(token, correct_token):
+        return None
 
-    if not (is_correct_username and is_correct_password):
+    return "admin"
+
+def require_auth(username: Annotated[Optional[str], Depends(get_current_username)]):
+    if not username:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Basic"},
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={"Location": "/login"},
         )
-    return credentials.username
+    return username
