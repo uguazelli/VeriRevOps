@@ -13,6 +13,8 @@
             {% endif %}
         </button>
     </td>
+    <td>{{ mapping.messages_used }} / {{ mapping.message_limit }}</td>
+    <td>{{ mapping.renewal_date }}</td>
     <td>
         {% if mapping.platform_token %}
         <span

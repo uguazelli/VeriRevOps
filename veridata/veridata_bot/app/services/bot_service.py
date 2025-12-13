@@ -69,6 +69,16 @@ async def process_message(
         # Do NOT mark as read here, so notification triggers on phone
         return {"status": "ignored", "reason": "paused"}
 
+    # C. Rate Limit Check
+    quota = await database.check_rate_limit(instance_id)
+    if not quota["allowed"]:
+        print(f"🛑 [BotService] Quota exceeded for {instance_id}. Limit: {quota['limit']}, Used: {quota['used']}")
+        # Optional: Notify user once? Or just silence?
+        # Better to notify so they know why it stopped working.
+        renewal_str = str(quota['renewal']) if quota['renewal'] else "soon"
+        await reply_callback(f"⚠️ Monthly Message Limit Reached.\n\nYour bot has used {quota['used']}/{quota['limit']} messages.\nResets on: {renewal_str}")
+        return {"status": "ignored", "reason": "quota_exceeded"}
+
     # Bot is ACTIVE -> Mark message as read to silence notification
     if mark_read_callback:
         try:
@@ -115,5 +125,8 @@ async def process_message(
 
     # 8. Send Response via Callback
     await reply_callback(str(response_text))
+
+    # 9. Increment Usage
+    await database.increment_usage(instance_id)
 
     return {"status": "processed"}

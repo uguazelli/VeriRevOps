@@ -60,6 +60,14 @@
             <label>Access Key (User Password)</label>
             <input type="text" name="access_key" placeholder="Optional User Login Key" style="width: 100%;">
         </div>
+        <div class="form-control">
+            <label>Message Limit (Monthly)</label>
+            <input type="number" name="message_limit" value="1000" style="width: 100%;">
+        </div>
+        <div class="form-control">
+            <label>Renewal Date</label>
+            <input type="date" name="renewal_date" style="width: 100%;">
+        </div>
         <div class="full-width">
             <button type="submit" style="width: 100%;">Add Mapping</button>
         </div>
@@ -71,6 +79,8 @@
         <tr>
             <th>Instance Name (Alias)</th>
             <th>Status</th>
+            <th>Usage</th>
+            <th>Renewal</th>
             <th>Type</th>
             <th>Tenant ID</th>
             <th>Access Key</th>

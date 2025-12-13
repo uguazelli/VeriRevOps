@@ -50,6 +50,10 @@ async def create_tables():
             await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS access_key TEXT;")
             await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS platform_token TEXT;")
             await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;")
+            # Rate Limiting Columns
+            await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS message_limit INTEGER DEFAULT 1000;")
+            await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS messages_used INTEGER DEFAULT 0;")
+            await conn.execute("ALTER TABLE mappings ADD COLUMN IF NOT EXISTS renewal_date DATE DEFAULT (CURRENT_DATE + INTERVAL '30 days');")
         except Exception as e:
             print(f"⚠️ Warning during mappings migration: {e}")
 
@@ -83,24 +87,34 @@ async def get_all_mappings() -> list[dict]:
     if not pool:
         return []
     async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT instance_name, tenant_id, access_key, platform_token, is_active FROM mappings ORDER BY instance_name")
+        rows = await conn.fetch("""
+            SELECT instance_name, tenant_id, access_key, platform_token, is_active,
+                   message_limit, messages_used, renewal_date
+            FROM mappings ORDER BY instance_name
+        """)
         return [dict(row) for row in rows]
 
-async def upsert_mapping(instance_name: str, tenant_id: str, access_key: str = None, platform_token: str = None):
+async def upsert_mapping(instance_name: str, tenant_id: str, access_key: str = None, platform_token: str = None,
+                         message_limit: int = 1000, renewal_date: str = None):
     if not pool:
         print("❌ ERROR: Connection pool is None in upsert_mapping")
         return
-    print(f"🛠️ Upserting mapping: {instance_name} -> {tenant_id} (Key: {access_key}, Token: {platform_token})")
+    print(f"🛠️ Upserting mapping: {instance_name} -> {tenant_id} (Limit: {message_limit})")
     async with pool.acquire() as conn:
+        # If renewal_date is provided, use it. If not, default to existing or NOW + 30 days on insert.
+        # We handle this via COALESCE and excluded logic.
+
         await conn.execute("""
-            INSERT INTO mappings (instance_name, tenant_id, access_key, platform_token, is_active)
-            VALUES ($1, $2, $3, $4, TRUE)
+            INSERT INTO mappings (instance_name, tenant_id, access_key, platform_token, is_active, message_limit, messages_used, renewal_date)
+            VALUES ($1, $2, $3, $4, TRUE, $5, 0, COALESCE($6::DATE, CURRENT_DATE + INTERVAL '30 days'))
             ON CONFLICT (instance_name) DO UPDATE SET
                 tenant_id = EXCLUDED.tenant_id,
                 access_key = COALESCE(EXCLUDED.access_key, mappings.access_key),
-                platform_token = EXCLUDED.platform_token
-                -- Do NOT overwrite is_active on upsert, keep existing state
-        """, instance_name, tenant_id, access_key, platform_token)
+                platform_token = EXCLUDED.platform_token,
+                message_limit = COALESCE($5, mappings.message_limit),
+                renewal_date = COALESCE($6::DATE, mappings.renewal_date)
+                -- Keep is_active and messages_used as is
+        """, instance_name, tenant_id, access_key, platform_token, message_limit, renewal_date)
     print("✅ Mapping upserted successfully")
 
 async def delete_mapping(instance_name: str):
@@ -108,6 +122,63 @@ async def delete_mapping(instance_name: str):
         return
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM mappings WHERE instance_name = $1", instance_name)
+
+async def increment_usage(instance_name: str):
+    if not pool:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE mappings SET messages_used = messages_used + 1 WHERE instance_name = $1", instance_name)
+
+async def check_rate_limit(instance_name: str) -> dict:
+    # Returns { "allowed": bool, "used": int, "limit": int, "renewal": date, "reason": str }
+    if not pool:
+        return {"allowed": True} # Fail open if DB is down? Or closed? Let's fail open for now.
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT message_limit, messages_used, renewal_date, CURRENT_DATE as today
+            FROM mappings WHERE instance_name = $1
+        """, instance_name)
+
+        if not row:
+            return {"allowed": False, "reason": "Unknown Instance"}
+
+        limit = row['message_limit'] or 1000
+        used = row['messages_used'] or 0
+        renewal = row['renewal_date']
+        today = row['today']
+
+        # Auto-Reset Logic
+        if renewal and today >= renewal:
+            # Time to reset!
+            print(f"🔄 Renewing quota for {instance_name}")
+            # Reset usage to 0, bump renewal date by 30 days from TODAY
+            new_renewal = await conn.fetchval("""
+                UPDATE mappings
+                SET messages_used = 0, renewal_date = (CURRENT_DATE + INTERVAL '30 days')
+                WHERE instance_name = $1
+                RETURNING renewal_date
+            """, instance_name)
+
+            # Update local vars
+            used = 0
+            renewal = new_renewal
+
+        if used >= limit:
+            return {
+                "allowed": False,
+                "reason": "Quota Exceeded",
+                "used": used,
+                "limit": limit,
+                "renewal": renewal
+            }
+
+        return {
+            "allowed": True,
+            "used": used,
+            "limit": limit,
+            "renewal": renewal
+        }
 
 async def get_session_id(instance_name: str, phone_number: str) -> Optional[str]:
     # Returns session_id ONLY if session exists. Status check should be separate or bundled.

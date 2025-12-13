@@ -62,6 +62,8 @@ async def add_mapping(
     tenant_id: str = Form(...),
     access_key: str = Form(None),
     platform_token: str = Form(None),
+    message_limit: int = Form(1000),
+    renewal_date: str = Form(None),
     user: str | None = Depends(get_current_user)
 ):
     if not user:
@@ -74,10 +76,21 @@ async def add_mapping(
     access_key = access_key.strip() if access_key else None
     platform_token = platform_token.strip() if platform_token else None
 
+    # Empty string renewal_date should be None
+    if renewal_date and not renewal_date.strip():
+        renewal_date = None
+
     # Logic: If platform_token is provided, instance_name is the ALIAS.
     # Otherwise, instance_name IS the platform ID (Evolution).
 
-    await database.upsert_mapping(instance_name, tenant_id, access_key, platform_token)
+    await database.upsert_mapping(
+        instance_name,
+        tenant_id,
+        access_key,
+        platform_token,
+        message_limit=message_limit,
+        renewal_date=renewal_date
+    )
 
     # Telegram Webhook Registration
     # Condition: It has a platform_token (Explicit Telegram) OR instance_name looks like a token (Old way)
@@ -105,12 +118,10 @@ async def add_mapping(
             print(f"⚠️ Failed to auto-set Telegram webhook: {e}")
 
     # Return just the new row for HTMX to append
-    new_mapping = {
-        "instance_name": instance_name,
-        "tenant_id": tenant_id,
-        "access_key": access_key,
-        "platform_token": platform_token
-    }
+    # Refetch to get calculated fields (like renewal_date default)
+    mappings = await database.get_all_mappings()
+    new_mapping = next((m for m in mappings if m['instance_name'] == instance_name), None)
+
     return templates.TemplateResponse("partials/mapping_row.html", {
         "request": request,
         "mapping": new_mapping

@@ -105,11 +105,15 @@ async def dashboard(
     # Get Global Status
     is_globally_active = await database.get_instance_status(instance_name)
 
+    # Get Quota Stats
+    quota = await database.check_rate_limit(instance_name)
+
     return templates.TemplateResponse("user_dashboard.html", {
         "request": request,
         "instance_name": instance_name,
         "sessions": my_sessions,
-        "is_globally_active": is_globally_active
+        "is_globally_active": is_globally_active,
+        "quota": quota
     })
 
 @router.post("/user/toggle/{phone_number}")
