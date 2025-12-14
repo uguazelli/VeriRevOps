@@ -1,9 +1,9 @@
 import os
+from datetime import datetime
 from fastapi import APIRouter, Request, Form, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app import database
-from typing import Annotated
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
@@ -77,8 +77,12 @@ async def add_mapping(
     platform_token = platform_token.strip() if platform_token else None
 
     # Empty string renewal_date should be None
-    if renewal_date and not renewal_date.strip():
-        renewal_date = None
+    renewal_date_obj = None
+    if renewal_date and renewal_date.strip():
+        try:
+            renewal_date_obj = datetime.strptime(renewal_date, "%Y-%m-%d").date()
+        except ValueError:
+            pass # Or handle error. For now, ignore invalid dates.
 
     # Logic: If platform_token is provided, instance_name is the ALIAS.
     # Otherwise, instance_name IS the platform ID (Evolution).
@@ -89,14 +93,17 @@ async def add_mapping(
         access_key,
         platform_token,
         message_limit=message_limit,
-        renewal_date=renewal_date
+        renewal_date=renewal_date_obj
     )
 
     # Telegram Webhook Registration
     # Condition: It has a platform_token (Explicit Telegram) OR instance_name looks like a token (Old way)
-    telegram_token = platform_token
-    if not telegram_token and ":" in instance_name and len(instance_name) > 20:
-        telegram_token = instance_name
+    # AND it is not a Chatwoot instance.
+    telegram_token = None
+    if not instance_name.startswith("chatwoot_"):
+        telegram_token = platform_token
+        if not telegram_token and ":" in instance_name and len(instance_name) > 20:
+            telegram_token = instance_name
 
     if telegram_token:
         # We need the base URL of this server.

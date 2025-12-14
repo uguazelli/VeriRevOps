@@ -1,7 +1,7 @@
 import httpx
 import os
 import base64
-from app.services import rag_service
+from app.services import rag_service, bot_service
 
 EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "")
 EVOLUTION_URL = os.getenv("EVOLUTION_URL", "https://dev-evolution.veridatapro.com")
@@ -87,8 +87,6 @@ async def message_whatsapp(*, instance: str, phone: str, message: str, delay: in
             print(f"❌ Error {e.response.status_code}: {e.response.text}")
         except Exception as e:
             print(f"❌ Request Failed: {str(e)}")
-
-from app.services import bot_service
 
 async def process_webhook(payload: dict):
     # 1. Filter Event Type

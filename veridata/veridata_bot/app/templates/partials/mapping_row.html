@@ -23,7 +23,9 @@
     </td>
     <td style="font-size: 0.9em; color: var(--text-muted);">{{ mapping.renewal_date }}</td>
     <td>
-        {% if mapping.platform_token %}
+        {% if mapping.instance_name.startswith('chatwoot_') %}
+        <span class="badge badge-primary" style="background-color: #1f93ff;">Chatwoot</span>
+        {% elif mapping.platform_token %}
         <span class="badge badge-telegram">Telegram</span>
         {% else %}
         <span class="badge badge-evolution">Evolution</span>

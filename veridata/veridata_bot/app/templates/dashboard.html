@@ -17,7 +17,7 @@
 </div>
 
 <div class="card" style="margin-bottom: 2rem;">
-    <h3 style="margin-top:0;">Add New Bot</h3>
+    <h3 style="margin-top:0;">Add or Update Bot</h3>
     <form hx-post="/admin/mappings" hx-target="#mappings-body" hx-swap="beforeend" hx-on::after-request="this.reset()"
         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
 
@@ -26,8 +26,8 @@
             <input type="text" name="instance_name" placeholder="MyBot" required>
         </div>
         <div class="form-control">
-            <label>Telegram Platform Token (Optional)</label>
-            <input type="text" name="platform_token" placeholder="123456:ABC... (Leave empty for Evolution)">
+            <label>Platform Bot Token (Telegram/Chatwoot)</label>
+            <input type="text" name="platform_token" placeholder="Token... (Leave empty for Evolution)">
         </div>
         <div class="form-control">
             <label>VeriData RAG Tenant ID</label>
@@ -46,7 +46,7 @@
             <input type="date" name="renewal_date">
         </div>
         <div class="full-width" style="grid-column: 1 / -1; margin-top: 0.5rem;">
-            <button type="submit" class="btn btn-primary" style="width: 100%;">Add Mapping</button>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Add or Update Mapping</button>
         </div>
     </form>
 </div>
