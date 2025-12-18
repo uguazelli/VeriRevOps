@@ -7,7 +7,6 @@ from app.services import rag_service, bot_service
 
 EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "")
 EVOLUTION_URL = os.getenv("EVOLUTION_URL", "https://dev-evolution.veridatapro.com")
-INTEGRATOR_URL = os.getenv("INTEGRATOR_URL", "http://veridata.integrator:8000/api/v1/leads")
 
 
 async def mark_message_read(*, instance: str, message_id: str, phone: str):
@@ -102,26 +101,23 @@ async def sync_lead(*, instance: str, phone: str, push_name: str):
         first_name = parts[0] if parts else "Unknown"
         last_name = parts[1] if len(parts) > 1 else first_name
 
+        # New API Endpoint
+        url = f"http://veridata.sync:8001/api/v1/{instance}/lead"
+
         payload = {
             "firstName": first_name,
             "lastName": last_name,
             "status": "New",
-            "source": "Call", # Hardcoded per user request
+            "source": "Call",
             "opportunityAmount": 0,
             "opportunityAmountCurrency": "USD",
-            "emailAddress": None, # Not available in webhook usually
+            "emailAddress": "unknunknown", # Not available in webhook usually, but required by API
             "phoneNumber": f"+{phone}" # Ensure E.164-ish format
-        }
-
-        # We authenticate using the Instance Alias (which assumes the integrator has mapped this alias to a Client)
-        headers = {
-            "X-Bot-Instance-Alias": instance,
-            "Content-Type": "application/json"
         }
 
         async with httpx.AsyncClient() as client:
             print(f"🔄 Syncing lead for {phone} to Integrator...")
-            resp = await client.post(INTEGRATOR_URL, json=payload, headers=headers)
+            resp = await client.post(url, json=payload)
             if resp.status_code >= 400:
                 print(f"⚠️ Integrator Sync Failed: {resp.status_code} - {resp.text}")
             else:

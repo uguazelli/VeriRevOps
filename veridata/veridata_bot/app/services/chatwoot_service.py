@@ -4,8 +4,6 @@ from app import database
 from app.services import bot_service
 import asyncio
 
-INTEGRATOR_URL = os.getenv("INTEGRATOR_URL", "http://veridata.integrator:8000/api/v1/leads")
-
 
 # Default Chatwoot URL if not provided elsewhere.
 CHATWOOT_BASE_URL = os.getenv("CHATWOOT_URL", "https://dev-chat.veridatapro.com")
@@ -45,31 +43,30 @@ async def sync_lead(*, instance: str, user_id: str, name: str, email: str, phone
         first_name = parts[0] if parts else "Unknown"
         last_name = parts[1] if len(parts) > 1 else first_name
 
+        # New API Endpoint
+        url = f"http://veridata.sync:8001/api/v1/{instance}/lead"
+
         payload = {
             "firstName": first_name,
             "lastName": last_name,
             "status": "New",
-            "source": "Call", # Hardcoded per user request
-            "emailAddress": email,
-            "phoneNumber": phone,
+            "source": "Call",
+            "emailAddress": email or "", # API expects string
+            "phoneNumber": phone or "",
             "opportunityAmount": 0,
-            "opportunityAmountCurrency": "USD",
-            "description": f"Chatwoot User ID: {user_id}"
-        }
-
-        # Authenticate using the Instance Alias (mapped to Client)
-        headers = {
-            "X-Bot-Instance-Alias": instance,
-            "Content-Type": "application/json"
+            "opportunityAmountCurrency": "USD"
         }
 
         async with httpx.AsyncClient() as client:
             print(f"🔄 Syncing lead for Chatwoot:{user_id} to Integrator...")
-            resp = await client.post(INTEGRATOR_URL, json=payload, headers=headers, timeout=5.0)
+            resp = await client.post(url, json=payload, timeout=5.0)
             if resp.status_code >= 400:
                 print(f"⚠️ Integrator Sync Failed: {resp.status_code} - {resp.text}")
             else:
                 print(f"✅ Lead Synced: {resp.json()}")
+
+    except Exception as e:
+        print(f"❌ Lead Sync Error: {str(e)}")
 
     except Exception as e:
         print(f"❌ Lead Sync Error: {str(e)}")

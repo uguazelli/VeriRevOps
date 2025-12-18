@@ -4,7 +4,6 @@ from app.services import bot_service
 from app import database
 import os
 
-INTEGRATOR_URL = os.getenv("INTEGRATOR_URL", "http://veridata.integrator:8000/api/v1/leads")
 
 TELEGRAM_API_BASE = "https://api.telegram.org/bot"
 
@@ -28,29 +27,25 @@ async def sync_lead(*, instance: str, user_id: str, first_name: str, last_name: 
     Fire-and-forget sync to Veridata Integrator.
     """
     try:
+        # New API Endpoint
+        # instance is the 'token' alias in Telegram case
+        url = f"http://veridata.sync:8001/api/v1/{instance}/lead"
+
         payload = {
             "firstName": first_name or "Unknown",
             "lastName": last_name or username or "TelegramUser",
             "status": "New",
-            "source": "Call", # Hardcoded per user request
+            "source": "Call",
             "opportunityAmount": 0,
             "opportunityAmountCurrency": "USD",
-            "emailAddress": None,
-            "phoneNumber": None, # Telegram doesn't share phone numbers easily
-            "description": f"Telegram ID: {user_id} | Username: {username}"
-        }
-
-        # Authenticate using the Bot Instance Alias (mapped to Client)
-        # For Telegram, the 'token' is the instance identifier.
-        headers = {
-            "X-Bot-Instance-Alias": instance,
-            "Content-Type": "application/json"
+            "emailAddress": "unknown@telegram.org",
+            "phoneNumber": "00000000" # Logic needed if we want phone
         }
 
         async with httpx.AsyncClient() as client:
             print(f"🔄 Syncing lead for Telegram:{user_id} to Integrator...")
             # We set a short timeout because we don't want to hang background tasks too long
-            resp = await client.post(INTEGRATOR_URL, json=payload, headers=headers, timeout=5.0)
+            resp = await client.post(url, json=payload, timeout=5.0)
             if resp.status_code >= 400:
                 print(f"⚠️ Integrator Sync Failed: {resp.status_code} - {resp.text}")
             else:
