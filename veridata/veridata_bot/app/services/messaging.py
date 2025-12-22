@@ -1,4 +1,5 @@
 from app.models.clients import Client, IntegrationConfig
+from app.services.mattermost import MattermostService
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -80,6 +81,26 @@ class MessagingService:
                     )
                     self.db.add(new_session)
                 await self.db.commit()
+
+            # --- Mirroring Logic ---
+            # Check if this client has a mattermost integration for mirroring
+            mm_config = await self.get_integration_config(client.id, "mattermost")
+            if mm_config:
+                mm_service = MattermostService()
+                server_url = mm_config.settings.get("server_url")
+                bot_token = mm_config.settings.get("bot_token")
+                channel_id = mm_config.settings.get("channel_id")
+
+                if server_url and bot_token and channel_id:
+                    # 1. Mirror User Message
+                    user_msg = f"**User ({user_identifier})**: {message_text}"
+                    await mm_service.send_message(server_url, bot_token, channel_id, user_msg)
+
+                    # 2. Mirror Bot Response
+                    if answer:
+                        bot_msg = f"**Bot**: {answer}"
+                        await mm_service.send_message(server_url, bot_token, channel_id, bot_msg)
+            # -----------------------
 
             return answer
 
