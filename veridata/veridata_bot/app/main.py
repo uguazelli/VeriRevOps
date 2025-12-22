@@ -3,8 +3,6 @@ from fastapi import FastAPI
 from sqladmin import Admin
 from app.core.database import engine
 from app.models.base import Base
-from app.models.clients import Client, IntegrationConfig
-from app.models.sessions import ConversationSession
 from app.admin.views import ClientAdmin, IntegrationConfigAdmin
 from app.core.config import get_settings
 
