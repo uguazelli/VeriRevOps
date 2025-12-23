@@ -61,6 +61,10 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
     if sender_type != "incoming":
         return {"status": "ignored_outgoing"}
 
+    conversation_status = payload.get("conversation", {}).get("status")
+    if conversation_status == "open" or conversation_status == "snoozed":
+        return {"status": "ignored_open_conversation"}
+
     user_query = payload.get("content")
 
     if not user_query:
@@ -127,6 +131,13 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
     )
 
     if answer:
+        # If conversation was resolved, reopen it as pending
+        if conversation_status == "resolved":
+            try:
+                await cw_client.toggle_status(conversation_id, "pending")
+            except Exception as e:
+                logger.error(f"Failed to set status to pending for {conversation_id}: {e}")
+
         await cw_client.send_message(
             conversation_id=conversation_id,
             message=answer
@@ -134,11 +145,11 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
 
     # Handle Handover
     if requires_human:
-         # Optionally toggle status in Chatwoot
-         # await cw_client.toggle_status(conversation_id, "open")
          logger.info(f"Handover requested for session {conversation_id}")
-         # TODO: Implement toggle_status in ChatwootClient if needed
-         pass
+         try:
+             await cw_client.toggle_status(conversation_id, "open")
+         except Exception as e:
+             logger.error(f"Failed to toggle status for {conversation_id}: {e}")
 
     # Increment Usage
     subscription.usage_count += 1

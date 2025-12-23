@@ -21,3 +21,11 @@ class ChatwootClient:
             resp = await client.post(url, json=payload, headers=self.headers)
             resp.raise_for_status()
             return resp.json()
+
+    async def toggle_status(self, conversation_id: str, status: str):
+        async with httpx.AsyncClient() as client:
+            url = f"{self.base_url}/api/v1/accounts/1/conversations/{conversation_id}/toggle_status"
+            payload = {"status": status}
+            resp = await client.post(url, json=payload, headers=self.headers)
+            resp.raise_for_status()
+            return resp.json()
