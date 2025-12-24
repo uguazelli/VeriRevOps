@@ -103,5 +103,4 @@ WHERE email = 'admin@veridatapro.com'
 
 
 Add the number to the company name to avoid Whatsapp ban
-
-[IMPORTANT] You must enable "Enable Post Username Override" in your Mattermost System Console > Integrations > Integration Management
+subscription, config, sessions, can we show

@@ -13,3 +13,6 @@ class ServiceConfig(Base):
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     client = relationship("Client", back_populates="configs")
+
+    def __str__(self):
+        return f"{self.platform} Config"

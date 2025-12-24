@@ -14,3 +14,6 @@ class Subscription(Base):
     end_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     client = relationship("Client", back_populates="subscriptions")
+
+    def __str__(self):
+        return f"Subscription(Limit={self.quota_limit}, Usage={self.usage_count})"

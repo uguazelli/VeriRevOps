@@ -13,3 +13,6 @@ class BotSession(Base):
     rag_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     client = relationship("Client", back_populates="sessions")
+
+    def __str__(self):
+        return f"Session {self.external_session_id}"
