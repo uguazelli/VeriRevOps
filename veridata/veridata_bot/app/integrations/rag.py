@@ -44,3 +44,21 @@ class RagClient:
             resp.raise_for_status()
             return resp.json()
             # Expected response: {"answer": "...", "requires_human": true, "session_id": "..."}
+
+    async def transcribe(self, file_bytes: bytes, filename: str, provider: str = "gemini") -> str:
+        async with httpx.AsyncClient() as client:
+            url = f"{self.base_url}/api/transcribe"
+
+            headers = {}
+            if self.api_key:
+                if "Basic" in self.api_key or "Bearer" in self.api_key:
+                     headers["Authorization"] = self.api_key
+                else:
+                     headers["Authorization"] = f"Bearer {self.api_key}"
+
+            files = {"file": (filename, file_bytes)}
+            data = {"provider": provider}
+
+            resp = await client.post(url, data=data, files=files, headers=headers)
+            resp.raise_for_status()
+            return resp.json().get("text", "")

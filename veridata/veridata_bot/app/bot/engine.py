@@ -7,6 +7,7 @@ from app.integrations.chatwoot import ChatwootClient
 from app.integrations.espocrm import EspoClient
 import uuid
 import logging
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +75,48 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
         return {"status": "ignored_open_conversation"}
 
     user_query = payload.get("content")
+    attachments = payload.get("attachments", [])
+    logger.info(f"Received {len(attachments)} attachments")
+
+    if not user_query and attachments:
+        # Try to find audio attachment
+        for att in attachments:
+             file_type = att.get("file_type")
+             data_url = att.get("data_url")
+             logger.info(f"Processing attachment: type={file_type}, url={data_url}")
+
+             if file_type == "audio":
+                 filename = f"audio.{att.get('extension', 'mp3')}"
+                 logger.info(f"Found audio attachment. Downloading from: {data_url}")
+
+                 try:
+                     async with httpx.AsyncClient(follow_redirects=True) as http_client:
+                         # Download audio
+                         logger.info(f"Starting download from {data_url}")
+                         resp = await http_client.get(data_url)
+                         resp.raise_for_status()
+                         audio_bytes = resp.content
+                         logger.info(f"Download complete. Size: {len(audio_bytes)} bytes")
+
+                         # Transcribe
+                         rag_client = RagClient(
+                            base_url=rag_config["base_url"],
+                            api_key=rag_config.get("api_key", ""),
+                            tenant_id=rag_config["tenant_id"]
+                         )
+
+                         logger.info("Calling transcription service...")
+                         transcript = await rag_client.transcribe(audio_bytes, filename)
+                         logger.info(f"Transcription result: '{transcript}'")
+
+                         if transcript:
+                             user_query = transcript
+                             break # One audio per message supported for now
+                 except Exception as e:
+                     logger.error(f"Failed to process audio attachment: {e}", exc_info=True)
 
     if not user_query:
-         logger.info("Empty message content")
+         logger.info("Empty message content and no valid audio transcription")
          return {"status": "empty_message"}
 
     # 3. Session Management
