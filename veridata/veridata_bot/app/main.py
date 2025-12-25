@@ -7,6 +7,16 @@ from app.bot.engine import process_webhook
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.base import Base
 
+import logging
+import sys
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
 app = FastAPI(title="Veridata Bot")
 
 # Admin Views

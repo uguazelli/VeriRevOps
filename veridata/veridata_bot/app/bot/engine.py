@@ -11,12 +11,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
+    logger.info(f"Processing webhook for client: {client_slug}")
     # 1. Validate Client & Subscription
     query = select(Client).where(Client.slug == client_slug, Client.is_active == True)
     result = await db.execute(query)
     client = result.scalars().first()
 
     if not client:
+        logger.error(f"Client not found or inactive: {client_slug}")
         raise HTTPException(status_code=404, detail="Client not found or inactive")
 
     # Check Subscription
@@ -43,14 +45,16 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
     espo_config = configs.get("espocrm")
 
     if not rag_config or not chatwoot_config:
-        logger.error(f"Missing configs for {client_slug}")
+        logger.error(f"Missing configs for {client_slug}. Found: {list(configs.keys())}")
         raise HTTPException(status_code=500, detail="Configuration missing")
 
     # Extract info from payload
     # Assuming Chatwoot webhook payload structure
     # event_type = widget_triggered, message_created etc.
     event_type = payload.get("event")
+    logger.info(f"Event type: {event_type}")
     if event_type != "message_created":
+        logger.info(f"Ignored event: {event_type}")
         return {"status": "ignored_event"}
 
     message_data = payload.get("content", "")
@@ -58,16 +62,21 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
     sender = payload.get("sender", {})
     sender_type = payload.get("message_type") # incoming / outgoing
 
+    logger.info(f"Message from {sender_type} in conversation {conversation_id}")
+
     if sender_type != "incoming":
+        logger.info("Ignored outgoing message")
         return {"status": "ignored_outgoing"}
 
     conversation_status = payload.get("conversation", {}).get("status")
     if conversation_status == "open" or conversation_status == "snoozed":
+        logger.info(f"Ignored conversation with status: {conversation_status}")
         return {"status": "ignored_open_conversation"}
 
     user_query = payload.get("content")
 
     if not user_query:
+         logger.info("Empty message content")
          return {"status": "empty_message"}
 
     # 3. Session Management
@@ -79,6 +88,7 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
     session = sess_result.scalars().first()
 
     if not session:
+        logger.info(f"Creating new BotSession for conversation {conversation_id}")
         session = BotSession(
             client_id=client.id,
             external_session_id=conversation_id
@@ -86,6 +96,8 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
         db.add(session)
         await db.commit()
         await db.refresh(session)
+    else:
+        logger.info(f"Found existing BotSession: {session.id}, RAG ID: {session.rag_session_id}")
 
     # 4. RAG Call
     # Extract optional params from config
@@ -106,13 +118,15 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
         if rag_use_hyde is not None: query_params["use_hyde"] = rag_use_hyde
         if rag_use_rerank is not None: query_params["use_rerank"] = rag_use_rerank
 
+        logger.info(f"Calling RAG service with query: '{user_query}' and params: {query_params}")
         rag_response = await rag_client.query(
             message=user_query,
             session_id=session.rag_session_id,
             **query_params
         )
+        logger.info("RAG response received successfully")
     except Exception as e:
-        logger.error(f"RAG Error: {e}")
+        logger.error(f"RAG Error: {e}", exc_info=True)
         return {"status": "rag_error"}
 
     answer = rag_response.get("answer")
@@ -121,6 +135,7 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
 
     # Update session if needed
     if new_rag_session_id and str(new_rag_session_id) != str(session.rag_session_id):
+        logger.info(f"Updating RAG session ID to {new_rag_session_id}")
         session.rag_session_id = uuid.UUID(new_rag_session_id)
         db.add(session) # Mark for update
 
@@ -134,14 +149,18 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
         # If conversation was resolved, reopen it as pending
         if conversation_status == "resolved":
             try:
+                logger.info(f"Reopening resolved conversation {conversation_id}")
                 await cw_client.toggle_status(conversation_id, "pending")
             except Exception as e:
                 logger.error(f"Failed to set status to pending for {conversation_id}: {e}")
 
+        logger.info(f"Sending response to Chatwoot conversation {conversation_id}")
         await cw_client.send_message(
             conversation_id=conversation_id,
             message=answer
         )
+    else:
+        logger.warning("RAG returned no answer")
 
     # Handle Handover
     if requires_human:
@@ -159,6 +178,7 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
     # 6. CRM Sync (Best effort)
     if espo_config:
         try:
+            logger.info("Attempting EspoCRM sync")
             espo = EspoClient(
                 base_url=espo_config["base_url"],
                 api_key=espo_config["api_key"]
@@ -167,6 +187,8 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
             name = sender.get("name", "Unknown")
             if email:
                 await espo.sync_lead(name=name, email=email)
+            else:
+                logger.info("Skipping CRM sync: No email provided")
         except Exception as e:
             logger.error(f"CRM Sync failed: {e}")
 

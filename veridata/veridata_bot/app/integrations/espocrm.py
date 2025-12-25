@@ -1,4 +1,7 @@
 import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 class EspoClient:
     def __init__(self, base_url: str, api_key: str):
@@ -8,6 +11,7 @@ class EspoClient:
 
     async def sync_lead(self, name: str, email: str = None):
         if not email:
+            logger.warning(f"EspoCRM sync matched no email for name: {name}")
             return None # Minimal requirement
 
         async with httpx.AsyncClient() as client:

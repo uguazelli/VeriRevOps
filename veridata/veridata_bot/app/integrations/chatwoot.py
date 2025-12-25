@@ -1,4 +1,7 @@
 import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ChatwootClient:
     def __init__(self, base_url: str, api_token: str):
@@ -9,6 +12,7 @@ class ChatwootClient:
     async def send_message(self, conversation_id: str, message: str, message_type: str = "outgoing"):
         async with httpx.AsyncClient() as client:
             url = f"{self.base_url}/api/v1/accounts/1/conversations/{conversation_id}/messages"
+            logger.info(f"Sending message to Chatwoot conversation {conversation_id}")
             payload = {
                 "content": message,
                 "message_type": message_type,

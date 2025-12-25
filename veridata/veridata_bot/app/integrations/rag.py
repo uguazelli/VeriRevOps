@@ -1,5 +1,8 @@
 import httpx
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RagClient:
     def __init__(self, base_url: str, api_key: str, tenant_id: str):
@@ -17,6 +20,8 @@ class RagClient:
                 "tenant_id": self.tenant_id,
                 **kwargs # provider, use_hyde, use_rerank etc.
             }
+
+            logger.info(f"RAG Request to {url}. Payload keys: {list(payload.keys())}")
 
             if session_id:
                 payload["session_id"] = str(session_id)
