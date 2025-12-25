@@ -6,6 +6,8 @@ from app.api.endpoints import router as api_router
 from app.bot.engine import process_webhook
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.base import Base
+from sqladmin.authentication import AuthenticationBackend
+from app.core.config import settings
 
 import logging
 import sys
@@ -32,15 +34,6 @@ class ServiceConfigAdmin(ModelView, model=ServiceConfig):
 class BotSessionAdmin(ModelView, model=BotSession):
     column_list = [BotSession.id, BotSession.client_id, BotSession.external_session_id]
 
-# Startup - Create tables
-@app.on_event("startup")
-async def startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-from sqladmin.authentication import AuthenticationBackend
-from app.core.config import settings
-
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
         form = await request.form()
@@ -63,6 +56,13 @@ class AdminAuth(AuthenticationBackend):
         return True
 
 authentication_backend = AdminAuth(secret_key=settings.postgres_password or "secret") # Using db password as secret for now, or could use itsdangerous
+
+# Startup - Create tables
+@app.on_event("startup")
+async def startup():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
 
 # Admin
 admin = Admin(app, engine, authentication_backend=authentication_backend)
