@@ -180,9 +180,11 @@ async def process_webhook(client_slug: str, payload: dict, db: AsyncSession):
         db.add(session) # Mark for update
 
     # 5. Send to Chatwoot
+    # 5. Send to Chatwoot
     cw_client = ChatwootClient(
         base_url=chatwoot_config["base_url"],
-        api_token=chatwoot_config["api_key"]
+        api_token=chatwoot_config["api_key"],
+        account_id=chatwoot_config.get("account_id", 1)
     )
 
     if answer:
