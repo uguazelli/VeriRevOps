@@ -13,6 +13,7 @@ from src.hyde import generate_hypothetical_answer
 from src.rerank import rerank_documents
 from src.llm_factory import get_llm
 from src.memory import add_message, get_chat_history, get_full_chat_history
+from src.logging import log_start, log_success, log_error, log_llm, log_skip, log_external_call
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ def summarize_conversation(session_id: UUID, provider: str = "gemini") -> Dict[s
         prompt = SUMMARY_PROMPT_TEMPLATE.format(history_str=history_str)
         response = llm.complete(prompt)
         text = response.text.replace('```json', '').replace('```', '').strip()
-        logger.info(f"LLM Summarization response: {text}")
+        log_llm(logger, f"Summarization response: {text}")
 
         import json
         try:
@@ -71,7 +72,7 @@ def summarize_conversation(session_id: UUID, provider: str = "gemini") -> Dict[s
             return ast.literal_eval(text)
 
     except Exception as e:
-        logger.error(f"Summarization failed: {e}")
+        log_error(logger, f"Summarization failed: {e}")
         # Return fallback object that matches the Pydantic schema
         return {
             "purchase_intent": "None",
@@ -165,7 +166,7 @@ def generate_answer(
     Retrieves context and generates an answer using the requested LLM provider.
     Supports Conversational Memory and Intent Classification.
     """
-    logger.info(f"Generating answer for query: '{query}' | Session={session_id} | Provider={provider}")
+    log_start(logger, f"Generating answer for query: '{query}' | Session={session_id} | Provider={provider}")
 
     # 1. Handle Memory (Contextualization)
     search_query = query
@@ -245,11 +246,11 @@ def generate_answer(
             response = llm.complete(prompt)
             answer = response.text
         except Exception as e:
-            logger.error(f"LLM generation failed: {e}")
+            log_error(logger, f"LLM generation failed: {e}")
             answer = "Sorry, I encountered an error generating the answer."
     else:
         # 4. Small Talk / Direct Generation
-        logger.info("Small talk detected. Bypassing RAG.")
+        log_skip(logger, "Small talk detected. Bypassing RAG.")
         prompt = (
             "You are Veribot 🤖, a helpful AI assistant.\n"
             "Respond to the following user message nicely and concisely.\n"

@@ -5,9 +5,10 @@ from fastapi.staticfiles import StaticFiles
 
 from src.db import init_db, close_pool
 from src.controllers import web, api
+from src.logging import setup_logging
 
-# Logging
-logging.basicConfig(level=logging.INFO)
+# Setup Logging
+setup_logging()
 logger = logging.getLogger(__name__)
 
 # Lifespan
