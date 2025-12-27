@@ -96,9 +96,14 @@ class EspoClient:
                 f"- Budget: {summary.get('detected_budget')}\n"
             )
 
-            # 3. Update
-            update_url = f"{self.base_url}/api/v1/Lead/{lead_id}"
-            payload = {"description": desc}
+            # 3. Post to Stream (Create Note)
+            create_note_url = f"{self.base_url}/api/v1/Note"
+            payload = {
+                "type": "Post",
+                "post": desc,
+                "parentType": "Lead",
+                "parentId": lead_id
+            }
 
-            logger.info(f"Updating Lead {lead_id} with summary")
-            await client.put(update_url, json=payload, headers=self.headers)
+            logger.info(f"Posting summary to Stream for Lead {lead_id}")
+            await client.post(create_note_url, json=payload, headers=self.headers)
