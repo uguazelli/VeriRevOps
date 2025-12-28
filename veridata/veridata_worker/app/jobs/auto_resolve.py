@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models import SyncConfig, ServiceConfig
 from app.integrations.chatwoot import ChatwootClient
+from app.core.logging import log_start, log_success, log_error, log_job, log_external_call
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ async def run_auto_resolve_job(session: AsyncSession, config: SyncConfig):
     Checks for inactive conversations and resolves them.
     Triggered by SyncConfig. Platform credentials fetched from ServiceConfig.
     """
-    logger.info(f"Starting Auto-Resolve Job for Config ID {config.id}")
+    log_start(logger, f"Starting Auto-Resolve Job for Config ID {config.id}")
 
     # 1. Fetch Credentials from ServiceConfig
     # We look for the 'chatwoot' service config for this client
@@ -24,7 +25,7 @@ async def run_auto_resolve_job(session: AsyncSession, config: SyncConfig):
     service_config = result.scalars().first()
 
     if not service_config:
-        logger.error(f"Skipping Auto-Resolve for Config {config.id}: No 'chatwoot' ServiceConfig found for Client {config.client_id}")
+        log_error(logger, f"Skipping Auto-Resolve for Config {config.id}: No 'chatwoot' ServiceConfig found for Client {config.client_id}")
         return
 
     cw_creds = service_config.config
@@ -33,14 +34,17 @@ async def run_auto_resolve_job(session: AsyncSession, config: SyncConfig):
     access_token = cw_creds.get("api_key") # Map 'api_key' to access_token
 
     if not all([base_url, access_token]):
-        logger.error(f"Invalid Chatwoot credentials in ServiceConfig {service_config.id}")
+        log_error(logger, f"Invalid Chatwoot credentials in ServiceConfig {service_config.id}")
         return
 
     client = ChatwootClient(base_url, str(account_id), access_token)
 
-    # Fetch OPEN conversations
-    # (Checking 'pending' too might be good, but starting with 'open' is safer)
-    conversations = await client.get_conversations(status="open")
+    # Fetch OPEN and PENDING conversations
+    log_external_call(logger, "Chatwoot", "Fetching open/pending conversations")
+    conversations_open = await client.get_conversations(status="open")
+    conversations_pending = await client.get_conversations(status="pending")
+
+    conversations = conversations_open + conversations_pending
 
     now = datetime.now(timezone.utc).timestamp() # Current unix timestamp
     threshold_seconds = config.frequency_minutes * 60
@@ -61,15 +65,15 @@ async def run_auto_resolve_job(session: AsyncSession, config: SyncConfig):
             # Check Inactivity
             if (now - last_activity_ts) > threshold_seconds:
                 conv_id = conv.get("id")
-                logger.info(f"Conversation {conv_id} inactive for {(now - last_activity_ts)/60:.1f} mins. Resolving...")
+                log_job(logger, f"Conversation {conv_id} inactive for {(now - last_activity_ts)/60:.1f} mins. Resolving...")
 
                 await client.toggle_status(conv_id, "resolved")
                 resolve_count += 1
 
         except Exception as e:
-            logger.warning(f"Error processing conversation {conv.get('id')}: {e}")
+            log_error(logger, f"Error processing conversation {conv.get('id')}: {e}")
 
     if resolve_count > 0:
-        logger.info(f"Auto-Resolve Job Complete. Resolved {resolve_count} conversations.")
+        log_success(logger, f"Auto-Resolve Job Complete. Resolved {resolve_count} conversations.")
     else:
-        logger.info("Auto-Resolve Job Complete. No inactive conversations found.")
+        log_success(logger, "Auto-Resolve Job Complete. No inactive conversations found.")

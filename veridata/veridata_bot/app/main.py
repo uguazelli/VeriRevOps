@@ -1,17 +1,10 @@
 from fastapi import FastAPI, Depends, Request, BackgroundTasks
-from app.core.db import engine, get_session, async_session_maker
-from app.models import Client, Subscription, ServiceConfig, BotSession
 from app.api.endpoints import router as api_router
 from app.bot.engine import process_bot_event, process_integration_event
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.base import Base
-from app.core.config import settings
-
+from app.core.db import async_session_maker
 import logging
-import sys
-
 from app.core.logging import setup_logging
-
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 # Configure logging
@@ -32,7 +25,6 @@ async def run_integration_bg(client_slug: str, payload: dict):
     async with async_session_maker() as db:
         await process_integration_event(client_slug, payload, db)
 
-# Admin UI removed (moved to veridata_worker)
 
 # API
 app.include_router(api_router, prefix="/api/v1")

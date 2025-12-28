@@ -29,6 +29,7 @@ class SyncConfig(SQLModel, table=True):
     config_json: dict = Field(default={}, sa_column=Column(JSON))
     is_active: bool = Field(default=True)
     frequency_minutes: int = Field(default=60)
+    last_run_at: Optional[datetime] = Field(default=None)
 
     client: Optional[Client] = Relationship(back_populates="sync_configs")
 

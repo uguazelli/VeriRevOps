@@ -1,10 +1,9 @@
 import httpx
 import uuid
 import logging
+import base64
 
 logger = logging.getLogger(__name__)
-
-import base64
 
 class RagClient:
     def __init__(self, base_url: str, api_key: str, tenant_id: str):
