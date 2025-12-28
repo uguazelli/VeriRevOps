@@ -75,22 +75,46 @@ async def create_tenant(request: Request, name: Annotated[str, Form()], username
 async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends(require_auth)):
     tenants = get_tenants()
     documents = get_tenant_documents(tenant_id)
-    tenant_name = "Unknown"
-    for t_id, t_name in tenants:
-        if str(t_id) == str(tenant_id):
-            tenant_name = t_name
-            break
+
+    tenant_data = {"id": str(tenant_id), "name": "Unknown", "preferred_languages": ""}
+
+    # Fetch details including languages
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT name, preferred_languages FROM tenants WHERE id = %s", (tenant_id,))
+            res = cur.fetchone()
+            if res:
+                tenant_data["name"] = res[0]
+                tenant_data["preferred_languages"] = res[1] or ""
 
     return templates.TemplateResponse(
         "index.html",
         {
             "request": request,
             "tenants": tenants,
-            "selected_tenant": {"id": str(tenant_id), "name": tenant_name},
+            "selected_tenant": tenant_data,
             "documents": documents,
             "username": username
         }
     )
+
+@router.post("/tenants/{tenant_id}/settings", response_class=HTMLResponse)
+async def update_tenant_settings(
+    request: Request,
+    tenant_id: UUID,
+    preferred_languages: Annotated[str, Form()],
+    username: str = Depends(require_auth)
+):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE tenants SET preferred_languages = %s WHERE id = %s",
+                (preferred_languages, tenant_id)
+            )
+            conn.commit()
+
+    # Return a success message (using HTMX if we wanted, but full reload is safer for now or just redirect)
+    return RedirectResponse(url=f"/tenants/{tenant_id}", status_code=303)
 
 @router.post("/ingest", response_class=HTMLResponse)
 async def ingest_file(

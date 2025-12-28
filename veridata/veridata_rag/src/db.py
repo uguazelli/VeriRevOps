@@ -35,13 +35,21 @@ def init_db():
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
             # Create tenants table
+            # Create tenants table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS tenants (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                     name VARCHAR(255) NOT NULL,
+                    preferred_languages TEXT,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+
+            # Migration for existing databases
+            try:
+                cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS preferred_languages TEXT;")
+            except Exception as e:
+                logger.warning(f"Migration check for preferred_languages failed: {e}")
 
             # Create documents table
             # embedding vector size depends on provider

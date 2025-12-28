@@ -154,6 +154,19 @@ def contextualize_query(query: str, history: List[Dict[str, str]], provider: str
 
 # ... existing search_documents ...
 
+# Helper
+def get_tenant_languages(tenant_id: UUID) -> str:
+    """Fetches preferred languages for a tenant."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT preferred_languages FROM tenants WHERE id = %s", (tenant_id,))
+                res = cur.fetchone()
+                return res[0] if res and res[0] else None
+    except Exception as e:
+        logger.error(f"Failed to fetch tenant languages: {e}")
+        return None
+
 def generate_answer(
     tenant_id: UUID,
     query: str,
@@ -168,6 +181,15 @@ def generate_answer(
     """
     log_start(logger, f"Generating answer for query: '{query}' | Session={session_id} | Provider={provider}")
 
+    # Fetch Tenant Preferences
+    pref_langs = get_tenant_languages(tenant_id)
+    lang_instruction = ""
+    if pref_langs:
+        lang_instruction = f"Preferred Languages: {pref_langs}\n(Prioritize these if the user's language is ambiguous, but always match the user's input language)."
+
+    logger.info(f"Tenant Preferences [{tenant_id}]: '{pref_langs}'")
+    # logger.info(f"Language Instruction: '{lang_instruction}'")
+
     # 1. Handle Memory (Contextualization)
     search_query = query
     history = []
@@ -181,6 +203,9 @@ def generate_answer(
     requires_rag = intent["requires_rag"]
     requires_human = intent["requires_human"]
 
+    # Force human handoff if the intent classifier is unsure but query seems urgent?
+    # (Just sticking to the classifier for now)
+
     results = []
     answer = ""
 
@@ -191,7 +216,8 @@ def generate_answer(
             "You are a helpful assistant.\n"
             "The user explicitly asked to speak to a human agent.\n"
             "Generate a polite response confirming you will transfer them to a human agent.\n"
-            "IMPORTANT: Expected output must be in the SAME language as the user's message.\n"
+            f"{lang_instruction}\n"
+            "CRITICAL: You MUST answer in the SAME language as the user's message. If the user speaks Portuguese, reply in Portuguese.\n"
             f"User Message: {search_query}\n"
             "Response:"
         )
@@ -228,12 +254,13 @@ def generate_answer(
         prompt = (
             "You are Veribot 🤖, an AI assistant.\n"
             "Use the following pieces of retrieved context AND the chat history to answer the user's question.\n"
-            "IMPORTANT: Always answer in the same language as the user's question.\n"
+            f"{lang_instruction}\n"
+            "IMPORTANT: Always answer in the SAME language as the user's question.\n"
             "If asked about your identity, say you are Veribot 🤖, an AI assistant capable of answering most questions and redirecting to a human if needed.\n"
             "Priority:\n"
             "1. Use the retrieved context for factual information about the documents.\n"
             "2. Use the chat history for conversational context (e.g., user's name, previous topics).\n"
-            "If the answer is not in the context or history, say you don't know.\n\n"
+            "If the answer is not in the context or history, say you don't know (in the user's language).\n\n"
             f"Chat History:\n{history_str}\n\n"
             f"Retrieved Context:\n{context_str}\n\n"
             f"Question: {search_query}\n\n"
@@ -254,6 +281,7 @@ def generate_answer(
         prompt = (
             "You are Veribot 🤖, a helpful AI assistant.\n"
             "Respond to the following user message nicely and concisely.\n"
+            f"{lang_instruction}\n"
             "If this is a greeting, introduce yourself as Veribot 🤖, an AI assistant who can answer most questions or redirect you to a human agent.\n"
             "IMPORTANT: Always answer in the same language as the user's message.\n"
             "Use the chat history to maintain conversation context (e.g. remember names).\n"

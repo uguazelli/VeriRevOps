@@ -28,7 +28,7 @@ For **$197/month**, you get a fully managed "Revenue Engine." This includes:
 1. **Single-Tenant Infrastructure:** Your own private server space (Docker/Traefik).
 2. **VeriBot (RAG AI):** A custom-trained AI that knows your business inside out.
 3. **Hosted EspoCRM:** A dedicated CRM instance pre-configured to capture leads.
-4. **Chatwoot Platform:** A professional dashboard for your human agents to manage chats.
+4. **Chatwoot Platform:** A professional dashboard for your s to manage chats.
 5. **Audio Intelligence:** The ability to transcribe and summarize client voice notes.
 
 **Why is this better than ManyChat or Typebot?**
@@ -109,4 +109,4 @@ That is exactly why you pay the **Setup Fee**. We do it for you. You just hand u
 That happens with "Pirate" APIs (tools that scan QR codes). We use the **Official Cloud API**. We are compliant with Meta's Terms of Service. This is the safest way to run a business on WhatsApp.
 
 **"What if the AI says something stupid?"**
-We implement "Guardrails." We can instruct the bot: "If you are 90% unsure, do not answer; tag a human agent." Also, since we manually curate your data during onboarding, the risk of hallucination is minimized compared to automated scrapers.
+We implement "Guardrails." We can instruct the bot: "If you are 90% unsure, do not answer; tag a ." Also, since we manually curate your data during onboarding, the risk of hallucination is minimized compared to automated scrapers.
