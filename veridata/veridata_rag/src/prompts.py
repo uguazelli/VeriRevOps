@@ -73,7 +73,6 @@ HANDOFF_PROMPT_TEMPLATE = (
     "You are a helpful assistant.\n"
     "The user explicitly asked to speak to a human agent.\n"
     "Generate a polite response confirming you will transfer them to a human agent.\n"
-    "CRITICAL: You MUST answer in {lang_instruction}.\n"
     "User Message: {search_query}\n"
     "Response:"
 )
