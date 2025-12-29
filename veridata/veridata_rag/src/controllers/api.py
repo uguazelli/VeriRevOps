@@ -25,7 +25,8 @@ async def api_query_rag(request: QueryRequest):
         use_hyde=request.use_hyde,
         use_rerank=request.use_rerank,
         provider=request.provider,
-        session_id=session_id
+        session_id=session_id,
+        handoff_rules=request.handoff_rules
     )
     return QueryResponse(
         answer=answer,

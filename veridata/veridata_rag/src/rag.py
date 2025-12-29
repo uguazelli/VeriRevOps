@@ -71,10 +71,15 @@ def summarize_conversation(session_id: UUID, provider: str = "gemini") -> Dict[s
         }
 
 
-def analyze_intent(query: str, provider: str = "gemini") -> Dict[str, bool]:
+def analyze_intent(query: str, provider: str = "gemini", handoff_rules: str = None) -> Dict[str, bool]:
     try:
         llm = get_llm(provider)
-        prompt = INTENT_PROMPT_TEMPLATE.format(query=query)
+
+        rules_text = ""
+        if handoff_rules:
+            rules_text = f"Additional Tenant Rules:\n{handoff_rules}"
+
+        prompt = INTENT_PROMPT_TEMPLATE.format(query=query, handoff_rules=rules_text)
         response = llm.complete(prompt)
         text = response.text.replace('```json', '').replace('```', '').strip()
         import json
@@ -122,7 +127,8 @@ def generate_answer(
     use_hyde: bool = False,
     use_rerank: bool = False,
     provider: str = "gemini",
-    session_id: Optional[UUID] = None
+    session_id: Optional[UUID] = None,
+    handoff_rules: Optional[str] = None
 ) -> tuple[str, bool]:
     log_start(logger, f"Generating answer for query: '{query}' | Session={session_id} | Provider={provider}")
 
@@ -144,7 +150,7 @@ def generate_answer(
             search_query = contextualize_query(query, history, provider)
 
     # 2. Intent Classification (Small Talk vs RAG vs Human)
-    intent = analyze_intent(search_query, provider)
+    intent = analyze_intent(search_query, provider, handoff_rules)
     requires_rag = intent["requires_rag"]
     requires_human = intent["requires_human"]
 

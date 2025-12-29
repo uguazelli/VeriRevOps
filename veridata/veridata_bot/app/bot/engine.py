@@ -322,6 +322,11 @@ async def process_bot_event(client_slug: str, payload: dict, db: AsyncSession):
         if rag_use_hyde is not None: query_params["use_hyde"] = rag_use_hyde
         if rag_use_rerank is not None: query_params["use_rerank"] = rag_use_rerank
 
+        # Extract handoff rules
+        handoff_rules = rag_config.get("handoff_rules")
+        if handoff_rules:
+            query_params["handoff_rules"] = handoff_rules
+
         log_external_call(logger, "Veridata RAG", f"Query: '{user_query}' | Params: {query_params}")
         rag_response = await rag_client.query(
             message=user_query,

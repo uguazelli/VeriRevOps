@@ -45,6 +45,7 @@ INTENT_PROMPT_TEMPLATE = (
     "4. Unsure -> RAG = TRUE\n\n"
     "Rules for HUMAN:\n"
     "1. User says 'talk to human', 'real person', 'support agent', 'manager' -> HUMAN = TRUE\n"
+    "{handoff_rules}\n"
     "2. Otherwise -> HUMAN = FALSE\n\n"
     "Return JSON with keys 'requires_rag' (bool) and 'requires_human' (bool).\n\n"
     "Query: {query}\n\n"

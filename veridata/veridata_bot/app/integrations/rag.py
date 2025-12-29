@@ -33,7 +33,8 @@ class RagClient:
             payload = {
                 "query": message,
                 "tenant_id": self.tenant_id,
-                **kwargs # provider, use_hyde, use_rerank etc.
+                "tenant_id": self.tenant_id,
+                **kwargs # provider, use_hyde, use_rerank, handoff_rules etc.
             }
 
             logger.info(f"RAG Request to {url}. Payload keys: {list(payload.keys())}")

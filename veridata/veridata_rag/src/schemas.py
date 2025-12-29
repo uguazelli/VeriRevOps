@@ -9,6 +9,7 @@ class QueryRequest(BaseModel):
     use_rerank: bool = False
     provider: str = "gemini"
     session_id: Optional[UUID] = None
+    handoff_rules: Optional[str] = None
 
 class QueryResponse(BaseModel):
     answer: str
