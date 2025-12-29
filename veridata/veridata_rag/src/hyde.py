@@ -1,4 +1,3 @@
-import os
 import logging
 from src.llm_factory import get_llm
 
@@ -13,9 +12,6 @@ HYDE_PROMPT_TEMPLATE = (
 )
 
 def generate_hypothetical_answer(query: str, provider: str = "gemini") -> str:
-    """
-    Generates a hypothetical document/answer for the given query.
-    """
     try:
         llm = get_llm(provider)
         response = llm.complete(HYDE_PROMPT_TEMPLATE.format(query=query))

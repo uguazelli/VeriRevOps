@@ -1,4 +1,3 @@
-import os
 import logging
 import json
 from typing import List, Dict, Any
@@ -17,10 +16,6 @@ RERANK_PROMPT_TEMPLATE = (
 )
 
 def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5, provider: str = "gemini") -> List[Dict[str, Any]]:
-    """
-    Reranks a list of documents based on semantic relevance to the query using an LLM.
-    Returns the top K documents.
-    """
     if not documents:
         return []
 
@@ -28,17 +23,12 @@ def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5
     llm = get_llm(provider)
     scored_docs = []
 
-    # Optimization: For better performance, we could batch this or use a CrossEncoder model.
-    # For simplicity, we iterate.
-
     for doc in documents:
         try:
-            # Truncate content for reranking to save cost/latency
             content_preview = doc['content'][:1000]
             prompt = RERANK_PROMPT_TEMPLATE.format(query=query, content=content_preview)
 
             response = llm.complete(prompt)
-            # Try to parse JSON from response
             text = response.text.replace('```json', '').replace('```', '').strip()
             score_data = json.loads(text)
             score = score_data.get('score', 0)
@@ -51,8 +41,5 @@ def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5
             doc['rerank_score'] = 0
             scored_docs.append(doc)
 
-    # Sort by score DESC
     scored_docs.sort(key=lambda x: x['rerank_score'], reverse=True)
-
-    # Return top K
     return scored_docs[:top_k]

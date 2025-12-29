@@ -46,9 +46,6 @@ SUMMARY_PROMPT_TEMPLATE = (
 )
 
 def summarize_conversation(session_id: UUID, provider: str = "gemini") -> Dict[str, Any]:
-    """
-    Summarizes a full conversation session into structured JSON.
-    """
     history = get_full_chat_history(session_id)
     if not history:
         logger.warning(f"No history found for session {session_id}")
@@ -92,7 +89,6 @@ def summarize_conversation(session_id: UUID, provider: str = "gemini") -> Dict[s
             "client_description": None
         }
 
-# ... existing imports ...
 
 CONTEXTUALIZE_PROMPT_TEMPLATE = (
     "Given a chat history and the latest user question which might reference context in the chat history, "
@@ -121,11 +117,7 @@ INTENT_PROMPT_TEMPLATE = (
 )
 
 def analyze_intent(query: str, provider: str = "gemini") -> Dict[str, bool]:
-    """
-    Uses LLM to decide if RAG is needed and if human handoff is requested.
-    """
     try:
-        # Use a fast model for routing if possible
         llm = get_llm(provider)
         prompt = INTENT_PROMPT_TEMPLATE.format(query=query)
         response = llm.complete(prompt)
@@ -141,9 +133,6 @@ def analyze_intent(query: str, provider: str = "gemini") -> Dict[str, bool]:
         return {"requires_rag": True, "requires_human": False}
 
 def contextualize_query(query: str, history: List[Dict[str, str]], provider: str = "gemini") -> str:
-    """
-    Rewrites the user query to be standalone based on chat history.
-    """
     if not history:
         return query
 
@@ -160,11 +149,8 @@ def contextualize_query(query: str, history: List[Dict[str, str]], provider: str
         logger.error(f"Contextualization failed: {e}")
         return query
 
-# ... existing search_documents ...
-
 # Helper
 def get_tenant_languages(tenant_id: UUID) -> str:
-    """Fetches preferred languages for a tenant."""
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -183,10 +169,6 @@ def generate_answer(
     provider: str = "gemini",
     session_id: Optional[UUID] = None
 ) -> tuple[str, bool]:
-    """
-    Retrieves context and generates an answer using the requested LLM provider.
-    Supports Conversational Memory and Intent Classification.
-    """
     log_start(logger, f"Generating answer for query: '{query}' | Session={session_id} | Provider={provider}")
 
     # Fetch Tenant Preferences
@@ -224,8 +206,7 @@ def generate_answer(
             "You are a helpful assistant.\n"
             "The user explicitly asked to speak to a human agent.\n"
             "Generate a polite response confirming you will transfer them to a human agent.\n"
-            f"{lang_instruction}\n"
-            "CRITICAL: You MUST answer in the SAME language as the user's message. If the user speaks Portuguese, reply in Portuguese.\n"
+            f"CRITICAL: You MUST answer in {lang_instruction}.\n"
             f"User Message: {search_query}\n"
             "Response:"
         )
@@ -317,9 +298,6 @@ def generate_answer(
     return answer, False
 
 def get_embed_model():
-    """
-    Factory to get the Gemini embedding model.
-    """
     global _embed_model
     if _embed_model is None:
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -335,16 +313,9 @@ def get_embed_model():
 
 from src.vlm import describe_image
 
-# ... existing imports ...
-
 def ingest_document(tenant_id: UUID, filename: str, content: str = None, file_bytes: bytes = None):
-    """
-    Parses, chunks, embeds, and inserts a document into the database.
-    Supports text files (content passed) and images (file_bytes passed).
-    """
     logger.info(f"Ingesting document {filename} for tenant {tenant_id}")
 
-    # 0. Handle Images (Multimodal)
     is_image = filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))
 
     if is_image:
@@ -408,11 +379,6 @@ def search_documents(
     use_rerank: bool = False,
     provider: str = "gemini"
 ) -> List[Dict[str, Any]]:
-    """
-    Performs a hybrid search (currently vector similarity) for a query.
-    Supports Query Expansion (HyDE) and Reranking.
-    """
-    # 1. Query Expansion (HyDE)
     search_query = query
     if use_hyde:
         logger.info(f"Using HyDE expansion with {provider}")

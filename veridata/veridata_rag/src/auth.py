@@ -9,12 +9,8 @@ security = APIKeyCookie(name="session_token", auto_error=False)
 def get_current_username(request: Request):
     token = request.cookies.get("session_token")
     if not token:
-        # Redirect logic handled in web routes or return None
         return None
 
-    # Simple token validation (In real app, use better session management)
-    # Here we just check if the token matches a secret "admin_token"
-    # For simplicity in this "no logic" refactor, we just check a static token
     correct_token = os.getenv("ADMIN_TOKEN", "secret-admin-token")
 
     if not secrets.compare_digest(token, correct_token):

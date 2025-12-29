@@ -35,7 +35,6 @@ def init_db():
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
             # Create tenants table
-            # Create tenants table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS tenants (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

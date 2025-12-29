@@ -6,7 +6,6 @@ from src.db import get_db
 logger = logging.getLogger(__name__)
 
 def create_session(tenant_id: UUID) -> str:
-    """Creates a new chat session for a tenant and returns the Session ID."""
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -18,7 +17,6 @@ def create_session(tenant_id: UUID) -> str:
             return str(session_id)
 
 def get_session(session_id: UUID) -> Optional[Dict[str, Any]]:
-    """Checks if a session exists."""
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id, tenant_id FROM chat_sessions WHERE id = %s", (session_id,))
@@ -28,7 +26,6 @@ def get_session(session_id: UUID) -> Optional[Dict[str, Any]]:
             return None
 
 def add_message(session_id: UUID, role: str, content: str):
-    """Adds a message to the session history."""
     if role not in ('user', 'ai'):
         raise ValueError("Role must be 'user' or 'ai'")
 
@@ -44,14 +41,8 @@ def add_message(session_id: UUID, role: str, content: str):
             conn.commit()
 
 def get_chat_history(session_id: UUID, limit: int = 10) -> List[Dict[str, str]]:
-    """
-    Retrieves the most recent chat history for a session.
-    Returns list of dicts: [{'role': 'user', 'content': '...'}, ...]
-    Ordered oldest to newest (for context window).
-    """
     with get_db() as conn:
         with conn.cursor() as cur:
-            # Fetch newest first (LIMIT), then re-order to chronological
             cur.execute(
                 """
                 SELECT role, content
@@ -64,14 +55,10 @@ def get_chat_history(session_id: UUID, limit: int = 10) -> List[Dict[str, str]]:
             )
             rows = cur.fetchall()
 
-            # Convert to list of dicts and reverse to chronological order
             history = [{"role": row[0], "content": row[1]} for row in rows]
             return history[::-1]
 
 def get_full_chat_history(session_id: UUID) -> List[Dict[str, str]]:
-    """
-    Retrieves ALL chat history for a session for summarization.
-    """
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -87,12 +74,8 @@ def get_full_chat_history(session_id: UUID) -> List[Dict[str, str]]:
             return [{"role": row[0], "content": row[1]} for row in rows]
 
 def delete_session(session_id: UUID):
-    """
-    Deletes a session and all its messages from the database.
-    """
     with get_db() as conn:
         with conn.cursor() as cur:
-            # Delete messages first (Constraint usually cascades, but good to be explicit)
             cur.execute("DELETE FROM chat_messages WHERE session_id = %s", (session_id,))
             cur.execute("DELETE FROM chat_sessions WHERE id = %s", (session_id,))
             conn.commit()

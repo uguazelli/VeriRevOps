@@ -4,10 +4,6 @@ from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.bridge.pydantic import PrivateAttr
 
 class CustomGeminiEmbedding(BaseEmbedding):
-    """
-    Custom wrapper for Google Gemini Embeddings using the official library directly.
-    Bypasses conflicting LlamaIndex wrapper dependencies.
-    """
     _model_name: str = PrivateAttr()
     _api_key: str = PrivateAttr()
 
@@ -30,7 +26,6 @@ class CustomGeminiEmbedding(BaseEmbedding):
         return self._get_embedding(text)
 
     def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
-        # Batch embedding not fully clear in raw API for now, iterating
         return [self._get_embedding(t) for t in texts]
 
     async def _aget_query_embedding(self, query: str) -> List[float]:
@@ -43,6 +38,6 @@ class CustomGeminiEmbedding(BaseEmbedding):
         result = genai.embed_content(
             model=self._model_name,
             content=text,
-            task_type="retrieval_document", # or retrival_query depending on context, simple for now
+            task_type="retrieval_document",
         )
         return result['embedding']
