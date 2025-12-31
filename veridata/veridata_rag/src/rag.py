@@ -122,6 +122,47 @@ def get_tenant_languages(tenant_id: UUID) -> str:
         logger.error(f"Failed to fetch tenant languages: {e}")
         return None
 
+def check_query_cache(tenant_id: UUID, query_embedding: List[float], threshold: float = 0.98) -> Optional[str]:
+    """Check if a similar query already has a cached answer for this tenant."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # Use vector similarity to find the most similar query
+                # 1 - distance = similarity (for cosine)
+                cur.execute(
+                    """
+                    SELECT answer_text, (1 - (embedding <=> %s::vector)) as similarity
+                    FROM query_cache
+                    WHERE tenant_id = %s
+                    AND (1 - (embedding <=> %s::vector)) >= %s
+                    ORDER BY similarity DESC
+                    LIMIT 1
+                    """,
+                    (query_embedding, tenant_id, query_embedding, threshold)
+                )
+                res = cur.fetchone()
+                if res:
+                    logger.info(f"Semantic cache hit! Similarity: {res[1]:.4f}")
+                    return res[0]
+    except Exception as e:
+        logger.error(f"Cache lookup failed: {e}")
+    return None
+
+def add_to_query_cache(tenant_id: UUID, query_text: str, query_embedding: List[float], answer_text: str):
+    """Save a query and its answer to the cache."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO query_cache (tenant_id, query_text, embedding, answer_text)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (tenant_id, query_text, query_embedding, answer_text)
+                )
+    except Exception as e:
+        logger.error(f"Failed to populate cache: {e}")
+
 def generate_answer(
     tenant_id: UUID,
     query: str,
@@ -147,6 +188,24 @@ def generate_answer(
 
     logger.info(f"Tenant Preferences [{tenant_id}]: '{pref_langs}'")
     # logger.info(f"Language Instruction: '{lang_instruction}'")
+
+    # 0. Semantic Cache Check (Saves ALL subsequent steps)
+    embed_model = get_embed_model()
+    query_embedding = None
+    try:
+        query_embedding = embed_model.get_query_embedding(query)
+        cached_answer = check_query_cache(tenant_id, query_embedding)
+        if cached_answer:
+            # If session is active, still save the conversation
+            if session_id:
+                try:
+                    add_message(session_id, "user", query)
+                    add_message(session_id, "ai", cached_answer)
+                except Exception as e:
+                    logger.error(f"Failed to save message history for cached response: {e}")
+            return cached_answer, False
+    except Exception as e:
+        logger.error(f"Semantic Cache preprocessing failed: {e}")
 
     # 1. Handle Memory (Contextualization)
     search_query = query
@@ -243,6 +302,10 @@ def generate_answer(
             add_message(session_id, "ai", answer)
         except Exception as e:
             logger.error(f"Failed to save message history: {e}")
+
+    # 6. Populate Cache for future identical/similar queries
+    if query_embedding and answer and not requires_human:
+        add_to_query_cache(tenant_id, query, query_embedding, answer)
 
     return answer, False
 
