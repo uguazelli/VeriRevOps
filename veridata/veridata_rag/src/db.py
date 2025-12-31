@@ -44,6 +44,15 @@ def init_db():
                 );
             """)
 
+            # Create global_configs table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS global_configs (
+                    id SERIAL PRIMARY KEY,
+                    config JSONB NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
             # Migration for existing databases
             try:
                 cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS preferred_languages TEXT;")

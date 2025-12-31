@@ -16,19 +16,16 @@ async def run_auto_resolve_job(session: AsyncSession, config: SyncConfig):
     log_start(logger, f"Starting Auto-Resolve Job for Config ID {config.id}")
 
     # 1. Fetch Credentials from ServiceConfig
-    # We look for the 'chatwoot' service config for this client
-    stmt = select(ServiceConfig).where(
-        ServiceConfig.client_id == config.client_id,
-        ServiceConfig.platform == "chatwoot"
-    )
+    # We fetch the unified service config for this client
+    stmt = select(ServiceConfig).where(ServiceConfig.client_id == config.client_id)
     result = await session.execute(stmt)
     service_config = result.scalars().first()
 
-    if not service_config:
-        log_error(logger, f"Skipping Auto-Resolve for Config {config.id}: No 'chatwoot' ServiceConfig found for Client {config.client_id}")
+    if not service_config or "chatwoot" not in service_config.config:
+        log_error(logger, f"Skipping Auto-Resolve for Config {config.id}: No 'chatwoot' configuration found in unified ServiceConfig for Client {config.client_id}")
         return
 
-    cw_creds = service_config.config
+    cw_creds = service_config.config["chatwoot"]
     base_url = cw_creds.get("base_url")
     account_id = cw_creds.get("account_id", "1")
     access_token = cw_creds.get("api_key") # Map 'api_key' to access_token

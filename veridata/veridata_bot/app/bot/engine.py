@@ -22,10 +22,11 @@ async def _get_client_and_config(client_slug: str, db: AsyncSession):
         log_error(logger, f"Client not found or inactive: {client_slug}")
         raise HTTPException(status_code=404, detail="Client not found or inactive")
 
-    # 2. Get Configs
+    # 2. Get Config
     cfg_query = select(ServiceConfig).where(ServiceConfig.client_id == client.id)
     cfg_result = await db.execute(cfg_query)
-    configs = {c.platform: c.config for c in cfg_result.scalars().all()}
+    cfg_record = cfg_result.scalars().first()
+    configs = cfg_record.config if cfg_record else {}
 
     return client, configs
 

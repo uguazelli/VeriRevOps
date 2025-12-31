@@ -9,6 +9,7 @@ from src.db import get_db
 from src.embeddings import CustomGeminiEmbedding
 from src.hyde import generate_hypothetical_answer
 from src.rerank import rerank_documents
+from src.config import get_global_setting
 from src.llm_factory import get_llm
 from src.memory import add_message, get_chat_history, get_full_chat_history
 from src.logging import log_start, log_success, log_error, log_llm, log_skip, log_external_call
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Single instance of embedding model
 _embed_model = None
 
-def summarize_conversation(session_id: UUID, provider: str = "gemini") -> Dict[str, Any]:
+def summarize_conversation(session_id: UUID, provider: str = None) -> Dict[str, Any]:
     history = get_full_chat_history(session_id)
     if not history:
         logger.warning(f"No history found for session {session_id}")
@@ -43,7 +44,7 @@ def summarize_conversation(session_id: UUID, provider: str = "gemini") -> Dict[s
     history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
 
     try:
-        llm = get_llm(provider)
+        llm = get_llm(step="summarization", provider=provider)
         prompt = SUMMARY_PROMPT_TEMPLATE.format(history_str=history_str)
         response = llm.complete(prompt)
         text = response.text.replace('```json', '').replace('```', '').strip()
@@ -71,9 +72,9 @@ def summarize_conversation(session_id: UUID, provider: str = "gemini") -> Dict[s
         }
 
 
-def analyze_intent(query: str, provider: str = "gemini", handoff_rules: str = None) -> Dict[str, bool]:
+def analyze_intent(query: str, provider: str = None, handoff_rules: str = None) -> Dict[str, bool]:
     try:
-        llm = get_llm(provider)
+        llm = get_llm(step="intent", provider=provider)
 
         rules_text = ""
         if handoff_rules:
@@ -92,14 +93,14 @@ def analyze_intent(query: str, provider: str = "gemini", handoff_rules: str = No
         logger.warning(f"Intent classification failed, defaulting to RAG=True, Human=False: {e}")
         return {"requires_rag": True, "requires_human": False}
 
-def contextualize_query(query: str, history: List[Dict[str, str]], provider: str = "gemini") -> str:
+def contextualize_query(query: str, history: List[Dict[str, str]], provider: str = None) -> str:
     if not history:
         return query
 
     history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
 
     try:
-        llm = get_llm(provider)
+        llm = get_llm(step="contextualization", provider=provider)
         prompt = CONTEXTUALIZE_PROMPT_TEMPLATE.format(history_str=history_str, query=query)
         response = llm.complete(prompt)
         rewritten = response.text.strip()
@@ -124,12 +125,18 @@ def get_tenant_languages(tenant_id: UUID) -> str:
 def generate_answer(
     tenant_id: UUID,
     query: str,
-    use_hyde: bool = False,
-    use_rerank: bool = False,
-    provider: str = "gemini",
+    use_hyde: Optional[bool] = None,
+    use_rerank: Optional[bool] = None,
+    provider: Optional[str] = None,
     session_id: Optional[UUID] = None,
     handoff_rules: Optional[str] = None
 ) -> tuple[str, bool]:
+    # Resolve optional parameters from global config if not provided
+    if use_hyde is None:
+        use_hyde = get_global_setting("use_hyde", False)
+    if use_rerank is None:
+        use_rerank = get_global_setting("use_rerank", False)
+
     log_start(logger, f"Generating answer for query: '{query}' | Session={session_id} | Provider={provider}")
 
     # Fetch Tenant Preferences
@@ -168,7 +175,7 @@ def generate_answer(
             search_query=search_query
         )
         try:
-            llm = get_llm(provider)
+            llm = get_llm(step="generation", provider=provider)
             response = llm.complete(prompt)
             return response.text.strip(), True
         except Exception as e:
@@ -207,7 +214,7 @@ def generate_answer(
 
         # 4. Generate
         try:
-            llm = get_llm(provider)
+            llm = get_llm(step="generation", provider=provider)
             response = llm.complete(prompt)
             answer = response.text
         except Exception as e:
@@ -222,7 +229,7 @@ def generate_answer(
             search_query=search_query
         )
         try:
-            llm = get_llm(provider)
+            llm = get_llm(step="generation", provider=provider)
             response = llm.complete(prompt)
             answer = response.text
         except Exception as e:

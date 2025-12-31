@@ -7,12 +7,12 @@ logger = logging.getLogger(__name__)
 
 from src.prompts import RERANK_PROMPT_TEMPLATE
 
-def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5, provider: str = "gemini") -> List[Dict[str, Any]]:
+def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5, provider: str = None) -> List[Dict[str, Any]]:
     if not documents:
         return []
 
-    logger.info(f"Reranking {len(documents)} documents for query: {query} using {provider}")
-    llm = get_llm(provider)
+    logger.info(f"Reranking {len(documents)} documents for query: {query} using step 'rag_search'")
+    llm = get_llm(step="rag_search", provider=provider)
     scored_docs = []
 
     for doc in documents:

@@ -5,9 +5,9 @@ from typing import Optional, Union
 class QueryRequest(BaseModel):
     tenant_id: UUID
     query: str
-    use_hyde: bool = False
-    use_rerank: bool = False
-    provider: str = "gemini"
+    use_hyde: Optional[bool] = None
+    use_rerank: Optional[bool] = None
+    provider: Optional[str] = None
     session_id: Optional[UUID] = None
     handoff_rules: Optional[str] = None
 
@@ -19,7 +19,7 @@ class QueryResponse(BaseModel):
 class SummarizeRequest(BaseModel):
     tenant_id: UUID
     session_id: UUID
-    provider: str = "gemini"
+    provider: Optional[str] = None
 
 class ConversationSummary(BaseModel):
     purchase_intent: str # High, Medium, Low, None

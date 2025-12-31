@@ -4,11 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
-from fastapi.responses import FileResponse, RedirectResponse
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from sqladmin import Admin, BaseView, expose
 from sqlalchemy import select
 from app.database import engine, get_session
-from app.admin import authentication_backend, ClientAdmin, SyncConfigAdmin, ServiceConfigAdmin, SubscriptionAdmin, BotSessionAdmin
+from app.admin import authentication_backend, ClientAdmin, SyncConfigAdmin, ClientConfigAdmin, SubscriptionAdmin, BotSessionAdmin, GlobalConfigAdmin
 from app.models import SyncConfig, Client
 import logging
 from app.core.logging import setup_logging, log_job, log_error
@@ -90,6 +90,7 @@ async def lifespan(app: FastAPI):
         # MIGRATION: Ensure last_run_at exists (create_all doesn't alter existing tables)
         from sqlalchemy import text
         try:
+            await conn.execute(text("ALTER TABLE service_configs DROP COLUMN IF EXISTS platform"))
             await conn.execute(text("ALTER TABLE sync_configs ADD COLUMN IF NOT EXISTS last_run_at TIMESTAMP WITHOUT TIME ZONE"))
             await conn.execute(text("ALTER TABLE sync_configs ADD COLUMN IF NOT EXISTS inactivity_threshold_minutes INTEGER"))
         except Exception as e:
@@ -106,9 +107,10 @@ async def lifespan(app: FastAPI):
     )
     admin.add_view(ClientAdmin)
     admin.add_view(SyncConfigAdmin)
-    admin.add_view(ServiceConfigAdmin)
+    admin.add_view(ClientConfigAdmin)
     admin.add_view(SubscriptionAdmin)
     admin.add_view(BotSessionAdmin)
+    admin.add_view(GlobalConfigAdmin)
     admin.add_view(LogsView)
 
     # Start worker
@@ -124,6 +126,7 @@ async def lifespan(app: FastAPI):
         pass
 
 app = FastAPI(title="Veridata Worker", lifespan=lifespan)
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 @app.get("/", include_in_schema=False)

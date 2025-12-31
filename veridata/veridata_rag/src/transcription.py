@@ -33,7 +33,10 @@ async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> 
 
     genai.configure(api_key=api_key)
 
-    model_name = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash")
+    from src.config import get_llm_settings
+    settings = get_llm_settings("transcription")
+    model_name = settings.get("model", os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash"))
+
     model = genai.GenerativeModel(model_name)
 
     try:
@@ -49,7 +52,7 @@ async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> 
         logger.error(f"Gemini Transcription failed: {e}")
         raise e
 
-async def transcribe_audio(file_bytes: bytes, filename: str, provider: str = "gemini") -> str:
+async def transcribe_audio(file_bytes: bytes, filename: str, provider: str = None) -> str:
     mime_type = "audio/mp3"
     if filename.endswith(".ogg"):
         mime_type = "audio/ogg"
@@ -58,7 +61,8 @@ async def transcribe_audio(file_bytes: bytes, filename: str, provider: str = "ge
     elif filename.endswith(".m4a"):
         mime_type = "audio/mp4"
 
-    if provider.lower() == "openai":
+    if provider and provider.lower() == "openai":
         return await transcribe_openai(file_bytes, filename)
     else:
+        # If no provider specified, transcribe_gemini is the default
         return await transcribe_gemini(file_bytes, mime_type)

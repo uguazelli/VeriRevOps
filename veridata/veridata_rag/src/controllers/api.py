@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form
+from typing import Optional
 from uuid import UUID
 from src.schemas import QueryRequest, QueryResponse, SummarizeRequest, ConversationSummary
 from src.rag import generate_answer, summarize_conversation
@@ -41,7 +42,7 @@ async def api_summarize_conversation(request: SummarizeRequest):
 
 
 @router.post("/transcribe")
-async def api_transcribe(file: UploadFile = File(...), provider: str = Form("gemini")):
+async def api_transcribe(file: UploadFile = File(...), provider: Optional[str] = Form(None)):
     content = await file.read()
     text = await transcribe_audio(content, file.filename, provider)
 

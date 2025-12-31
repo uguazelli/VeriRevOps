@@ -9,7 +9,6 @@ class ServiceConfig(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False)
-    platform: Mapped[str] = mapped_column(String, nullable=False)  # 'rag', 'chatwoot', 'espocrm'
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     client = relationship("Client", back_populates="configs")

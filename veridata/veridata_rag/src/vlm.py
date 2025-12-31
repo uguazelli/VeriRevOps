@@ -48,11 +48,13 @@ def describe_image(image_bytes: bytes, filename: str) -> str:
         import google.generativeai as genai
         from PIL import Image
         import io
+        from src.config import get_llm_settings
 
         api_key = os.getenv("GOOGLE_API_KEY")
         genai.configure(api_key=api_key)
 
-        model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        settings = get_llm_settings("complex_reasoning")
+        model_name = settings.get("model", os.getenv("GEMINI_MODEL", "gemini-2.0-flash"))
         # Ensure model name doesn't have 'models/' prefix for direct SDK or does?
         # SDK usually handles both, but clean 'gemini-2.0-flash' is safer.
         clean_model = model_name.replace("models/", "")

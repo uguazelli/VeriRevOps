@@ -4,7 +4,7 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 import logging
 from app.database import settings, get_session
-from app.models import Client, SyncConfig, ServiceConfig, Subscription, BotSession
+from app.models import Client, SyncConfig, ServiceConfig, Subscription, BotSession, GlobalConfig
 from app.jobs.auto_resolve import run_auto_resolve_job
 
 class AdminAuth(AuthenticationBackend):
@@ -62,11 +62,11 @@ class SyncConfigAdmin(ModelView, model=SyncConfig):
             return RedirectResponse(referer)
         return RedirectResponse(request.url_for("admin:list", identity="syncconfig"))
 
-class ServiceConfigAdmin(ModelView, model=ServiceConfig):
-    name = "Service Credential"
-    name_plural = "Service Credentials"
-    column_list = [ServiceConfig.id, ServiceConfig.client_id, ServiceConfig.platform]
-    form_columns = [ServiceConfig.client, ServiceConfig.platform, ServiceConfig.config]
+class ClientConfigAdmin(ModelView, model=ServiceConfig):
+    name = "Client Configuration"
+    name_plural = "Client Configurations"
+    column_list = [ServiceConfig.id, ServiceConfig.client_id]
+    form_columns = [ServiceConfig.client, ServiceConfig.config]
     icon = "fa-solid fa-robot"
 
 class SubscriptionAdmin(ModelView, model=Subscription):
@@ -82,3 +82,10 @@ class BotSessionAdmin(ModelView, model=BotSession):
     name_plural = "Live Sessions"
     column_list = [BotSession.id, BotSession.client_id, BotSession.external_session_id, BotSession.rag_session_id]
     icon = "fa-solid fa-comments"
+
+class GlobalConfigAdmin(ModelView, model=GlobalConfig):
+    name = "Global Setting"
+    name_plural = "Global Settings"
+    column_list = [GlobalConfig.id, GlobalConfig.updated_at]
+    form_columns = [GlobalConfig.config]
+    icon = "fa-solid fa-gears"

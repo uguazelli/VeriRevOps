@@ -47,7 +47,6 @@ class ServiceConfig(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     client_id: int = Field(foreign_key="clients.id")
-    platform: str # 'rag', 'chatwoot', 'espocrm'
     config: dict = Field(default={}, sa_column=Column(JSON))
 
     client: Optional[Client] = Relationship(back_populates="service_configs")
@@ -86,3 +85,14 @@ class BotSession(SQLModel, table=True):
     rag_session_id: Optional[uuid.UUID] = Field(default=None, sa_column=Column(UUID(as_uuid=True)))
 
     client: Optional[Client] = Relationship(back_populates="bot_sessions")
+
+class GlobalConfig(SQLModel, table=True):
+    """
+    Global configuration for the entire system (LLM settings, etc.).
+    """
+    __tablename__ = "global_configs"
+    __table_args__ = {"extend_existing": True}
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    config: dict = Field(default={}, sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
