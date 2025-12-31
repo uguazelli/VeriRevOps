@@ -89,9 +89,18 @@ def init_db():
                     filename VARCHAR(255) NOT NULL,
                     content TEXT NOT NULL,
                     embedding vector({dim}),
+                    fts_vector tsvector,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+
+            try:
+                cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS fts_vector tsvector;")
+                cur.execute("CREATE INDEX IF NOT EXISTS documents_fts_vector_idx ON documents USING GIN (fts_vector);")
+                # Populate existing rows
+                cur.execute("UPDATE documents SET fts_vector = to_tsvector('english', content) WHERE fts_vector IS NULL;")
+            except Exception as e:
+                logger.warning(f"Migration check for fts_vector failed: {e}")
 
             # Create HNSW index for performance
             # Note: HNSW requires some data to be effective but good to have DDL ready.

@@ -313,10 +313,10 @@ def ingest_document(tenant_id: UUID, filename: str, content: str = None, file_by
             for node, embedding in zip(nodes, embeddings):
                 cur.execute(
                     """
-                    INSERT INTO documents (tenant_id, filename, content, embedding)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO documents (tenant_id, filename, content, embedding, fts_vector)
+                    VALUES (%s, %s, %s, %s, to_tsvector('english', %s))
                     """,
-                    (tenant_id, filename, node.get_content(), embedding)
+                    (tenant_id, filename, node.get_content(), embedding, node.get_content())
                 )
     logger.info(f"Successfully ingested {filename}")
 
@@ -348,17 +348,34 @@ def search_documents(
     results = []
     with get_db() as conn:
         with conn.cursor() as cur:
-            # Vector search with Cosine Similarity (<=> operator)
-            # Ordered by distance ASC (closest first)
+            # Hybrid search with RRF (Reciprocal Rank Fusion)
+            # We use candidate_limit for both searches
             cur.execute(
                 """
-                SELECT id, filename, content, (embedding <=> %s::vector) as distance
-                FROM documents
-                WHERE tenant_id = %s
-                ORDER BY distance ASC
-                LIMIT %s
+                WITH vector_search AS (
+                    SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) as rank
+                    FROM documents
+                    WHERE tenant_id = %s
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT %s
+                ),
+                keyword_search AS (
+                    SELECT id, ROW_NUMBER() OVER (ORDER BY ts_rank_cd(fts_vector, websearch_to_tsquery('english', %s)) DESC) as rank
+                    FROM documents
+                    WHERE tenant_id = %s AND fts_vector @@ websearch_to_tsquery('english', %s)
+                    LIMIT %s
+                )
+                SELECT
+                    d.id, d.filename, d.content,
+                    COALESCE(1.0 / (vs.rank + 60), 0.0) + COALESCE(1.0 / (ks.rank + 60), 0.0) as score
+                FROM documents d
+                LEFT JOIN vector_search vs ON d.id = vs.id
+                LEFT JOIN keyword_search ks ON d.id = ks.id
+                WHERE vs.id IS NOT NULL OR ks.id IS NOT NULL
+                ORDER BY score DESC
+                LIMIT %s;
                 """,
-                (query_embedding, tenant_id, candidate_limit)
+                (query_embedding, tenant_id, query_embedding, candidate_limit, query, tenant_id, query, candidate_limit, candidate_limit)
             )
             rows = cur.fetchall()
 
@@ -367,7 +384,7 @@ def search_documents(
                     "id": str(row[0]),
                     "filename": row[1],
                     "content": row[2],
-                    "distance": float(row[3])
+                    "score": float(row[3])
                 })
 
     # 4. Reranking
