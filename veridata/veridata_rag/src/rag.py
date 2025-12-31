@@ -154,6 +154,27 @@ def check_query_cache(tenant_id: UUID, query_embedding: List[float], threshold: 
         logger.error(f"Cache lookup failed: {e}")
     return None
 
+def check_literal_cache(tenant_id: UUID, query_text: str) -> Optional[str]:
+    """Check for an exact character-for-character match in the cache (Zero API cost)."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT answer_text
+                    FROM query_cache
+                    WHERE tenant_id = %s AND LOWER(query_text) = LOWER(%s)
+                    LIMIT 1
+                    """,
+                    (tenant_id, query_text.strip())
+                )
+                res = cur.fetchone()
+                if res:
+                    return res[0]
+    except Exception as e:
+        logger.error(f"Literal cache lookup failed: {e}")
+    return None
+
 def add_to_query_cache(tenant_id: UUID, query_text: str, query_embedding: List[float], answer_text: str):
     """Save a query and its answer to the cache."""
     try:
@@ -194,6 +215,18 @@ def generate_answer(
 
     logger.info(f"Tenant Preferences [{tenant_id}]: '{pref_langs}'")
     # logger.info(f"Language Instruction: '{lang_instruction}'")
+
+    # -1. Literal Cache Check (Super Fast, Zero API Cost, Zero Latency)
+    cached_answer = check_literal_cache(tenant_id, query)
+    if cached_answer:
+        logger.info("🚀 Opt 0 (Speed): Literal cache HIT (Exact match).")
+        if session_id:
+            try:
+                add_message(session_id, "user", query)
+                add_message(session_id, "ai", cached_answer)
+            except Exception as e:
+                logger.error(f"Failed to save history for literal cache hit: {e}")
+        return cached_answer, False
 
     # 0. Semantic Cache Check (Saves ALL subsequent steps)
     embed_model = get_embed_model()
