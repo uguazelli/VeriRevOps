@@ -79,14 +79,12 @@ class HubSpotClient:
         if email: properties["email"] = email
         if phone_number: properties["phone"] = phone_number
 
-        # Split name if possible
-        if name:
-            parts = name.split(" ", 1)
-            properties["firstname"] = parts[0]
-            if len(parts) > 1:
-                properties["lastname"] = parts[1]
-            else:
-                properties["lastname"] = "Unknown"
+        # Use shared name parser
+        from app.bot.utils import parse_name
+        first, last = parse_name(name)
+
+        properties["firstname"] = first
+        properties["lastname"] = last if last else "Unknown"
 
         async with httpx.AsyncClient() as client:
             if existing_id:
@@ -107,21 +105,11 @@ class HubSpotClient:
         """
         Syncs a contact object (usually from Chatwoot payload) to HubSpot.
         """
-        # Try direct access (standard contact payload)
-        email = payload.get("email")
-        phone = payload.get("phone_number")
-        name = payload.get("name")
+        # Use shared extractor
+        from app.bot.utils import extract_contact_info
+        info = extract_contact_info(payload)
 
-        # Fallback: Sometimes generic webhook wraps it in 'payload' or 'contact'
-        if not email and not phone:
-             # Check if it is inside 'contact' key (common in some webhooks)
-             contact_data = payload.get("contact")
-             if isinstance(contact_data, dict):
-                 email = contact_data.get("email")
-                 phone = contact_data.get("phone_number")
-                 name = contact_data.get("name")
-
-        await self.sync_lead(name, email, phone)
+        await self.sync_lead(info["name"], info["email"], info["phone"])
 
     async def update_lead_summary(self, email: Optional[str], phone: Optional[str], summary_data: Dict[str, Any]):
         """

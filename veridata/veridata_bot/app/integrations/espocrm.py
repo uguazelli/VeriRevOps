@@ -33,14 +33,18 @@ class EspoClient:
 
         return None
 
-    async def sync_contact(self, customer_data: dict):
+    async def sync_contact(self, payload: dict):
         """
         Syncs a Chatwoot contact to EspoCRM (Lead or Contact).
         Creates a Lead if no match found. Updates existing record if found.
         """
-        email = customer_data.get("email")
-        phone = customer_data.get("phone_number")
-        name = customer_data.get("name", "Unknown")
+        # Use shared extractor
+        from app.bot.utils import extract_contact_info, parse_name
+        info = extract_contact_info(payload)
+
+        email = info["email"]
+        phone = info["phone"]
+        name = info["name"]
 
         if not email and not phone:
             logger.warning(f"EspoCRM sync matched no email or phone for name: {name}")
@@ -60,16 +64,27 @@ class EspoClient:
                     entity_id = lead['id']
 
             # Prepare Payload
-            # Name logic
-            name_parts = name.strip().split(' ')
-            if len(name_parts) > 1:
-                first_name = name_parts[0]
-                last_name = ' '.join(name_parts[1:])
-            else:
-                first_name = ""
-                last_name = name
+            # Use shared name parser
+            first_name, last_name = parse_name(name)
 
-            additional = customer_data.get("additional_attributes", {})
+            # EspoCRM specific: If single name "John", parse_name returns "John", "".
+            # Espo might rely on LastName?
+            # Existing logic was: if single, last_name = name, first_name = ""
+            # Let's verify existing logic:
+            # if len > 1: first=parts[0], last=rest
+            # else: first="", last=name
+
+            # My parser: first=name, last=""
+            # Adaptation:
+            if not last_name:
+                # If only one name provided, treat it as Last Name for EspoCRM compatibility?
+                # Or just use First Name?
+                # Let's inspect Espo API requirements. Usually Last Name is required.
+                # So if last_name is empty, swap them?
+                last_name = first_name
+                first_name = ""
+
+            additional = payload.get("additional_attributes", {})
 
             payload = {
                 "firstName": first_name,
