@@ -5,6 +5,7 @@ from app.models import Client, Subscription, ServiceConfig, BotSession
 from app.integrations.rag import RagClient
 from app.integrations.chatwoot import ChatwootClient
 from app.integrations.espocrm import EspoClient
+from app.integrations.hubspot import HubSpotClient
 import uuid
 import logging
 import httpx
@@ -30,56 +31,75 @@ async def _get_client_and_config(client_slug: str, db: AsyncSession):
 
     return client, configs
 
+def _get_crm_integrations(configs):
+    integrations = []
+
+    # EspoCRM
+    espo_conf = configs.get("espocrm")
+    if espo_conf:
+        integrations.append(EspoClient(
+            base_url=espo_conf["base_url"],
+            api_key=espo_conf["api_key"]
+        ))
+
+    # HubSpot
+    hub_conf = configs.get("hubspot")
+    if hub_conf:
+        token = hub_conf.get("access_token") or hub_conf.get("api_key")
+        if token:
+            integrations.append(HubSpotClient(access_token=token))
+
+    return integrations
+
 async def process_integration_event(client_slug: str, payload: dict, db: AsyncSession):
     log_start(logger, f"Processing Integration Event for {client_slug}")
 
     try:
         client, configs = await _get_client_and_config(client_slug, db)
-        espo_config = configs.get("espocrm")
+        # espo_config = configs.get("espocrm") # Deprecated: using list of crms
 
         event_type = payload.get("event")
         # log_payload(logger, payload, f"Integration Event: {event_type}")
 
+        crms = _get_crm_integrations(configs)
+
         if event_type == "conversation_created":
-            if espo_config:
+            if crms:
                 sender = payload.get("meta", {}).get("sender", {}) or payload.get("sender", {})
                 email = sender.get("email")
                 phone = sender.get("phone_number")
                 name = sender.get("name", "Unknown")
 
                 if email or phone:
-                    try:
-                        log_external_call(logger, "EspoCRM", "Syncing lead for new conversation")
-                        espo = EspoClient(
-                            base_url=espo_config["base_url"],
-                            api_key=espo_config["api_key"]
-                        )
-                        await espo.sync_lead(name=name, email=email, phone_number=phone)
-                        log_success(logger, f"Lead synced: {email or phone}")
-                    except Exception as e:
-                        log_error(logger, f"CRM Sync failed for conversation_created: {e}")
+                    log_external_call(logger, "CRM", f"Syncing lead to {len(crms)} integrations")
+                    for crm in crms:
+                        try:
+                            platform_name = crm.__class__.__name__.replace("Client", "")
+                            # log_external_call(logger, platform_name, "Syncing lead")
+                            await crm.sync_lead(name=name, email=email, phone_number=phone)
+                            log_success(logger, f"Lead synced: {platform_name}")
+                        except Exception as e:
+                            log_error(logger, f"CRM Sync failed for {platform_name}: {e}")
                 else:
                     log_skip(logger, "Skipping CRM sync: No email or phone provided")
             else:
-                log_skip(logger, "Skipping CRM sync: EspoCRM not configured")
+                log_skip(logger, "Skipping CRM sync: No CRM configured")
 
             return {"status": "conversation_created_processed"}
 
         elif event_type in ("contact_created", "contact_updated"):
-            if espo_config:
-                log_external_call(logger, "EspoCRM", f"Syncing contact for {event_type}")
-                try:
-                    espo = EspoClient(
-                        base_url=espo_config["base_url"],
-                        api_key=espo_config["api_key"]
-                    )
-                    # Payload for contact events is the contact itself
-                    await espo.sync_contact(payload)
-                    log_success(logger, f"Contact synced for {event_type}")
-                except Exception as e:
-                    log_error(logger, f"CRM Sync failed for {event_type}: {e}")
+            crms = _get_crm_integrations(configs)
+            if crms:
+                log_external_call(logger, "CRM", f"Syncing contact for {event_type} to {len(crms)} integrations")
+                for crm in crms:
+                    try:
+                        platform_name = crm.__class__.__name__.replace("Client", "")
+                        await crm.sync_contact(payload)
+                        log_success(logger, f"Contact synced: {platform_name}")
+                    except Exception as e:
+                        log_error(logger, f"CRM Sync failed for {platform_name}: {e}")
             else:
-                 log_skip(logger, "Skipping CRM sync: EspoCRM not configured")
+                 log_skip(logger, "Skipping CRM sync: No CRM configured")
 
             return {"status": "contact_event_processed"}
 
@@ -136,19 +156,21 @@ async def process_integration_event(client_slug: str, payload: dict, db: AsyncSe
                             summary["conversation_end"] = end_str
 
                             # 3. Sync to CRM
-                            if espo_config:
+                            crms = _get_crm_integrations(configs)
+                            if crms:
                                 sender = payload.get("meta", {}).get("sender", {}) or payload.get("sender", {})
                                 email = sender.get("email")
                                 phone = sender.get("phone_number")
 
                                 if email or phone:
-                                    log_external_call(logger, "EspoCRM", "Updating lead with summary")
-                                    espo = EspoClient(
-                                        base_url=espo_config["base_url"],
-                                        api_key=espo_config["api_key"]
-                                    )
-                                    await espo.update_lead_summary(email, phone, summary)
-                                    log_success(logger, "CRM updated with summary")
+                                    log_external_call(logger, "CRM", f"Updating summary to {len(crms)} integrations")
+                                    for crm in crms:
+                                        try:
+                                            platform_name = crm.__class__.__name__.replace("Client", "")
+                                            await crm.update_lead_summary(email, phone, summary)
+                                            log_success(logger, f"Summary updated in {platform_name}")
+                                        except Exception as e:
+                                            log_error(logger, f"CRM Summary Update failed for {platform_name}: {e}")
                                 else:
                                     log_skip(logger, "Skipping CRM update: No email or phone to match lead")
 

@@ -151,17 +151,9 @@ class EspoClient:
                 return
 
             # 3. Format Description
-            desc = (
-                f"### AI Conversation Summary 🤖\n\n"
-                f"**Period**: {summary.get('conversation_start', 'N/A')} - {summary.get('conversation_end', 'N/A')}\n"
-                f"**Summary**: {summary.get('ai_summary', 'N/A')}\n\n"
-                f"**Client Profile**: {summary.get('client_description', 'N/A')}\n"
-                f"**Analysis**:\n"
-                f"- Intent: {summary.get('purchase_intent')}\n"
-                f"- Urgency: {summary.get('urgency_level')}\n"
-                f"- Sentiment: {summary.get('sentiment_score')}\n"
-                f"- Budget: {summary.get('detected_budget')}\n"
-            )
+            from app.bot.formatting import ConversationFormatter
+            formatter = ConversationFormatter(summary)
+            desc = formatter.to_markdown()
 
             # 4. Post to Stream (Create Note)
             create_note_url = f"{self.base_url}/api/v1/Note"
