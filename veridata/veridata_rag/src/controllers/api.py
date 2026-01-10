@@ -1,5 +1,4 @@
 from fastapi import APIRouter, UploadFile, File, Form
-from typing import Optional
 from uuid import UUID
 from src.schemas import QueryRequest, QueryResponse, SummarizeRequest, ConversationSummary, ChatHistoryResponse
 from src.rag import generate_answer
@@ -17,7 +16,6 @@ async def api_delete_session(session_id: UUID):
 async def api_get_history(session_id: UUID):
     from src.memory import get_full_chat_history
     history = get_full_chat_history(session_id)
-    # Convert list of dicts to list of ChatMessage
     return {"messages": history}
 
 @router.post("/query", response_model=QueryResponse)
@@ -34,8 +32,6 @@ async def api_query_rag(request: QueryRequest):
         use_rerank=request.use_rerank,
         provider=request.provider,
         session_id=session_id,
-
-
         complexity_score=request.complexity_score,
         pricing_intent=request.pricing_intent,
         external_context=request.external_context

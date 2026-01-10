@@ -6,7 +6,6 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, BackgroundTasks, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-
 from src.db import get_db
 from src.auth import require_auth
 from src.rag import ingest_document, generate_answer
@@ -15,7 +14,6 @@ logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="src/templates")
 router = APIRouter()
 
-# Helpers
 def get_tenants():
     with get_db() as conn:
         with conn.cursor() as cur:
@@ -25,10 +23,15 @@ def get_tenants():
 def get_tenant_documents(tenant_id: UUID):
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, filename, created_at FROM documents WHERE tenant_id = %s ORDER BY created_at DESC", (tenant_id,))
+            cur.execute("""
+                SELECT filename, MAX(created_at) as created_at, COUNT(*) as chunk_count
+                FROM documents
+                WHERE tenant_id = %s
+                GROUP BY filename
+                ORDER BY created_at DESC
+            """, (tenant_id,))
             return cur.fetchall()
 
-# Login Routes
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
@@ -37,8 +40,6 @@ async def login_page(request: Request):
 async def login_action(request: Request, username: Annotated[str, Form()], password: Annotated[str, Form()]):
     correct_user = os.getenv("ADMIN_USER", "admin")
     correct_pass = os.getenv("ADMIN_PASSWORD", "admin")
-
-    # We use a static token secret for simplicity
     admin_token = os.getenv("ADMIN_TOKEN", "secret-admin-token")
 
     if secrets.compare_digest(username, correct_user) and secrets.compare_digest(password, correct_pass):
@@ -54,7 +55,6 @@ async def logout(request: Request):
     response.delete_cookie("session_token")
     return response
 
-# Routes
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, username: str = Depends(require_auth)):
     tenants = get_tenants()
@@ -78,7 +78,6 @@ async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends
 
     tenant_data = {"id": str(tenant_id), "name": "Unknown", "preferred_languages": ""}
 
-    # Fetch details including languages
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT name, preferred_languages FROM tenants WHERE id = %s", (tenant_id,))
@@ -113,7 +112,6 @@ async def update_tenant_settings(
             )
             conn.commit()
 
-    # Return a success message (using HTMX if we wanted, but full reload is safer for now or just redirect)
     return RedirectResponse(url=f"/tenants/{tenant_id}", status_code=303)
 
 @router.post("/ingest", response_class=HTMLResponse)
@@ -129,7 +127,6 @@ async def ingest_file(
 
     content = await file.read()
     try:
-        # If text, decode it. If image, pass bytes.
         text_content = None
         file_bytes = None
 
@@ -159,7 +156,6 @@ async def query_rag(
     session_id: Annotated[Optional[str], Form()] = None,
     username: str = Depends(require_auth)
 ):
-    # Create session if needed
     if not session_id:
         session_id = create_session(tenant_id)
 
@@ -176,10 +172,19 @@ async def query_rag(
         {"request": request, "answer": answer, "query": query, "session_id": session_id}
     )
 
-@router.delete("/documents/{doc_id}", response_class=HTMLResponse)
-async def delete_document(request: Request, doc_id: UUID, username: str = Depends(require_auth)):
+@router.delete("/tenants/{tenant_id}/documents", response_class=HTMLResponse)
+async def delete_document(request: Request, tenant_id: UUID, filename: str, username: str = Depends(require_auth)):
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+            cur.execute("DELETE FROM documents WHERE tenant_id = %s AND filename = %s", (tenant_id, filename))
             conn.commit()
     return HTMLResponse("")
+
+@router.delete("/tenants/{tenant_id}", response_class=HTMLResponse)
+async def delete_tenant(request: Request, tenant_id: UUID, username: str = Depends(require_auth)):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
+            conn.commit()
+    # HX-Redirect tells HTMX to navigate the client to the new URL
+    return HTMLResponse("", headers={"HX-Redirect": "/"})
