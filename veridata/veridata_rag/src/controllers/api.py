@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form
 from typing import Optional
 from uuid import UUID
 from src.schemas import QueryRequest, QueryResponse, SummarizeRequest, ConversationSummary, ChatHistoryResponse
-from src.rag import generate_answer, summarize_conversation
+from src.rag import generate_answer
 from src.memory import create_session, delete_session
 
 
@@ -46,9 +46,6 @@ async def api_query_rag(request: QueryRequest):
         session_id=session_id
     )
 
-@router.post("/summarize", response_model=ConversationSummary)
-async def api_summarize_conversation(request: SummarizeRequest):
-    summary_data = summarize_conversation(request.session_id, request.provider)
-    return ConversationSummary(**summary_data)
+
 
 

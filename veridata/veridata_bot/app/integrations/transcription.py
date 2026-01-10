@@ -1,7 +1,7 @@
 import os
 import io
 import logging
-import google.generativeai as genai
+
 from openai import AsyncOpenAI
 from app.core.config import settings
 
@@ -30,6 +30,9 @@ async def transcribe_openai(file_bytes: bytes, filename: str = "audio.mp3") -> s
         logger.error(f"OpenAI Transcription failed: {e}")
         raise e
 
+from google import genai
+from google.genai import types
+
 async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> str:
     api_key = settings.google_api_key
     if not api_key:
@@ -38,21 +41,23 @@ async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> 
     if not api_key:
         raise ValueError("GOOGLE_API_KEY not set")
 
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
     # Use default model or valid gemini-1.5-flash / 2.0-flash
-    model_name = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash")
-
-    model = genai.GenerativeModel(model_name)
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
     try:
-        response = model.generate_content([
-            "Transcribe this audio file exactly as spoken.",
-            {
-                "mime_type": mime_type,
-                "data": file_bytes
-            }
-        ])
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[
+                types.Content(
+                    parts=[
+                        types.Part.from_text(text="Transcribe this audio file exactly as spoken."),
+                        types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+                    ]
+                )
+            ]
+        )
         return response.text
     except Exception as e:
         logger.error(f"Gemini Transcription failed: {e}")

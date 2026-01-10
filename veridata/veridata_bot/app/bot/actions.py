@@ -9,6 +9,7 @@ from app.integrations.hubspot import HubSpotClient
 import httpx
 import logging
 from app.core.logging import log_start, log_payload, log_skip, log_success, log_error, log_external_call, log_db
+from app.agent.summarizer import summarize_start_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -195,11 +196,13 @@ async def handle_conversation_resolution(client, configs, conversation_data, sen
                         api_key=rag_config.get("api_key", ""),
                         tenant_id=rag_config["tenant_id"]
                     )
-                    summary = await rag_client.summarize(
+
+                    # New Local Summarization Flow
+                    summary = await summarize_start_conversation(
                         session_id=session.rag_session_id,
-                        provider=rag_config.get("provider", "gemini")
+                        rag_client=rag_client
                     )
-                    log_success(logger, "Summary generated successfully")
+                    log_success(logger, "Summary generated successfully (Local LLM)")
 
                     import datetime
                     created_at_ts = conversation_data.get("created_at")

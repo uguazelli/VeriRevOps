@@ -30,53 +30,6 @@ logger = logging.getLogger(__name__)
 # Single instance of embedding model
 _embed_model = None
 
-def summarize_conversation(session_id: UUID, provider: str = None) -> Dict[str, Any]:
-    history = get_full_chat_history(session_id)
-    if not history:
-        logger.warning(f"No history found for session {session_id}")
-        return {
-            "purchase_intent": "None",
-            "urgency_level": "Low",
-            "sentiment_score": "Neutral",
-            "detected_budget": None,
-            "ai_summary": "No history available to summarize.",
-            "contact_info": {},
-            "client_description": None
-        }
-
-    history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
-
-    try:
-        llm = get_llm(step="summarization", provider=provider)
-        prompt = SUMMARY_PROMPT_TEMPLATE.format(history_str=history_str)
-        response = llm.complete(prompt)
-        text = response.text.replace('```json', '').replace('```', '').strip()
-        log_llm(logger, f"Summarization response: {text}")
-
-        import json
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            import ast
-            logger.warning("JSON decode failed, trying literal_eval")
-            return ast.literal_eval(text)
-
-    except Exception as e:
-        log_error(logger, f"Summarization failed: {e}")
-        # Return fallback object that matches the Pydantic schema
-        return {
-            "purchase_intent": "None",
-            "urgency_level": "Low",
-            "sentiment_score": "Neutral",
-            "detected_budget": None,
-            "ai_summary": f"Summarization failed due to error: {str(e)}",
-            "contact_info": {},
-            "client_description": None
-        }
-
-
-
-
 def contextualize_query(query: str, history: List[Dict[str, str]], provider: str = None) -> str:
     if not history:
         return query
