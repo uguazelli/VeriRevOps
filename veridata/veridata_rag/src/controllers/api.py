@@ -34,7 +34,7 @@ async def api_query_rag(request: QueryRequest):
         use_rerank=request.use_rerank,
         provider=request.provider,
         session_id=session_id,
-        handoff_rules=request.handoff_rules,
+
 
         complexity_score=request.complexity_score,
         pricing_intent=request.pricing_intent,

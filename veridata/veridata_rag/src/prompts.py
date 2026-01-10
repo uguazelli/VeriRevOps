@@ -1,29 +1,6 @@
 # Centralized Prompt Templates
 
-SUMMARY_PROMPT_TEMPLATE = (
-    "You are an expert CRM analyst. Analyze the following conversation between a user and an AI assistant.\n"
-    "Extract structured information for lead qualification and CRM updates.\n\n"
-    "Conversation:\n{history_str}\n\n"
-    "Tasks:\n"
-    "1. Analyze Purchase Intent (High, Medium, Low, None)\n"
-    "2. Assess Urgency (Urgent, Normal, Low)\n"
-    "3. Determine Sentiment Score (Positive, Neutral, Negative)\n"
-    "4. Detect Budget (if mentioned)\n"
-    "5. Extract Contact Info (Name, Phone, Email, Address, Industry)\n"
-    "6. Write a concise AI Summary (Markdown)\n"
-    "7. Write a Client Description (Professional tone)\n\n"
-    "Output must be valid JSON with this structure:\n"
-    "{{\n"
-    "  \"purchase_intent\": \"...\",\n"
-    "  \"urgency_level\": \"...\",\n"
-    "  \"sentiment_score\": \"...\",\n"
-    "  \"detected_budget\": null,\n"
-    "  \"ai_summary\": \"...\",\n"
-    "  \"contact_info\": {{\"name\": null, \"phone\": null, \"email\": null, \"address\": null, \"industry\": null}},\n"
-    "  \"client_description\": \"...\"\n"
-    "}}\n\n"
-    "JSON Output:"
-)
+
 
 CONTEXTUALIZE_PROMPT_TEMPLATE = (
     "Given a chat history and the latest user question which might reference context in the chat history, "
@@ -54,13 +31,7 @@ HYDE_PROMPT_TEMPLATE = (
     "Passage:"
 )
 
-HANDOFF_PROMPT_TEMPLATE = (
-    "You are a helpful assistant.\n"
-    "The user explicitly asked to speak to a human agent.\n"
-    "Generate a polite response confirming you will transfer them to a human agent.\n"
-    "User Message: {search_query}\n"
-    "Response:"
-)
+
 
 RAG_ANSWER_PROMPT_TEMPLATE = (
     "You are Veribot 🤖, an AI assistant.\n"

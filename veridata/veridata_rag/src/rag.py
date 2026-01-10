@@ -13,9 +13,7 @@ from src.llm_factory import get_llm
 from src.memory import add_message, get_chat_history, get_full_chat_history
 from src.logging import log_start, log_success, log_error, log_llm, log_skip, log_external_call
 from src.prompts import (
-    SUMMARY_PROMPT_TEMPLATE,
     CONTEXTUALIZE_PROMPT_TEMPLATE,
-    HANDOFF_PROMPT_TEMPLATE,
     RAG_ANSWER_PROMPT_TEMPLATE,
     SMALL_TALK_PROMPT_TEMPLATE
 )
@@ -125,7 +123,6 @@ def generate_answer(
     use_rerank: Optional[bool] = None,
     provider: Optional[str] = None,
     session_id: Optional[UUID] = None,
-    handoff_rules: Optional[str] = None,
 
     # skip_routing: bool = False, # DEPRECATED/REMOVED
     complexity_score: int = 5,
@@ -214,7 +211,7 @@ def generate_answer(
         requires_rag = False
 
     if pricing_intent:
-        logger.info("🎯 Pricing intent detected: Fetching spreadsheet.")
+        logger.info("🎯 Pricing intent detected.")
 
     # 2.1 Route to appropriate model brain
     # Simple queries use 'generation', hard ones use 'complex_reasoning'
@@ -232,20 +229,7 @@ def generate_answer(
     results = []
     answer = ""
 
-    # If human handoff is requested, short-circuit
-    if requires_human:
-        logger.info("Human handoff requested.")
-        prompt = HANDOFF_PROMPT_TEMPLATE.format(
-            lang_instruction=lang_instruction,
-            search_query=search_query
-        )
-        try:
-            llm = get_llm(step=gen_step, provider=provider)
-            response = llm.complete(prompt)
-            return response.text.strip(), True
-        except Exception as e:
-            logger.error(f"LLM generation for handoff failed: {e}")
-            return "I will transfer you to a human agent.", True
+
 
     # Format history for EITHER prompt
     history_str = ""

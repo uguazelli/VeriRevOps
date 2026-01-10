@@ -9,7 +9,7 @@ class QueryRequest(BaseModel):
     use_rerank: Optional[bool] = None
     provider: Optional[str] = None
     session_id: Optional[UUID] = None
-    handoff_rules: Optional[str] = None
+
 
     complexity_score: Optional[int] = 5
     pricing_intent: Optional[bool] = False
