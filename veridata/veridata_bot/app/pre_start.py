@@ -8,7 +8,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-max_tries = 60 * 5  # 5 minutes
+max_tries = 60 * 5
 wait_seconds = 1
 
 @retry(

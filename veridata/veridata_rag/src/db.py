@@ -21,20 +21,16 @@ def get_pool() -> ConnectionPool:
 
 @contextmanager
 def get_db() -> Generator[psycopg.Connection, None, None]:
-    """Get a database connection from the pool."""
     pool = get_pool()
     with pool.connection() as conn:
         yield conn
 
 def init_db():
-    """Initialize the database schema."""
     logger.info("Initializing database schema...")
     with get_db() as conn:
         with conn.cursor() as cur:
-            # Enable pgvector extension
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
-            # Create tenants table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS tenants (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -44,7 +40,6 @@ def init_db():
                 );
             """)
 
-            # Create global_configs table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS global_configs (
                     id SERIAL PRIMARY KEY,
@@ -53,17 +48,12 @@ def init_db():
                 );
             """)
 
-            # Migration for existing databases
             try:
                 cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS preferred_languages TEXT;")
             except Exception as e:
                 logger.warning(f"Migration check for preferred_languages failed: {e}")
 
-            # Create documents table
-            # embedding vector size depends on provider
             dim = 768
-
-            # Check existing dimension if table exists
             cur.execute("SELECT to_regclass('documents');")
             if cur.fetchone()[0]:
                 cur.execute("""
@@ -97,31 +87,20 @@ def init_db():
             try:
                 cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS fts_vector tsvector;")
                 cur.execute("CREATE INDEX IF NOT EXISTS documents_fts_vector_idx ON documents USING GIN (fts_vector);")
-                # Populate existing rows
                 cur.execute("UPDATE documents SET fts_vector = to_tsvector('english', content) WHERE fts_vector IS NULL;")
             except Exception as e:
                 logger.warning(f"Migration check for fts_vector failed: {e}")
 
-            # Create HNSW index for performance
-            # Note: HNSW requires some data to be effective but good to have DDL ready.
-            # We use IF NOT EXISTS logic carefully or just create if not exists
-            # vector_l2_ops is standard for Euclidean/Cosine (if normalized)
-            # Cosine similarity: <=> (cosine distance), but usually we normalize vectors and use L2 or inner product.
-            # LlamaIndex defaults to cosine similarity.
-            # vector_cosine_ops is available in pgvector 0.5.0+.
-            # We will use vector_cosine_ops for cosine similarity.
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS documents_embedding_idx
                 ON documents
                 USING hnsw (embedding vector_cosine_ops);
             """)
 
-            # Create index for tenant_id for faster filtering
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS documents_tenant_id_idx ON documents (tenant_id);
             """)
 
-            # Create chat_sessions table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chat_sessions (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -130,7 +109,6 @@ def init_db():
                 );
             """)
 
-            # Create chat_messages table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS chat_messages (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -141,12 +119,9 @@ def init_db():
                 );
             """)
 
-            # Create index for session messages
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS chat_messages_session_id_idx ON chat_messages (session_id);
             """)
-
-            # Create query_cache table for Semantic Caching
             cur.execute(f"""
                 CREATE TABLE IF NOT EXISTS query_cache (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

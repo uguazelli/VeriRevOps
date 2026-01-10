@@ -13,7 +13,6 @@ def get_config(force_reload: bool = False) -> Dict[str, Any]:
     if _config_cache is not None and not force_reload:
         return _config_cache
 
-    # 1. Load from default JSON
     base_path = os.path.dirname(__file__)
     json_path = os.path.join(base_path, "config.json")
 
@@ -25,7 +24,6 @@ def get_config(force_reload: bool = False) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Failed to load config.json: {e}")
 
-    # 2. Override from DB if available
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -34,8 +32,6 @@ def get_config(force_reload: bool = False) -> Dict[str, Any]:
                 if row:
                     db_config = row[0]
                     if isinstance(db_config, dict):
-                        # Merge or replace? The user wants global config to have all parameters.
-                        # We'll merge the top-level keys.
                         config.update(db_config)
                         logger.info("Loaded global config from database")
     except Exception as e:
@@ -49,7 +45,6 @@ def get_llm_settings(step: str) -> Dict[str, str]:
     llm_config = config.get("llm_config", {})
     steps = llm_config.get("steps", {})
 
-    # Fallback to a default if step not found
     step_config = steps.get(step, steps.get("generation", {
         "provider": "gemini",
         "model": "models/gemini-2.0-flash"

@@ -1,7 +1,5 @@
 # Centralized Prompt Templates
 
-
-
 CONTEXTUALIZE_PROMPT_TEMPLATE = (
     "Given a chat history and the latest user question which might reference context in the chat history, "
     "formulate a standalone question which can be understood without the chat history. "
@@ -10,8 +8,6 @@ CONTEXTUALIZE_PROMPT_TEMPLATE = (
     "Latest Question: {query}\n\n"
     "Standalone Question:"
 )
-
-
 
 RERANK_PROMPT_TEMPLATE = (
     "You are a relevance ranking system. "
@@ -30,8 +26,6 @@ HYDE_PROMPT_TEMPLATE = (
     "Question: {query}\n\n"
     "Passage:"
 )
-
-
 
 RAG_ANSWER_PROMPT_TEMPLATE = (
     "You are Veribot 🤖, an AI assistant.\n"

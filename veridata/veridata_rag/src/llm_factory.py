@@ -3,19 +3,13 @@ import logging
 from typing import Any
 from llama_index.llms.gemini import Gemini
 from llama_index.llms.openai import OpenAI
-
 from src.config import get_llm_settings
 
 logger = logging.getLogger(__name__)
 
-# Instances cache (now by step or provider)
 _llm_instances = {}
 
 def get_llm(step: str = "generation", provider: str = None) -> Any:
-    """
-    Get an LLM instance based on the interaction step or provider.
-    Priority: Provider (if provided) > Global Config for Step.
-    """
     settings = {}
     if provider:
         settings = {"provider": provider.lower(), "model": None}
@@ -25,7 +19,6 @@ def get_llm(step: str = "generation", provider: str = None) -> Any:
     provider = settings.get("provider", "gemini").lower()
     model_name = settings.get("model")
 
-    # Cache key depends on provider and model
     instance_key = f"{provider}:{model_name}"
 
     if instance_key in _llm_instances:

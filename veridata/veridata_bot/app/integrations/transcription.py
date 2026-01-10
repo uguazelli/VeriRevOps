@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 async def transcribe_openai(file_bytes: bytes, filename: str = "audio.mp3") -> str:
     api_key = settings.openai_api_key
     if not api_key:
-        api_key = os.getenv("OPENAI_API_KEY") # Fallback
+        api_key = os.getenv("OPENAI_API_KEY")
 
     if not api_key:
         raise ValueError("OPENAI_API_KEY not set")
@@ -43,7 +43,6 @@ async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> 
 
     client = genai.Client(api_key=api_key)
 
-    # Use default model or valid gemini-1.5-flash / 2.0-flash
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
     try:
@@ -72,7 +71,6 @@ async def transcribe_audio(file_bytes: bytes, filename: str, provider: str = Non
     elif filename.endswith(".m4a"):
         mime_type = "audio/mp4"
 
-    # Determine provider (default to Gemini if not specified)
     if not provider:
          provider = "gemini"
 

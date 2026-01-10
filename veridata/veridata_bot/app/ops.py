@@ -114,28 +114,21 @@ async def websocket_endpoint(websocket: WebSocket):
              await websocket.send_text(f"Log file not waiting: {LOG_FILE}")
              return
 
-        # Tail existing logs (last 50 lines)
         with open(LOG_FILE, "r") as f:
-            # Simple tail implementation
             try:
                 f.seek(0, os.SEEK_END)
                 end = f.tell()
-                # Read backwards to find lines?
-                # Simplification: Just read last 4096 bytes and split
                 if end > 4096:
                     f.seek(end - 4096)
                 else:
                     f.seek(0)
                 content = f.read()
-                lines = content.splitlines()[-50:] # Keep last 50
+                lines = content.splitlines()[-50:]
                 for line in lines:
                      await websocket.send_text(line)
             except Exception as e:
                 await websocket.send_text(f"Error reading history: {e}")
 
-            # Follow new lines
-            # In production, use a library or smarter polling.
-            # Check every 0.1s
             f.seek(0, os.SEEK_END)
             while True:
                 line = f.readline()

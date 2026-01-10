@@ -2,14 +2,11 @@ import httpx
 import csv
 import logging
 from io import StringIO
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 async def fetch_google_sheet_data(url: str) -> str:
-    """Fetch CSV from Google Sheets and return a summarized text context."""
     try:
-        # Convert standard URL to export URL
         if "/edit" in url:
             url = url.split("/edit")[0] + "/export?format=csv"
         elif "/view" in url:
@@ -27,7 +24,6 @@ async def fetch_google_sheet_data(url: str) -> str:
             rows_processed = 0
             for row in reader:
                 rows_processed += 1
-                # Format: Product (SKU): Price | Notes
                 name = row.get("Product Name") or row.get("item_name")
                 price = row.get("Price") or row.get("item_price")
                 sku = row.get("ID / SKU") or row.get("item_id")

@@ -19,10 +19,6 @@ class ChatwootClient:
                 "message_type": message_type,
                 "private": False
             }
-            # Note: Authentication might vary (header vs param). Assuming header based on standard practices
-            # or it might be passed differently. Adjusting for standard Chatwoot API.
-            # Usually: api_access_token in header or query.
-            # Using header here.
             resp = await client.post(url, json=payload, headers=self.headers)
             resp.raise_for_status()
             return resp.json()

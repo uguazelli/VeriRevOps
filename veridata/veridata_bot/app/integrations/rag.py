@@ -14,14 +14,12 @@ class RagClient:
     def _get_headers(self):
         headers = {}
         if self.api_key:
-            # If the key contains a colon, assume it's username:password and use Basic Auth
             if ":" in self.api_key and "Basic" not in self.api_key and "Bearer" not in self.api_key:
                 encoded = base64.b64encode(self.api_key.encode()).decode()
                 headers["Authorization"] = f"Basic {encoded}"
             elif "Basic" in self.api_key or "Bearer" in self.api_key:
                  headers["Authorization"] = self.api_key
             else:
-                 # Default to Bearer if single string
                  headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
@@ -38,7 +36,6 @@ class RagClient:
         async with httpx.AsyncClient(timeout=60.0) as client:
             url = f"{self.base_url}/api/query"
 
-            # Base payload
             payload = {
                 "query": message,
                 "tenant_id": self.tenant_id,
@@ -62,7 +59,6 @@ class RagClient:
 
             resp.raise_for_status()
             return resp.json()
-            # Expected response: {"answer": "...", "requires_human": true, "session_id": "..."}
 
     async def transcribe(self, file_bytes: bytes, filename: str, provider: str = "gemini") -> str:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -102,7 +98,6 @@ class RagClient:
 
             logger.info(f"Deleting RAG session {session_id}")
             resp = await client.delete(url, headers=headers)
-            # If 404, it's fine (already deleted)
             if resp.status_code == 404:
                 return {"status": "already_deleted"}
             resp.raise_for_status()

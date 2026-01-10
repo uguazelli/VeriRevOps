@@ -19,13 +19,11 @@ class EspoClient:
                     return data['list'][0]
             return None
 
-        # 1. Try Email
         if email:
             params = {"where[0][type]": "equals", "where[0][attribute]": "emailAddress", "where[0][value]": email}
             found = await _query(params)
             if found: return found
 
-        # 2. Try Phone
         if phone:
             params = {"where[0][type]": "equals", "where[0][attribute]": "phoneNumber", "where[0][value]": phone}
             found = await _query(params)
@@ -34,11 +32,6 @@ class EspoClient:
         return None
 
     async def sync_contact(self, payload: dict):
-        """
-        Syncs a Chatwoot contact to EspoCRM (Lead or Contact).
-        Creates a Lead if no match found. Updates existing record if found.
-        """
-        # Use shared extractor
         from app.bot.utils import extract_contact_info, parse_name
         info = extract_contact_info(payload)
 
@@ -51,36 +44,17 @@ class EspoClient:
             return None
 
         async with httpx.AsyncClient() as client:
-            # 1. Check Contact first (Converted/Active Client)
             contact = await self._search_impl(client, "Contact", email, phone)
             entity_type = "Contact"
             entity_id = contact['id'] if contact else None
-
-            # 2. Check Lead if no Contact
             if not entity_id:
                 lead = await self._search_impl(client, "Lead", email, phone)
                 if lead:
                     entity_type = "Lead"
                     entity_id = lead['id']
 
-            # Prepare Payload
-            # Use shared name parser
             first_name, last_name = parse_name(name)
-
-            # EspoCRM specific: If single name "John", parse_name returns "John", "".
-            # Espo might rely on LastName?
-            # Existing logic was: if single, last_name = name, first_name = ""
-            # Let's verify existing logic:
-            # if len > 1: first=parts[0], last=rest
-            # else: first="", last=name
-
-            # My parser: first=name, last=""
-            # Adaptation:
             if not last_name:
-                # If only one name provided, treat it as Last Name for EspoCRM compatibility?
-                # Or just use First Name?
-                # Let's inspect Espo API requirements. Usually Last Name is required.
-                # So if last_name is empty, swap them?
                 last_name = first_name
                 first_name = ""
 
@@ -98,7 +72,6 @@ class EspoClient:
                 "title": additional.get("designation") or additional.get("title"), # sometimes passed
             }
 
-            # Remove None values and empty strings to avoid overwriting with empty
             payload = {k: v for k, v in payload.items() if v}
 
             if entity_id:
@@ -111,15 +84,11 @@ class EspoClient:
                     return resp.json()
                 except httpx.HTTPStatusError as e:
                     logger.error(f"EspoCRM Update Failed: {e.response.text}")
-                    # Don't raise, just return existing to avoid breaking flow? Or raise?
-                    # Raising is better for visibility in logs
                     raise e
             else:
-                # Create New Lead
                 logger.info("Creating new Lead")
                 create_url = f"{self.base_url}/api/v1/Lead"
 
-                # Default fields for new Lead
                 payload["status"] = "New"
                 payload["source"] = "Other"
 
@@ -132,7 +101,6 @@ class EspoClient:
                     logger.error(f"EspoCRM Creation Failed: {e.response.text}")
                     raise e
 
-    # Deprecated/Alias for backward compatibility if needed, but we can replace usage
     async def sync_lead(self, name: str, email: str = None, phone_number: str = None):
         return await self.sync_contact({
             "name": name,
@@ -148,14 +116,12 @@ class EspoClient:
             parent_type = "Lead"
             parent_id = None
 
-            # 1. Search Contact (Priority)
             contact = await self._search_impl(client, "Contact", email, phone)
             if contact:
                 parent_type = "Contact"
                 parent_id = contact['id']
                 logger.info(f"Summary target found: Contact {parent_id}")
             else:
-                # 2. Search Lead
                 lead = await self._search_impl(client, "Lead", email, phone)
                 if lead:
                     parent_id = lead['id']
@@ -165,12 +131,9 @@ class EspoClient:
                 logger.warning(f"Entity not found for summary update: {email or phone}")
                 return
 
-            # 3. Format Description
             from app.bot.formatting import ConversationFormatter
             formatter = ConversationFormatter(summary)
             desc = formatter.to_markdown()
-
-            # 4. Post to Stream (Create Note)
             create_note_url = f"{self.base_url}/api/v1/Note"
             payload = {
                 "type": "Post",
@@ -182,28 +145,24 @@ class EspoClient:
             logger.info(f"Posting summary to Stream for {parent_type} {parent_id}")
             await client.post(create_note_url, json=payload, headers=self.headers)
 
-            # 5. Update Budget (Opportunity Amount) if detected
             budget = summary.get('detected_budget')
-
             if budget and parent_type == "Lead":
                 try:
-                    # Simple parsing: remove non-numeric chars except dot/comma
                     import re
                     clean_budget = 0.0
                     if isinstance(budget, (int, float)):
                         clean_budget = float(budget)
                     elif isinstance(budget, str):
-                        # Extract first valid number
                         match = re.search(r'[\d,.]+', budget)
                         if match:
-                            clean_str = match.group().replace(',', '') # rudimentary parsing
+                            clean_str = match.group().replace(',', '')
                             clean_budget = float(clean_str)
 
                     if clean_budget > 0:
                         update_lead_url = f"{self.base_url}/api/v1/Lead/{parent_id}"
                         lead_payload = {
                             "opportunityAmount": clean_budget,
-                            "opportunityAmountCurrency": "USD" # Fix for validation failure
+                            "opportunityAmountCurrency": "USD"
                         }
                         logger.info(f"Updating Lead opportunityAmount to {clean_budget} USD")
                         await client.put(update_lead_url, json=lead_payload, headers=self.headers)

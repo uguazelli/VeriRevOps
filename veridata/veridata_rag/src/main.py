@@ -7,11 +7,9 @@ from src.db import init_db, close_pool
 from src.controllers import web, api, ops
 from src.logging import setup_logging
 
-# Setup Logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# Lifespan
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -20,15 +18,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="VeriRag Core", lifespan=lifespan)
 
-# Include Routers
-# Web (HTML) Router - Mounts at root
 app.include_router(web.router)
-
-# API (JSON) Router - Mounts at /api
 app.include_router(api.router, prefix="/api")
-
-# Ops Router
 app.include_router(ops.router, prefix="/ops", tags=["ops"])
-
-# Static files
 app.mount("/static", StaticFiles(directory="src/static"), name="static")

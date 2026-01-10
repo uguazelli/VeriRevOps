@@ -79,7 +79,6 @@ class HubSpotClient:
         if email: properties["email"] = email
         if phone_number: properties["phone"] = phone_number
 
-        # Use shared name parser
         from app.bot.utils import parse_name
         first, last = parse_name(name)
 
@@ -88,12 +87,10 @@ class HubSpotClient:
 
         async with httpx.AsyncClient() as client:
             if existing_id:
-                # Update
                 url = f"{self.base_url}/crm/v3/objects/contacts/{existing_id}"
                 await client.patch(url, headers=self.headers, json={"properties": properties})
                 logger.info(f"HubSpot: Updated contact {existing_id}")
             else:
-                # Create
                 url = f"{self.base_url}/crm/v3/objects/contacts"
                 resp = await client.post(url, headers=self.headers, json={"properties": properties})
                 if resp.status_code == 201:
@@ -105,7 +102,6 @@ class HubSpotClient:
         """
         Syncs a contact object (usually from Chatwoot payload) to HubSpot.
         """
-        # Use shared extractor
         from app.bot.utils import extract_contact_info
         info = extract_contact_info(payload)
 
@@ -120,27 +116,21 @@ class HubSpotClient:
             logger.warning("HubSpot: Could not find contact to attach summary")
             return
 
-        # Format the summary as a readable Note (HubSpot supports HTML)
         from app.bot.formatting import ConversationFormatter
         formatter = ConversationFormatter(summary_data)
         note_body = formatter.to_html()
 
-        # Create Engagement (Note)
-        # HubSpot V3 supports associating notes directly to valid objects
         url = f"{self.base_url}/crm/v3/objects/notes"
 
         note_properties = {
             "hs_note_body": note_body
         }
 
-        # HubSpot requires hs_timestamp. Use summary time or fallback to now.
         import time
         ts_ms = int(time.time() * 1000) # Default to now
 
         if summary_data.get("end_timestamp"):
             try:
-                # Expecting unix timestamp (float or int)
-                # Ensure we have a valid number
                 ts_val = float(summary_data["end_timestamp"])
                 if ts_val > 0:
                     ts_ms = int(ts_val * 1000)
