@@ -3,11 +3,15 @@ import io
 import logging
 import google.generativeai as genai
 from openai import AsyncOpenAI
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 async def transcribe_openai(file_bytes: bytes, filename: str = "audio.mp3") -> str:
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = settings.openai_api_key
+    if not api_key:
+        api_key = os.getenv("OPENAI_API_KEY") # Fallback
+
     if not api_key:
         raise ValueError("OPENAI_API_KEY not set")
 
@@ -27,15 +31,17 @@ async def transcribe_openai(file_bytes: bytes, filename: str = "audio.mp3") -> s
         raise e
 
 async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> str:
-    api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = settings.google_api_key
+    if not api_key:
+        api_key = os.getenv("GOOGLE_API_KEY")
+
     if not api_key:
         raise ValueError("GOOGLE_API_KEY not set")
 
     genai.configure(api_key=api_key)
 
-    from src.config import get_llm_settings
-    settings = get_llm_settings("transcription")
-    model_name = settings.get("model", os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash"))
+    # Use default model or valid gemini-1.5-flash / 2.0-flash
+    model_name = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash")
 
     model = genai.GenerativeModel(model_name)
 
@@ -61,8 +67,11 @@ async def transcribe_audio(file_bytes: bytes, filename: str, provider: str = Non
     elif filename.endswith(".m4a"):
         mime_type = "audio/mp4"
 
-    if provider and provider.lower() == "openai":
+    # Determine provider (default to Gemini if not specified)
+    if not provider:
+         provider = "gemini"
+
+    if provider.lower() == "openai":
         return await transcribe_openai(file_bytes, filename)
     else:
-        # If no provider specified, transcribe_gemini is the default
         return await transcribe_gemini(file_bytes, mime_type)

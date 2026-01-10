@@ -11,7 +11,6 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# --- PROMPTS (Ported from RAG) ---
 
 INTENT_SYSTEM_PROMPT = """You are a router. Analyze the user's query and decide on two things:
 1. Does it require looking up external documents? (RAG)
@@ -51,25 +50,15 @@ If this is a greeting, introduce yourself as Veribot 🤖, an AI assistant who c
 IMPORTANT: Always answer in the same language as the user's message.
 """
 
-# --- NODES ---
-
 async def router_node(state: AgentState):
-    """
-    Analyzes the last message to decide the next step.
-    Propagates the decision to the conditional edge.
-    """
     last_msg = state["messages"][-1].content
 
-    # Use Gemini Flash for speed/cost (equivalent to gpt-4o-mini)
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.0-flash",
         temperature=0,
-        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        google_api_key=settings.google_api_key,
         convert_system_message_to_human=True # Gemini sometimes prefers this
     )
-
-    # Note: Gemini JSON mode is a bit specific, usually prompts need to imply it strongly
-    # or use .with_structured_output if available. For now we rely on prompt instruction + json parse.
 
     messages = [
         SystemMessage(content=INTENT_SYSTEM_PROMPT + "\nJSON Output:"),
@@ -77,19 +66,20 @@ async def router_node(state: AgentState):
     ]
 
     response = await llm.ainvoke(messages)
-    # Clean the response content to handle markdown code blocks
     content = response.content.replace('```json', '').replace('```', '').strip()
 
     try:
         data = json.loads(content)
         intent = "rag"
+        complexity = data.get("complexity_score", 5)
+        pricing = data.get("pricing_intent", False)
+
         if data.get("requires_human"):
             intent = "human"
         elif not data.get("requires_rag"):
-            intent = "small_talk"
-
-        complexity = data.get("complexity_score", 5)
-        pricing = data.get("pricing_intent", False)
+            intent = "rag"
+            complexity = 1
+            pricing = False
 
         logger.info(f"Router Decision: {intent} (Reason: {data.get('reason')}) | Complexity: {complexity} | Pricing: {pricing}")
 
@@ -103,40 +93,24 @@ async def router_node(state: AgentState):
         logger.error(f"Router failed: {e} | Content: {content}")
         return {"intent": "rag"} # Fallback
 
-async def small_talk_node(state: AgentState):
-    """Handles greetings and chitchat without RAG."""
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        temperature=0.7,
-        google_api_key=os.getenv("GOOGLE_API_KEY")
-    )
-    messages = [SystemMessage(content=SMALL_TALK_SYSTEM_PROMPT)] + state["messages"]
 
-    response = await llm.ainvoke(messages)
-    return {"messages": [response]}
 
 async def human_handoff_node(state: AgentState):
-    """Handles requests for a human agent."""
     return {
         "messages": [AIMessage(content="I understand you want to speak to a human. I am notifying a support agent to take over this chat.")],
         "requires_human": True
     }
 
 from app.integrations.rag import RagClient
+from app.integrations.sheets import fetch_google_sheet_data
 from app.core.config import settings
 import uuid
 
 async def rag_node(state: AgentState):
-    """
-    Prepares the query for the RAG service.
-    Calls the actual 'veridata_rag' API via RagClient.
-    """
     last_msg = state["messages"][-1].content
 
     rag_url = str(settings.rag_service_url)
     rag_key = settings.rag_api_key
-
-    # Use context from state, fallback to dummy for safety/testing
     raw_tenant_id = state.get("tenant_id")
     tenant_id = "00000000-0000-0000-0000-000000000000"
 
@@ -150,9 +124,7 @@ async def rag_node(state: AgentState):
     except ValueError:
         logger.warning(f"Invalid Tenant ID format '{raw_tenant_id}', using default: {tenant_id}")
 
-    session_id = state.get("session_id") # Can be None/Empty string
-
-    # Ensure Session ID is a valid UUID or None
+    session_id = state.get("session_id")
     try:
          if session_id:
              session_uuid = uuid.UUID(session_id)
@@ -167,21 +139,30 @@ async def rag_node(state: AgentState):
     pricing_intent = state.get("pricing_intent", False)
     google_sheets_url = state.get("google_sheets_url")
 
+    external_context = None
+    if google_sheets_url:
+        # Fetch data locally in the Bot
+        logger.info(f"📊 Fetching Google Sheet data from {google_sheets_url}...")
+        external_context = await fetch_google_sheet_data(google_sheets_url)
+
     try:
         response_data = await client.query(
             message=last_msg,
             session_id=session_uuid,
             complexity_score=complexity_score,
             pricing_intent=pricing_intent,
-            google_sheets_url=google_sheets_url
+            google_sheets_url=google_sheets_url, # Still passed for legacy/logging
+            external_context=external_context
         )
 
         rag_response = response_data.get("answer", "No answer returned.")
         requires_human = response_data.get("requires_human", False)
+        new_session_id = response_data.get("session_id")
 
         return {
             "messages": [AIMessage(content=rag_response)],
-            "requires_human": requires_human
+            "requires_human": requires_human,
+            "session_id": new_session_id
         }
 
     except Exception as e:

@@ -32,6 +32,7 @@ class RagClient:
         complexity_score: int = 5,
         pricing_intent: bool = False,
         google_sheets_url: str | None = None,
+        external_context: str | None = None,
         **kwargs
     ) -> dict:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -44,6 +45,7 @@ class RagClient:
                 "complexity_score": complexity_score,
                 "pricing_intent": pricing_intent,
                 "google_sheets_url": google_sheets_url,
+                "external_context": external_context,
                 **kwargs
             }
 
@@ -106,3 +108,14 @@ class RagClient:
                 return {"status": "already_deleted"}
             resp.raise_for_status()
             return resp.json()
+
+    async def get_history(self, session_id: uuid.UUID) -> list[dict]:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            url = f"{self.base_url}/api/session/{session_id}/history"
+            headers = self._get_headers()
+
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 404:
+                return []
+            resp.raise_for_status()
+            return resp.json().get("messages", [])

@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, START, END
 from app.agent.state import AgentState
-from app.agent.nodes import router_node, small_talk_node, human_handoff_node, rag_node
+from app.agent.nodes import router_node, human_handoff_node, rag_node
 
 def route_decision(state: AgentState):
     """
@@ -8,11 +8,10 @@ def route_decision(state: AgentState):
     Reads the 'intent' from state and returns the next node name.
     """
     intent = state.get("intent")
-    if intent == "small_talk":
-        return "small_talk"
-    elif intent == "human":
+    if intent == "human":
         return "human_handoff"
     else:
+        # Default to RAG (which now handles small talk via complexity=1)
         return "rag"
 
 def build_graph():
@@ -21,7 +20,6 @@ def build_graph():
 
     # Add nodes
     workflow.add_node("router", router_node)
-    workflow.add_node("small_talk", small_talk_node)
     workflow.add_node("human_handoff", human_handoff_node)
     workflow.add_node("rag", rag_node)
 
@@ -33,14 +31,12 @@ def build_graph():
         "router",
         route_decision,
         {
-            "small_talk": "small_talk",
             "human_handoff": "human_handoff",
             "rag": "rag"
         }
     )
 
     # Common Exit
-    workflow.add_edge("small_talk", END)
     workflow.add_edge("human_handoff", END)
     workflow.add_edge("rag", END)
 

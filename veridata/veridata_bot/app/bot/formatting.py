@@ -17,10 +17,6 @@ class ConversationFormatter:
         self.budget = summary_data.get('detected_budget', 'N/A')
 
     def to_markdown(self) -> str:
-        """
-        Returns Markdown format for EspoCRM.
-        Order: Header -> Period -> Summary -> Client Profile -> Analysis
-        """
         return (
             f"### AI Conversation Summary 🤖\n\n"
             f"**Period**: {self.start} - {self.end}\n"
@@ -35,11 +31,6 @@ class ConversationFormatter:
         )
 
     def to_html(self) -> str:
-        """
-        Returns HTML format for HubSpot.
-        Order: Header -> Period -> Summary -> Client Profile -> Analysis
-        (Matching Markdown order exactly)
-        """
         return (
             f"<div style='font-family: sans-serif; color: #33475b;'>"
             f"   <h3 style='margin-top: 0; color: #0091ae;'>🤖 Veridata Bot Summary</h3>"

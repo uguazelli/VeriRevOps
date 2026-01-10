@@ -13,6 +13,7 @@ class QueryRequest(BaseModel):
     google_sheets_url: Optional[str] = None
     complexity_score: Optional[int] = 5
     pricing_intent: Optional[bool] = False
+    external_context: Optional[str] = None
 
 class QueryResponse(BaseModel):
     answer: str
@@ -32,3 +33,11 @@ class ConversationSummary(BaseModel):
     ai_summary: str
     contact_info: Optional[dict] = {} # phone, email, name, address, industry
     client_description: Optional[str] = None
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+    created_at: Optional[str] = None
+
+class ChatHistoryResponse(BaseModel):
+    messages: list[ChatMessage]

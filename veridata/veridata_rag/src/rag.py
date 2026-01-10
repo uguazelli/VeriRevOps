@@ -222,7 +222,8 @@ def generate_answer(
     google_sheets_url: Optional[str] = None,
     # skip_routing: bool = False, # DEPRECATED/REMOVED
     complexity_score: int = 5,
-    pricing_intent: bool = False
+    pricing_intent: bool = False,
+    external_context: Optional[str] = None
 ) -> tuple[str, bool]:
     # Resolve optional parameters from global config if not provided
     if use_hyde is None:
@@ -302,9 +303,12 @@ def generate_answer(
 
     # Intent Analysis is now handled by the Bot Router.
     # We rely on the passed parameters.
-    requires_rag = True
     requires_human = False
     complexity = 5 if complexity_score is None else complexity_score
+
+    requires_rag = True
+    if complexity < 2 and not pricing_intent:
+        requires_rag = False
 
     if pricing_intent:
         logger.info("🎯 Pricing intent detected: Fetching spreadsheet.")
@@ -360,19 +364,17 @@ def generate_answer(
         else:
             doc_context = ""
 
-        # 3.1 Live Pricing Injection (Google Sheets)
-        live_data = ""
-        if pricing_intent and google_sheets_url:
-            logger.info(f"📊 Opt 1 (Live Data): Intent is PRICING. Attempting to fetch...")
-            live_data = fetch_google_sheet_data(google_sheets_url)
-            if live_data:
-                logger.info(f"✅ Opt 1 (Live Data): Data successfully fetched and ready to inject.")
-                # Add a strong instruction for the LLM
+        # 3.1 Live Pricing Injection (External Context)
+        if external_context:
+             logger.info("📊 Opt 1 (Live Data): Injecting external context provided by Bot.")
+             lang_instruction += "\nIMPORTANT: Use the [LIVE PRICING & PRODUCT DATA] section for any mention of products or costs. Trust it over other data. Be flexible with names (e.g., 'consultoria' matches 'Consulting Hour')."
+             live_data = external_context
+        elif pricing_intent and google_sheets_url:
+             # Legacy Fallback/Deprecated
+             logger.warning(f"⚠️ Opt 1 (Live Data): Internal fetch triggered (legacy). Provide 'external_context' instead.")
+             live_data = fetch_google_sheet_data(google_sheets_url)
+             if live_data:
                 lang_instruction += "\nIMPORTANT: Use the [LIVE PRICING & PRODUCT DATA] section for any mention of products or costs. Trust it over other data. Be flexible with names (e.g., 'consultoria' matches 'Consulting Hour')."
-            else:
-                logger.error("❌ Opt 1 (Live Data): Pricing intent was TRUE but FETCH FAILED or returned no items.")
-        elif google_sheets_url:
-            logger.info(f"ℹ️ Opt 1 (Live Data): Skipping spreadsheet because pricing_intent is FALSE. Query: '{search_query}'")
 
         # Combine them
         context_str = ""

@@ -1,10 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, Form
 from typing import Optional
 from uuid import UUID
-from src.schemas import QueryRequest, QueryResponse, SummarizeRequest, ConversationSummary
+from src.schemas import QueryRequest, QueryResponse, SummarizeRequest, ConversationSummary, ChatHistoryResponse
 from src.rag import generate_answer, summarize_conversation
 from src.memory import create_session, delete_session
-from src.transcription import transcribe_audio
+
 
 router = APIRouter()
 
@@ -12,6 +12,13 @@ router = APIRouter()
 async def api_delete_session(session_id: UUID):
     delete_session(session_id)
     return {"status": "deleted", "session_id": session_id}
+
+@router.get("/session/{session_id}/history", response_model=ChatHistoryResponse)
+async def api_get_history(session_id: UUID):
+    from src.memory import get_full_chat_history
+    history = get_full_chat_history(session_id)
+    # Convert list of dicts to list of ChatMessage
+    return {"messages": history}
 
 @router.post("/query", response_model=QueryResponse)
 async def api_query_rag(request: QueryRequest):
@@ -30,7 +37,8 @@ async def api_query_rag(request: QueryRequest):
         handoff_rules=request.handoff_rules,
         google_sheets_url=request.google_sheets_url,
         complexity_score=request.complexity_score,
-        pricing_intent=request.pricing_intent
+        pricing_intent=request.pricing_intent,
+        external_context=request.external_context
     )
     return QueryResponse(
         answer=answer,
@@ -44,9 +52,3 @@ async def api_summarize_conversation(request: SummarizeRequest):
     return ConversationSummary(**summary_data)
 
 
-@router.post("/transcribe")
-async def api_transcribe(file: UploadFile = File(...), provider: Optional[str] = Form(None)):
-    content = await file.read()
-    text = await transcribe_audio(content, file.filename, provider)
-
-    return {"text": text}

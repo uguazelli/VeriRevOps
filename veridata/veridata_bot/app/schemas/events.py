@@ -1,3 +1,4 @@
+# Moved to app/schemas/events.py
 from pydantic import BaseModel, Field, AliasChoices
 from typing import Optional, List, Any, Dict, Union
 
