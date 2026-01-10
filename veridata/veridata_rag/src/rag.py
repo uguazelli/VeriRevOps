@@ -205,7 +205,7 @@ def fetch_google_sheet_data(url: str) -> str:
             url = url.split("/view")[0] + "/export?format=csv"
 
         logger.info(f"🌐 Fetching live data from: {url}")
-        with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
             response = client.get(url)
             response.raise_for_status()
 
