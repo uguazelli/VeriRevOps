@@ -63,7 +63,7 @@ def get_full_chat_history(session_id: UUID) -> List[Dict[str, str]]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT role, content
+                SELECT role, content, created_at
                 FROM chat_messages
                 WHERE session_id = %s
                 ORDER BY created_at ASC
@@ -71,7 +71,7 @@ def get_full_chat_history(session_id: UUID) -> List[Dict[str, str]]:
                 (session_id,)
             )
             rows = cur.fetchall()
-            return [{"role": row[0], "content": row[1]} for row in rows]
+            return [{"role": row[0], "content": row[1], "created_at": row[2].isoformat()} for row in rows]
 
 def delete_session(session_id: UUID):
     with get_db() as conn:

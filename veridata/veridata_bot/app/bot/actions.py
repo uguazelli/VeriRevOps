@@ -242,14 +242,31 @@ async def handle_conversation_resolution(client, configs, conversation_data, sen
                     log_success(logger, "Summary generated successfully (Local LLM)")
 
                     import datetime
-                    created_at_ts = conversation_data.get("created_at")
-                    now = datetime.datetime.now()
 
-                    if created_at_ts:
-                        start_dt = datetime.datetime.fromtimestamp(int(created_at_ts))
-                        start_str = start_dt.strftime("%d/%m/%Y %H:%M")
-                    else:
-                        start_str = "Unknown"
+                    # 1. Try to get start time from RAG history (Real Session Start)
+                    rag_start_str = summary.get("session_start_time")
+                    start_str = "Unknown"
+
+                    if rag_start_str:
+                        # Parse ISO format from RAG (e.g., 2026-01-11T12:00:00+00:00)
+                        try:
+                            # Handle ISO format
+                            start_dt = datetime.datetime.fromisoformat(rag_start_str)
+                            start_str = start_dt.strftime("%d/%m/%Y %H:%M")
+                        except ValueError as e:
+                             logger.warning(f"Failed to parse RAG timestamp: {rag_start_str} | Error: {e}")
+
+                    # 2. Fallback to Chatwoot Conversation Create Date
+                    if start_str == "Unknown":
+                        created_at_ts = conversation_data.get("created_at")
+                        if created_at_ts:
+                            try:
+                                start_dt = datetime.datetime.fromtimestamp(int(created_at_ts))
+                                start_str = start_dt.strftime("%d/%m/%Y %H:%M")
+                            except Exception:
+                                pass
+
+                    now = datetime.datetime.now()
 
                     end_str = now.strftime("%d/%m/%Y %H:%M")
 

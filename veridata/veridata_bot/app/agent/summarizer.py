@@ -67,7 +67,16 @@ async def summarize_start_conversation(session_id: uuid.UUID, rag_client: RagCli
         text = response.content.replace('```json', '').replace('```', '').strip()
 
         try:
-            return json.loads(text)
+            summary_json = json.loads(text)
+
+            # Extract start time from the first message
+            start_time = None
+            if history_list and "created_at" in history_list[0] and history_list[0]["created_at"]:
+                start_time = history_list[0]["created_at"]
+
+            summary_json["session_start_time"] = start_time
+            return summary_json
+
         except json.JSONDecodeError:
             logger.error(f"JSON decode failed for summary: {text}")
             return {
