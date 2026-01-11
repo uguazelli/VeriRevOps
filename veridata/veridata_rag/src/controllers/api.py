@@ -1,8 +1,11 @@
 from fastapi import APIRouter, UploadFile, File, Form
 from uuid import UUID
-from src.schemas import QueryRequest, QueryResponse, SummarizeRequest, ConversationSummary, ChatHistoryResponse
-from src.rag import generate_answer
-from src.memory import create_session, delete_session
+from src.storage.db import get_db, close_pool
+from src.services.rag import search_documents, generate_answer
+from src.services.vlm import describe_image
+from src.models.schemas import QueryRequest, QueryResponse, ChatMessage, ChatHistoryResponse
+from src.services.memory import get_full_chat_history, create_session, delete_session
+from src.config.logging import log_start, log_success, log_error
 
 
 router = APIRouter()
@@ -14,7 +17,7 @@ async def api_delete_session(session_id: UUID):
 
 @router.get("/session/{session_id}/history", response_model=ChatHistoryResponse)
 async def api_get_history(session_id: UUID):
-    from src.memory import get_full_chat_history
+    from src.services.memory import get_full_chat_history
     history = get_full_chat_history(session_id)
     return {"messages": history}
 

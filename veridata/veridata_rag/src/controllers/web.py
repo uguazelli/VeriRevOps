@@ -6,9 +6,9 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, BackgroundTasks, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from src.db import get_db
-from src.auth import require_auth
-from src.rag import ingest_document, generate_answer
+from src.storage.db import get_db
+from src.utils.auth import require_auth
+from src.services.rag import ingest_document, generate_answer
 
 logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="src/templates")
@@ -143,7 +143,7 @@ async def ingest_file(
         logger.error(f"Error reading file: {e}")
         return HTMLResponse(f'<div class="text-red-500">Error reading file</div>')
 
-from src.memory import create_session
+from src.services.memory import create_session
 
 @router.post("/query", response_class=HTMLResponse)
 async def query_rag(

@@ -3,7 +3,7 @@ import logging
 from typing import Any
 from llama_index.llms.gemini import Gemini
 from llama_index.llms.openai import OpenAI
-from src.config import get_llm_settings
+from src.config.config import get_llm_settings
 
 logger = logging.getLogger(__name__)
 

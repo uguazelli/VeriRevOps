@@ -1,9 +1,9 @@
 import logging
-from src.llm_factory import get_llm
+from src.services.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
 
-from src.prompts import HYDE_PROMPT_TEMPLATE
+from src.utils.prompts import HYDE_PROMPT_TEMPLATE
 
 def generate_hypothetical_answer(query: str, provider: str = None) -> str:
     try:

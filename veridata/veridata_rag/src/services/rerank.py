@@ -1,11 +1,12 @@
 import logging
 import json
 from typing import List, Dict, Any
-from src.llm_factory import get_llm
+from src.config.config import get_global_setting
+from src.services.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
 
-from src.prompts import RERANK_PROMPT_TEMPLATE
+from src.utils.prompts import RERANK_PROMPT_TEMPLATE
 
 def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5, provider: str = None) -> List[Dict[str, Any]]:
     if not documents:

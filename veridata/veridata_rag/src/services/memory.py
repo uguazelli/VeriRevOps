@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 from typing import List, Dict, Any, Optional
-from src.db import get_db
+from src.storage.db import get_db
 
 logger = logging.getLogger(__name__)
 

@@ -3,11 +3,11 @@ import logging
 from llama_index.multi_modal_llms.gemini import GeminiMultiModal
 from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
 from llama_index.core.schema import ImageDocument
-from src.prompts import IMAGE_DESCRIPTION_PROMPT_TEMPLATE
+from src.utils.prompts import IMAGE_DESCRIPTION_PROMPT_TEMPLATE
 import google.generativeai as genai
 from PIL import Image
 import io
-from src.config import get_llm_settings
+from src.config.config import get_llm_settings
 
 logger = logging.getLogger(__name__)
 

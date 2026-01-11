@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from typing import Any, Dict
-from src.db import get_db
+from src.storage.db import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -13,14 +13,13 @@ def get_config(force_reload: bool = False) -> Dict[str, Any]:
     if _config_cache is not None and not force_reload:
         return _config_cache
 
-    base_path = os.path.dirname(__file__)
-    json_path = os.path.join(base_path, "config.json")
-
     config = {}
-    if os.path.exists(json_path):
+    # Load from JSON
+    config_path = os.path.join(os.path.dirname(__file__), "config.json")
+    if os.path.exists(config_path):
         try:
-            with open(json_path, "r") as f:
-                config = json.load(f)
+            with open(config_path, "r") as f:
+                config.update(json.load(f))
         except Exception as e:
             logger.error(f"Failed to load config.json: {e}")
 

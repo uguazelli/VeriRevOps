@@ -122,26 +122,7 @@ def init_db():
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS chat_messages_session_id_idx ON chat_messages (session_id);
             """)
-            cur.execute(f"""
-                CREATE TABLE IF NOT EXISTS query_cache (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
-                    query_text TEXT NOT NULL,
-                    embedding vector({dim}),
-                    answer_text TEXT NOT NULL,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
 
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS query_cache_embedding_idx
-                ON query_cache
-                USING hnsw (embedding vector_cosine_ops);
-            """)
-
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS query_cache_tenant_id_idx ON query_cache (tenant_id);
-            """)
 
     logger.info("Database schema initialized.")
 
