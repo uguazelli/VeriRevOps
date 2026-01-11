@@ -252,7 +252,14 @@ async def process_bot_event(client_slug: str, payload_dict: dict, db: AsyncSessi
     logger.info(f"DEBUG: Graph Input Messages: {[m.content for m in full_messages]}")
 
     try:
-        result = await agent_app.ainvoke(initial_state)
+        from langfuse.langchain import CallbackHandler
+        langfuse_handler = CallbackHandler()
+
+        # Pass the callback handler to the invoke method
+        result = await agent_app.ainvoke(
+            initial_state,
+            config={"callbacks": [langfuse_handler]}
+        )
         answer = result["messages"][-1].content
         logger.info(f"DEBUG: Agent Answer: {answer}")
 

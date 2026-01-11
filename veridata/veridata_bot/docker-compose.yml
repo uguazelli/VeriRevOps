@@ -7,6 +7,8 @@ services:
     restart: always
     ports:
       - "${APP_PORT:-4019}:4019"
+    env_file:
+      - .env
     environment:
       - APP_PORT=4019
       - ADMIN_USER=${ADMIN_USER:-vd}
