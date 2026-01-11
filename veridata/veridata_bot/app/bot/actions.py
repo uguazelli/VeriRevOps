@@ -13,6 +13,10 @@ from app.agent.summarizer import summarize_start_conversation
 
 logger = logging.getLogger(__name__)
 
+# ==================================================================================
+# ACTION: GET CLIENT & CONFIG
+# Helper to fetch the Tenant and its Secrets (API Keys) from DB
+# ==================================================================================
 async def get_client_and_config(client_slug: str, db: AsyncSession):
     query = select(Client).where(Client.slug == client_slug, Client.is_active == True)
     result = await db.execute(query)
@@ -29,6 +33,11 @@ async def get_client_and_config(client_slug: str, db: AsyncSession):
 
     return client, configs
 
+# ==================================================================================
+# ACTION: LOAD CRM CLIENTS
+# Creates instances of HubSpot/EspoCRM clients based on config.
+# returns a list of active clients.
+# ==================================================================================
 def get_crm_integrations(configs):
     integrations = []
 
@@ -47,6 +56,10 @@ def get_crm_integrations(configs):
 
     return integrations
 
+# ==================================================================================
+# ACTION: CHECK QUOTA
+# Verifies if the client has enough credits left in their subscription.
+# ==================================================================================
 async def check_subscription_quota(client_id, client_slug, db: AsyncSession):
     sub_query = select(Subscription).where(
         Subscription.client_id == client_id,
@@ -61,6 +74,11 @@ async def check_subscription_quota(client_id, client_slug, db: AsyncSession):
 
     return subscription
 
+# ==================================================================================
+# ACTION: EXECUTE CRM ACTION
+# Generic wrapper to run a function on ALL connected CRMs sequentially.
+# E.g. "Save Lead" -> saves to both HubSpot and Espo if configured.
+# ==================================================================================
 async def execute_crm_action(crms, action_desc, action_func):
     if not crms:
         log_skip(logger, f"Skipping CRM sync ({action_desc}): No CRM configured")
@@ -75,38 +93,10 @@ async def execute_crm_action(crms, action_desc, action_func):
         except Exception as e:
              log_error(logger, f"CRM Sync failed for {platform_name}: {e}")
 
-async def handle_audio_message(attachments, rag_config) -> str:
-    if not attachments:
-        return ""
-
-    for att in attachments:
-        logger.info(f"Processing attachment: type={att.file_type}, url={att.data_url}")
-
-        if att.file_type == "audio":
-            filename = f"audio.{att.extension or 'mp3'}"
-            logger.info(f"Found audio attachment. Downloading from: {att.data_url}")
-
-            try:
-                async with httpx.AsyncClient(follow_redirects=True) as http_client:
-                    log_external_call(logger, "Internal/Web", f"Downloading audio from {att.data_url}")
-                    resp = await http_client.get(att.data_url)
-                    resp.raise_for_status()
-                    audio_bytes = resp.content
-                    logger.info(f"Download complete. Size: {len(audio_bytes)} bytes")
-
-                    # Transcribe locally
-                    from app.integrations.transcription import transcribe_audio
-                    transcript_text = await transcribe_audio(audio_bytes, att.data_url)
-
-                    logger.info(f"Transcription result: {transcript_text}")
-                    return transcript_text
-
-            except Exception as e:
-                log_error(logger, f"Failed to process audio attachment: {e}")
-                return ""
-
-    return ""
-
+# ==================================================================================
+# ACTION: EXECUTE RAG QUERY (Unused - moved to Agent Node)
+# Kept for reference or direct calls bypassing the agent.
+# ==================================================================================
 async def query_rag_system(user_query, session, rag_config) -> dict:
     rag_provider = rag_config.get("provider")
     rag_use_hyde = rag_config.get("use_hyde")
@@ -143,6 +133,48 @@ async def query_rag_system(user_query, session, rag_config) -> dict:
         log_error(logger, f"RAG Error: {e}", exc_info=True)
         return {"error": str(e)}
 
+# ==================================================================================
+# ACTION: HANDLE AUDIO
+# Downloads audio from Chatwoot URL -> Transcribes via OpenAI/Gemini
+# ==================================================================================
+async def handle_audio_message(attachments, rag_config) -> str:
+    if not attachments:
+        return ""
+
+    for att in attachments:
+        logger.info(f"Processing attachment: type={att.file_type}, url={att.data_url}")
+
+        if att.file_type == "audio":
+            filename = f"audio.{att.extension or 'mp3'}"
+            logger.info(f"Found audio attachment. Downloading from: {att.data_url}")
+
+            try:
+                async with httpx.AsyncClient(follow_redirects=True) as http_client:
+                    log_external_call(logger, "Internal/Web", f"Downloading audio from {att.data_url}")
+                    resp = await http_client.get(att.data_url)
+                    resp.raise_for_status()
+                    audio_bytes = resp.content
+                    logger.info(f"Download complete. Size: {len(audio_bytes)} bytes")
+
+                    # Transcribe locally
+                    from app.integrations.transcription import transcribe_audio
+                    transcript_text = await transcribe_audio(audio_bytes, att.data_url)
+
+                    logger.info(f"Transcription result: {transcript_text}")
+                    return transcript_text
+
+            except Exception as e:
+                log_error(logger, f"Failed to process audio attachment: {e}")
+                return ""
+
+    return ""
+
+
+# ==================================================================================
+# ACTION: SEND REPLY TO CHATWOOT
+# Posts the final AI answer back to the conversation.
+# Also handles toggling status to 'Open' (Handover) or 'Pending' (Bot active).
+# ==================================================================================
 async def handle_chatwoot_response(conversation_id, answer, requires_human, chatwoot_config):
     cw_client = ChatwootClient(
         base_url=chatwoot_config["base_url"],
@@ -174,6 +206,11 @@ async def handle_chatwoot_response(conversation_id, answer, requires_human, chat
     except Exception as e:
          log_error(logger, f"Failed to update status for {conversation_id}: {e}")
 
+# ==================================================================================
+# ACTION: RESOLVE & SUMMARIZE
+# Triggered when conversation is marked 'Resolved'.
+# Generates a summary and syncs it to the CRM.
+# ==================================================================================
 async def handle_conversation_resolution(client, configs, conversation_data, sender, db):
     conversation_id = str(conversation_data.get("id"))
     client_slug = client.slug

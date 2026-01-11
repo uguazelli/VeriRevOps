@@ -34,6 +34,11 @@ def get_embed_model():
         )
     return _embed_model
 
+# ==================================================================================
+# FLOW HELPER: CONTEXTUALIZE
+# Rewrites the user query to include context from previous messages.
+# Example: "How much is it?" -> "How much is the Standard Plan?"
+# ==================================================================================
 def contextualize_query(query: str, history: List[Dict[str, str]], provider: str = None) -> str:
     if not history:
         return query
@@ -51,6 +56,13 @@ def contextualize_query(query: str, history: List[Dict[str, str]], provider: str
         logger.error(f"Contextualization failed: {e}")
         return query
 
+# ==================================================================================
+# RETRIEVAL ENGINE
+# 1. HyDE (Optional): Hallucinate an answer to search for semantic concepts.
+# 2. Embedding: Vectorize the query.
+# 3. Search: Hybrid (Keyword + Semantic) search via Postgres.
+# 4. Rerank (Optional): Use a cross-encoder to re-score results.
+# ==================================================================================
 def search_documents(
     tenant_id: UUID,
     query: str,
@@ -118,6 +130,11 @@ def prepare_query_context(
             search_query = contextualize_query(query, history, provider)
     return search_query, history
 
+# ==================================================================================
+# FLOW HELPER: INTENT CLASSIFICATION
+# Decides if we need RAG (Knowledge) or just Small Talk.
+# Also routes complex queries (>7) to stronger models.
+# ==================================================================================
 def determine_intent(complexity_score: int, pricing_intent: bool) -> tuple[bool, str]:
     # Returns (requires_rag, gen_step)
     complexity = 5 if complexity_score is None else complexity_score
@@ -139,6 +156,12 @@ def determine_intent(complexity_score: int, pricing_intent: bool) -> tuple[bool,
 
     return requires_rag, gen_step
 
+# ==================================================================================
+# FLOW HELPER: RETRIEVE CONTEXT
+# Aggregates data from:
+# 1. Live Data (Google Sheets/External API - passed as external_context)
+# 2. Vector Store (search_documents)
+# ==================================================================================
 def retrieve_context(
     tenant_id: UUID,
     search_query: str,
