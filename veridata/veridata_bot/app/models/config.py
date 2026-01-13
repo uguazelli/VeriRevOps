@@ -1,8 +1,11 @@
-from sqlalchemy import Integer, ForeignKey, String
+from typing import Any
+
+from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.models.base import Base
-from typing import Any
+
 
 class ServiceConfig(Base):
     __tablename__ = "service_configs"

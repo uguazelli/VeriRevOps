@@ -1,17 +1,20 @@
+import logging
+
+import httpx
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models import Client, Subscription, ServiceConfig, BotSession
-from app.integrations.rag import RagClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.agent.summarizer import summarize_start_conversation
+from app.core.logging import log_db, log_error, log_external_call, log_skip, log_start, log_success
 from app.integrations.chatwoot import ChatwootClient
 from app.integrations.espocrm import EspoClient
 from app.integrations.hubspot import HubSpotClient
-import httpx
-import logging
-from app.core.logging import log_start, log_payload, log_skip, log_success, log_error, log_external_call, log_db
-from app.agent.summarizer import summarize_start_conversation
+from app.integrations.rag import RagClient
+from app.models import BotSession, Client, ServiceConfig, Subscription
 
 logger = logging.getLogger(__name__)
+
 
 # ==================================================================================
 # ACTION: GET CLIENT & CONFIG
@@ -33,6 +36,7 @@ async def get_client_and_config(client_slug: str, db: AsyncSession):
 
     return client, configs
 
+
 # ==================================================================================
 # ACTION: LOAD CRM CLIENTS
 # Creates instances of HubSpot/EspoCRM clients based on config.
@@ -43,10 +47,7 @@ def get_crm_integrations(configs):
 
     espo_conf = configs.get("espocrm")
     if espo_conf:
-        integrations.append(EspoClient(
-            base_url=espo_conf["base_url"],
-            api_key=espo_conf["api_key"]
-        ))
+        integrations.append(EspoClient(base_url=espo_conf["base_url"], api_key=espo_conf["api_key"]))
 
     hub_conf = configs.get("hubspot")
     if hub_conf:
@@ -56,14 +57,14 @@ def get_crm_integrations(configs):
 
     return integrations
 
+
 # ==================================================================================
 # ACTION: CHECK QUOTA
 # Verifies if the client has enough credits left in their subscription.
 # ==================================================================================
 async def check_subscription_quota(client_id, client_slug, db: AsyncSession):
     sub_query = select(Subscription).where(
-        Subscription.client_id == client_id,
-        Subscription.usage_count < Subscription.quota_limit
+        Subscription.client_id == client_id, Subscription.usage_count < Subscription.quota_limit
     )
     result = await db.execute(sub_query)
     subscription = result.scalars().first()
@@ -73,6 +74,7 @@ async def check_subscription_quota(client_id, client_slug, db: AsyncSession):
         return None
 
     return subscription
+
 
 # ==================================================================================
 # ACTION: EXECUTE CRM ACTION
@@ -88,10 +90,11 @@ async def execute_crm_action(crms, action_desc, action_func):
     for crm in crms:
         platform_name = crm.__class__.__name__.replace("Client", "")
         try:
-             await action_func(crm)
-             log_success(logger, f"{action_desc} synced: {platform_name}")
+            await action_func(crm)
+            log_success(logger, f"{action_desc} synced: {platform_name}")
         except Exception as e:
-             log_error(logger, f"CRM Sync failed for {platform_name}: {e}")
+            log_error(logger, f"CRM Sync failed for {platform_name}: {e}")
+
 
 # ==================================================================================
 # ACTION: EXECUTE RAG QUERY (Unused - moved to Agent Node)
@@ -103,16 +106,17 @@ async def query_rag_system(user_query, session, rag_config) -> dict:
     rag_use_rerank = rag_config.get("use_rerank")
 
     rag_client = RagClient(
-        base_url=rag_config["base_url"],
-        api_key=rag_config.get("api_key", ""),
-        tenant_id=rag_config["tenant_id"]
+        base_url=rag_config["base_url"], api_key=rag_config.get("api_key", ""), tenant_id=rag_config["tenant_id"]
     )
 
     try:
         query_params = {}
-        if rag_provider: query_params["provider"] = rag_provider
-        if rag_use_hyde is not None: query_params["use_hyde"] = rag_use_hyde
-        if rag_use_rerank is not None: query_params["use_rerank"] = rag_use_rerank
+        if rag_provider:
+            query_params["provider"] = rag_provider
+        if rag_use_hyde is not None:
+            query_params["use_hyde"] = rag_use_hyde
+        if rag_use_rerank is not None:
+            query_params["use_rerank"] = rag_use_rerank
         handoff_rules = rag_config.get("handoff_rules")
         if handoff_rules:
             query_params["handoff_rules"] = handoff_rules
@@ -122,16 +126,13 @@ async def query_rag_system(user_query, session, rag_config) -> dict:
             query_params["google_sheets_url"] = gs_url
 
         log_external_call(logger, "Veridata RAG", f"Query: '{user_query}' | Params: {query_params}")
-        rag_response = await rag_client.query(
-            message=user_query,
-            session_id=session.rag_session_id,
-            **query_params
-        )
+        rag_response = await rag_client.query(message=user_query, session_id=session.rag_session_id, **query_params)
         log_success(logger, "RAG response received successfully")
         return rag_response
     except Exception as e:
         log_error(logger, f"RAG Error: {e}", exc_info=True)
         return {"error": str(e)}
+
 
 # ==================================================================================
 # ACTION: HANDLE AUDIO
@@ -158,6 +159,7 @@ async def handle_audio_message(attachments, rag_config) -> str:
 
                     # Transcribe locally
                     from app.integrations.transcription import transcribe_audio
+
                     transcript_text = await transcribe_audio(audio_bytes, att.data_url)
 
                     logger.info(f"Transcription result: {transcript_text}")
@@ -179,32 +181,30 @@ async def handle_chatwoot_response(conversation_id, answer, requires_human, chat
     cw_client = ChatwootClient(
         base_url=chatwoot_config["base_url"],
         api_token=chatwoot_config["api_key"],
-        account_id=chatwoot_config.get("account_id", 1)
+        account_id=chatwoot_config.get("account_id", 1),
     )
 
     if answer:
         log_external_call(logger, "Chatwoot", f"Sending response to conversation {conversation_id}")
-        await cw_client.send_message(
-            conversation_id=conversation_id,
-            message=answer
-        )
+        await cw_client.send_message(conversation_id=conversation_id, message=answer)
         log_success(logger, "Response sent to Chatwoot")
     else:
         log_skip(logger, "RAG returned no answer (empty response)")
 
     try:
         if requires_human:
-             log_start(logger, f"Handover requested for session {conversation_id}")
-             await cw_client.toggle_status(conversation_id, "open")
-             log_success(logger, "Conversation opened for human agent")
+            log_start(logger, f"Handover requested for session {conversation_id}")
+            await cw_client.toggle_status(conversation_id, "open")
+            log_success(logger, "Conversation opened for human agent")
 
         else:
-             log_external_call(logger, "Chatwoot", f"Enforcing pending status for conversation {conversation_id}")
-             await cw_client.toggle_status(conversation_id, "pending")
-             log_success(logger, "Conversation set to pending")
+            log_external_call(logger, "Chatwoot", f"Enforcing pending status for conversation {conversation_id}")
+            await cw_client.toggle_status(conversation_id, "pending")
+            log_success(logger, "Conversation set to pending")
 
     except Exception as e:
-         log_error(logger, f"Failed to update status for {conversation_id}: {e}")
+        log_error(logger, f"Failed to update status for {conversation_id}: {e}")
+
 
 # ==================================================================================
 # ACTION: RESOLVE & SUMMARIZE
@@ -218,8 +218,7 @@ async def handle_conversation_resolution(client, configs, conversation_data, sen
     log_db(logger, f"Looking for BotSession for resolution. Ext ID: '{conversation_id}'")
 
     session_query = select(BotSession).where(
-        BotSession.client_id == client.id,
-        BotSession.external_session_id == conversation_id
+        BotSession.client_id == client.id, BotSession.external_session_id == conversation_id
     )
     sess_result = await db.execute(session_query)
     session = sess_result.scalars().first()
@@ -227,76 +226,74 @@ async def handle_conversation_resolution(client, configs, conversation_data, sen
     if session and session.rag_session_id:
         rag_config = configs.get("rag")
         if rag_config:
-                try:
-                    rag_client = RagClient(
-                        base_url=rag_config["base_url"],
-                        api_key=rag_config.get("api_key", ""),
-                        tenant_id=rag_config["tenant_id"]
-                    )
+            try:
+                rag_client = RagClient(
+                    base_url=rag_config["base_url"],
+                    api_key=rag_config.get("api_key", ""),
+                    tenant_id=rag_config["tenant_id"],
+                )
 
-                    # New Local Summarization Flow
-                    summary = await summarize_start_conversation(
-                        session_id=session.rag_session_id,
-                        rag_client=rag_client
-                    )
-                    log_success(logger, "Summary generated successfully (Local LLM)")
+                # New Local Summarization Flow
+                summary = await summarize_start_conversation(session_id=session.rag_session_id, rag_client=rag_client)
+                log_success(logger, "Summary generated successfully (Local LLM)")
 
-                    import datetime
+                import datetime
 
-                    # 1. Try to get start time from RAG history (Real Session Start)
-                    rag_start_str = summary.get("session_start_time")
-                    start_str = "Unknown"
+                # 1. Try to get start time from RAG history (Real Session Start)
+                rag_start_str = summary.get("session_start_time")
+                start_str = "Unknown"
 
-                    if rag_start_str:
-                        # Parse ISO format from RAG (e.g., 2026-01-11T12:00:00+00:00)
-                        try:
-                            # Handle ISO format
-                            start_dt = datetime.datetime.fromisoformat(rag_start_str)
-                            start_str = start_dt.strftime("%d/%m/%Y %H:%M")
-                        except ValueError as e:
-                             logger.warning(f"Failed to parse RAG timestamp: {rag_start_str} | Error: {e}")
-
-                    # 2. Fallback to Chatwoot Conversation Create Date
-                    if start_str == "Unknown":
-                        created_at_ts = conversation_data.get("created_at")
-                        if created_at_ts:
-                            try:
-                                start_dt = datetime.datetime.fromtimestamp(int(created_at_ts))
-                                start_str = start_dt.strftime("%d/%m/%Y %H:%M")
-                            except Exception:
-                                pass
-
-                    now = datetime.datetime.now()
-
-                    end_str = now.strftime("%d/%m/%Y %H:%M")
-
-                    summary["conversation_start"] = start_str
-                    summary["conversation_end"] = end_str
-
-                    crms = get_crm_integrations(configs)
-                    if crms:
-                        pass
-
-
-                        if sender and (sender.email or sender.phone_number):
-                            await execute_crm_action(crms, "conversation summary",
-                                lambda crm: crm.update_lead_summary(sender.email, sender.phone_number, summary)
-                            )
-                        else:
-                            log_skip(logger, "Skipping CRM update: No email or phone to match lead")
-
+                if rag_start_str:
+                    # Parse ISO format from RAG (e.g., 2026-01-11T12:00:00+00:00)
                     try:
-                        log_external_call(logger, "Veridata RAG", f"Deleting RAG session {session.rag_session_id}")
-                        await rag_client.delete_session(session.rag_session_id)
-                    except Exception as e:
-                        log_error(logger, f"Failed to delete RAG session: {e}")
+                        # Handle ISO format
+                        start_dt = datetime.datetime.fromisoformat(rag_start_str)
+                        start_str = start_dt.strftime("%d/%m/%Y %H:%M")
+                    except ValueError as e:
+                        logger.warning(f"Failed to parse RAG timestamp: {rag_start_str} | Error: {e}")
 
-                    log_db(logger, f"Deleting BotSession {session.id} for resolved conversation")
-                    await db.delete(session)
-                    await db.commit()
+                # 2. Fallback to Chatwoot Conversation Create Date
+                if start_str == "Unknown":
+                    created_at_ts = conversation_data.get("created_at")
+                    if created_at_ts:
+                        try:
+                            start_dt = datetime.datetime.fromtimestamp(int(created_at_ts))
+                            start_str = start_dt.strftime("%d/%m/%Y %H:%M")
+                        except Exception:
+                            pass
 
+                now = datetime.datetime.now()
+
+                end_str = now.strftime("%d/%m/%Y %H:%M")
+
+                summary["conversation_start"] = start_str
+                summary["conversation_end"] = end_str
+
+                crms = get_crm_integrations(configs)
+                if crms:
+                    pass
+
+                    if sender and (sender.email or sender.phone_number):
+                        await execute_crm_action(
+                            crms,
+                            "conversation summary",
+                            lambda crm: crm.update_lead_summary(sender.email, sender.phone_number, summary),
+                        )
+                    else:
+                        log_skip(logger, "Skipping CRM update: No email or phone to match lead")
+
+                try:
+                    log_external_call(logger, "Veridata RAG", f"Deleting RAG session {session.rag_session_id}")
+                    await rag_client.delete_session(session.rag_session_id)
                 except Exception as e:
-                        log_error(logger, f"Summarization flow failed: {e}", exc_info=True)
+                    log_error(logger, f"Failed to delete RAG session: {e}")
+
+                log_db(logger, f"Deleting BotSession {session.id} for resolved conversation")
+                await db.delete(session)
+                await db.commit()
+
+            except Exception as e:
+                log_error(logger, f"Summarization flow failed: {e}", exc_info=True)
         else:
             log_skip(logger, "RAG config missing, cannot summarize")
     else:

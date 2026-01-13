@@ -1,13 +1,13 @@
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from app.agent.state import AgentState
-from app.core.config import settings
-from langchain_google_genai import ChatGoogleGenerativeAI
-# from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from typing import Literal
 import json
 import logging
-import os
+
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+# from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+from app.agent.state import AgentState
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,7 @@ If this is a greeting, introduce yourself as Veribot 🤖, an AI assistant who c
 IMPORTANT: Always answer in the same language as the user's message.
 """
 
+
 async def router_node(state: AgentState):
     last_msg = state["messages"][-1].content
 
@@ -57,16 +58,13 @@ async def router_node(state: AgentState):
         model="gemini-2.0-flash",
         temperature=0,
         google_api_key=settings.google_api_key,
-        convert_system_message_to_human=True # Gemini sometimes prefers this
+        convert_system_message_to_human=True,  # Gemini sometimes prefers this
     )
 
-    messages = [
-        SystemMessage(content=INTENT_SYSTEM_PROMPT + "\nJSON Output:"),
-        HumanMessage(content=last_msg)
-    ]
+    messages = [SystemMessage(content=INTENT_SYSTEM_PROMPT + "\nJSON Output:"), HumanMessage(content=last_msg)]
 
     response = await llm.ainvoke(messages)
-    content = response.content.replace('```json', '').replace('```', '').strip()
+    content = response.content.replace("```json", "").replace("```", "").strip()
 
     try:
         data = json.loads(content)
@@ -81,30 +79,33 @@ async def router_node(state: AgentState):
             complexity = 1
             pricing = False
 
-        logger.info(f"Router Decision: {intent} (Reason: {data.get('reason')}) | Complexity: {complexity} | Pricing: {pricing}")
+        logger.info(
+            f"Router Decision: {intent} (Reason: {data.get('reason')}) | Complexity: {complexity} | Pricing: {pricing}"
+        )
 
-        return {
-            "intent": intent,
-            "complexity_score": complexity,
-            "pricing_intent": pricing
-        }
+        return {"intent": intent, "complexity_score": complexity, "pricing_intent": pricing}
 
     except Exception as e:
         logger.error(f"Router failed: {e} | Content: {content}")
-        return {"intent": "rag"} # Fallback
-
+        return {"intent": "rag"}  # Fallback
 
 
 async def human_handoff_node(state: AgentState):
     return {
-        "messages": [AIMessage(content="I understand you want to speak to a human. I am notifying a support agent to take over this chat.")],
-        "requires_human": True
+        "messages": [
+            AIMessage(
+                content="I understand you want to speak to a human. I am notifying a support agent to take over this chat."
+            )
+        ],
+        "requires_human": True,
     }
+
+
+import uuid
 
 from app.integrations.rag import RagClient
 from app.integrations.sheets import fetch_google_sheet_data
-from app.core.config import settings
-import uuid
+
 
 async def rag_node(state: AgentState):
     last_msg = state["messages"][-1].content
@@ -127,12 +128,12 @@ async def rag_node(state: AgentState):
 
     session_id = state.get("session_id")
     try:
-         if session_id:
-             session_uuid = uuid.UUID(session_id)
-         else:
-             session_uuid = None
+        if session_id:
+            session_uuid = uuid.UUID(session_id)
+        else:
+            session_uuid = None
     except:
-         session_uuid = None
+        session_uuid = None
 
     client = RagClient(base_url=rag_url, api_key=rag_key, tenant_id=tenant_id)
 
@@ -152,8 +153,7 @@ async def rag_node(state: AgentState):
             session_id=session_uuid,
             complexity_score=complexity_score,
             pricing_intent=pricing_intent,
-
-            external_context=external_context
+            external_context=external_context,
         )
 
         rag_response = response_data.get("answer", "No answer returned.")
@@ -163,7 +163,7 @@ async def rag_node(state: AgentState):
         return {
             "messages": [AIMessage(content=rag_response)],
             "requires_human": requires_human,
-            "session_id": new_session_id
+            "session_id": new_session_id,
         }
 
     except Exception as e:

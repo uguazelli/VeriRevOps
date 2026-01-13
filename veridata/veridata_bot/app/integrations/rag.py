@@ -1,17 +1,19 @@
-import httpx
-import uuid
-import logging
 import base64
+import logging
+import uuid
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
+
 class RagClient:
-    """
-    Client for communicating with the internal Veridata RAG Service.
+    """Client for communicating with the internal Veridata RAG Service.
     Handles Auth (Bearer/Basic) and JSON serialization.
     """
+
     def __init__(self, base_url: str, api_key: str, tenant_id: str):
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.tenant_id = tenant_id
 
@@ -38,9 +40,8 @@ class RagClient:
         session_id: uuid.UUID | None = None,
         complexity_score: int = 5,
         pricing_intent: bool = False,
-
         external_context: str | None = None,
-        **kwargs
+        **kwargs,
     ) -> dict:
         async with httpx.AsyncClient(timeout=60.0) as client:
             url = f"{self.base_url}/api/query"
@@ -51,7 +52,7 @@ class RagClient:
                 "complexity_score": complexity_score,
                 "pricing_intent": pricing_intent,
                 "external_context": external_context,
-                **kwargs
+                **kwargs,
             }
 
             logger.info(f"RAG Request to {url}. Payload: {payload}")
@@ -77,11 +78,7 @@ class RagClient:
         async with httpx.AsyncClient(timeout=60.0) as client:
             url = f"{self.base_url}/api/summarize"
 
-            payload = {
-                "tenant_id": self.tenant_id,
-                "session_id": str(session_id),
-                "provider": provider
-            }
+            payload = {"tenant_id": self.tenant_id, "session_id": str(session_id), "provider": provider}
 
             logger.info(f"Requesting summary for session {session_id}")
             headers = self._get_headers()

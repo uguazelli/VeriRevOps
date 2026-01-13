@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 _llm_instances = {}
 
+
 def get_llm(step: str = "generation", provider: str = None) -> Any:
     settings = {}
     if provider:
@@ -24,7 +25,9 @@ def get_llm(step: str = "generation", provider: str = None) -> Any:
     if instance_key in _llm_instances:
         return _llm_instances[instance_key]
 
-    logger.info(f"Initializing LLM for step '{step}' (Provider: {provider}, Model: {model_name})")
+    logger.info(
+        f"Initializing LLM for step '{step}' (Provider: {provider}, Model: {model_name})"
+    )
 
     llm = None
 
@@ -51,8 +54,10 @@ def get_llm(step: str = "generation", provider: str = None) -> Any:
     _llm_instances[instance_key] = llm
     return llm
 
+
 def get_hyde_llm() -> Any:
     return get_llm(step="rag_search")
+
 
 def get_rerank_llm() -> Any:
     return get_llm(step="rag_search")

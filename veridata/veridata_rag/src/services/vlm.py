@@ -1,8 +1,6 @@
 import os
 import logging
 from llama_index.multi_modal_llms.gemini import GeminiMultiModal
-from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
-from llama_index.core.schema import ImageDocument
 from src.utils.prompts import IMAGE_DESCRIPTION_PROMPT_TEMPLATE
 import google.generativeai as genai
 from PIL import Image
@@ -13,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 _vlm = None
 
+
 def get_vlm():
     global _vlm
     if _vlm is None:
@@ -21,13 +20,16 @@ def get_vlm():
         _vlm = GeminiMultiModal(model_name=model_name, api_key=api_key)
     return _vlm
 
+
 def describe_image(image_bytes: bytes, filename: str) -> str:
     try:
         logger.info(f"Generating caption for image: {filename}")
         api_key = os.getenv("GOOGLE_API_KEY")
         genai.configure(api_key=api_key)
         settings = get_llm_settings("complex_reasoning")
-        model_name = settings.get("model", os.getenv("GEMINI_MODEL", "gemini-2.0-flash"))
+        model_name = settings.get(
+            "model", os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+        )
         clean_model = model_name.replace("models/", "")
         model = genai.GenerativeModel(clean_model)
         image = Image.open(io.BytesIO(image_bytes))

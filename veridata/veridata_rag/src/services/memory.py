@@ -7,6 +7,7 @@ from src.models import ChatSession, ChatMessage
 
 logger = logging.getLogger(__name__)
 
+
 async def create_session(tenant_id: UUID) -> str:
     async for session in get_session():
         try:
@@ -19,16 +20,23 @@ async def create_session(tenant_id: UUID) -> str:
             logger.error(f"Failed to create session: {e}")
             raise
 
+
 async def get_session_data(session_id: UUID) -> Optional[Dict[str, Any]]:
     async for session in get_session():
-        result = await session.execute(select(ChatSession).where(ChatSession.id == session_id))
+        result = await session.execute(
+            select(ChatSession).where(ChatSession.id == session_id)
+        )
         chat_session = result.scalars().first()
         if chat_session:
-            return {"id": str(chat_session.id), "tenant_id": str(chat_session.tenant_id)}
+            return {
+                "id": str(chat_session.id),
+                "tenant_id": str(chat_session.tenant_id),
+            }
         return None
 
+
 async def add_message(session_id: UUID, role: str, content: str):
-    if role not in ('user', 'ai'):
+    if role not in ("user", "ai"):
         raise ValueError("Role must be 'user' or 'ai'")
 
     async for session in get_session():
@@ -39,6 +47,7 @@ async def add_message(session_id: UUID, role: str, content: str):
         except Exception as e:
             logger.error(f"Failed to add message: {e}")
             raise
+
 
 async def get_chat_history(session_id: UUID, limit: int = 10) -> List[Dict[str, str]]:
     async for session in get_session():
@@ -54,6 +63,7 @@ async def get_chat_history(session_id: UUID, limit: int = 10) -> List[Dict[str, 
         history = [{"role": msg.role, "content": msg.content} for msg in rows]
         return history[::-1]
 
+
 async def get_full_chat_history(session_id: UUID) -> List[Dict[str, str]]:
     async for session in get_session():
         stmt = (
@@ -63,7 +73,15 @@ async def get_full_chat_history(session_id: UUID) -> List[Dict[str, str]]:
         )
         result = await session.execute(stmt)
         rows = result.scalars().all()
-        return [{"role": msg.role, "content": msg.content, "created_at": msg.created_at.isoformat()} for msg in rows]
+        return [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat(),
+            }
+            for msg in rows
+        ]
+
 
 async def delete_session(session_id: UUID):
     async for session in get_session():

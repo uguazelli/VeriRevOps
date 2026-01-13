@@ -1,13 +1,14 @@
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
+
+from app.agent.nodes import human_handoff_node, rag_node, router_node
 from app.agent.state import AgentState
-from app.agent.nodes import router_node, human_handoff_node, rag_node
+
 
 # ==================================================================================
 # CONDITIONAL EDGE LOGIC (The Router's Brain)
 # ==================================================================================
 def route_decision(state: AgentState):
-    """
-    Called AFTER the 'router' node.
+    """Called AFTER the 'router' node.
     It checks the 'intent' field stored in the state (RAG vs HUMAN)
     and tells the graph which node to visit next.
     """
@@ -18,6 +19,7 @@ def route_decision(state: AgentState):
     else:
         # Defaults to RAG (even for small talk, which is RAG with complexity=1)
         return "rag"
+
 
 # ==================================================================================
 # BUILD THE GRAPH (The Workflow Definition)
@@ -45,14 +47,7 @@ def build_graph():
     workflow.add_edge(START, "router")
 
     # Router -> (Conditional) -> Handoff OR RAG
-    workflow.add_conditional_edges(
-        "router",
-        route_decision,
-        {
-            "human_handoff": "human_handoff",
-            "rag": "rag"
-        }
-    )
+    workflow.add_conditional_edges("router", route_decision, {"human_handoff": "human_handoff", "rag": "rag"})
 
     # ------------------------------------------------------------------
     # 3. DEFINE EXITS
@@ -62,6 +57,7 @@ def build_graph():
     workflow.add_edge("rag", END)
 
     return workflow.compile()
+
 
 # Global instance for import
 agent_app = build_graph()

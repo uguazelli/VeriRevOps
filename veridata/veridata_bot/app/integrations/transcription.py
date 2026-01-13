@@ -1,11 +1,13 @@
-import os
 import io
 import logging
+import os
 
 from openai import AsyncOpenAI
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
 
 async def transcribe_openai(file_bytes: bytes, filename: str = "audio.mp3") -> str:
     api_key = settings.openai_api_key
@@ -21,17 +23,16 @@ async def transcribe_openai(file_bytes: bytes, filename: str = "audio.mp3") -> s
     file_obj.name = filename
 
     try:
-        transcript = await client.audio.transcriptions.create(
-            model="whisper-1",
-            file=file_obj
-        )
+        transcript = await client.audio.transcriptions.create(model="whisper-1", file=file_obj)
         return transcript.text
     except Exception as e:
         logger.error(f"OpenAI Transcription failed: {e}")
         raise e
 
+
 from google import genai
 from google.genai import types
+
 
 async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> str:
     api_key = settings.google_api_key
@@ -52,15 +53,16 @@ async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> 
                 types.Content(
                     parts=[
                         types.Part.from_text(text="Transcribe this audio file exactly as spoken."),
-                        types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+                        types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
                     ]
                 )
-            ]
+            ],
         )
         return response.text
     except Exception as e:
         logger.error(f"Gemini Transcription failed: {e}")
         raise e
+
 
 async def transcribe_audio(file_bytes: bytes, filename: str, provider: str = None) -> str:
     mime_type = "audio/mp3"
@@ -72,7 +74,7 @@ async def transcribe_audio(file_bytes: bytes, filename: str, provider: str = Non
         mime_type = "audio/mp4"
 
     if not provider:
-         provider = "gemini"
+        provider = "gemini"
 
     if provider.lower() == "openai":
         return await transcribe_openai(file_bytes, filename)

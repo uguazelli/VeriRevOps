@@ -21,3 +21,19 @@ dependencies = [
     "python-multipart>=0.0.20",
     "uvicorn[standard]>=0.38.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.1.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "D"]
+ignore = ["D100", "D104"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

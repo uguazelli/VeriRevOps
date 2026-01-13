@@ -1,11 +1,13 @@
-import httpx
 import logging
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
+
 class EspoClient:
     def __init__(self, base_url: str, api_key: str):
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.headers = {"X-Api-Key": api_key}
 
@@ -15,24 +17,27 @@ class EspoClient:
             resp = await client.get(search_url, params=params, headers=self.headers)
             if resp.status_code == 200:
                 data = resp.json()
-                if data.get('list'):
-                    return data['list'][0]
+                if data.get("list"):
+                    return data["list"][0]
             return None
 
         if email:
             params = {"where[0][type]": "equals", "where[0][attribute]": "emailAddress", "where[0][value]": email}
             found = await _query(params)
-            if found: return found
+            if found:
+                return found
 
         if phone:
             params = {"where[0][type]": "equals", "where[0][attribute]": "phoneNumber", "where[0][value]": phone}
             found = await _query(params)
-            if found: return found
+            if found:
+                return found
 
         return None
 
     async def sync_contact(self, payload: dict):
         from app.bot.utils import extract_contact_info, parse_name
+
         info = extract_contact_info(payload)
 
         email = info["email"]
@@ -46,12 +51,12 @@ class EspoClient:
         async with httpx.AsyncClient() as client:
             contact = await self._search_impl(client, "Contact", email, phone)
             entity_type = "Contact"
-            entity_id = contact['id'] if contact else None
+            entity_id = contact["id"] if contact else None
             if not entity_id:
                 lead = await self._search_impl(client, "Lead", email, phone)
                 if lead:
                     entity_type = "Lead"
-                    entity_id = lead['id']
+                    entity_id = lead["id"]
 
             first_name, last_name = parse_name(name)
             if not last_name:
@@ -68,8 +73,8 @@ class EspoClient:
                 "addressCity": additional.get("city"),
                 "addressCountry": additional.get("country"),
                 "description": additional.get("description"),
-                "accountName": additional.get("company_name"), # specific for Lead usually
-                "title": additional.get("designation") or additional.get("title"), # sometimes passed
+                "accountName": additional.get("company_name"),  # specific for Lead usually
+                "title": additional.get("designation") or additional.get("title"),  # sometimes passed
             }
 
             payload = {k: v for k, v in payload.items() if v}
@@ -102,11 +107,7 @@ class EspoClient:
                     raise e
 
     async def sync_lead(self, name: str, email: str = None, phone_number: str = None):
-        return await self.sync_contact({
-            "name": name,
-            "email": email,
-            "phone_number": phone_number
-        })
+        return await self.sync_contact({"name": name, "email": email, "phone_number": phone_number})
 
     async def update_lead_summary(self, email: str | None, phone: str | None, summary: dict):
         if not email and not phone:
@@ -119,12 +120,12 @@ class EspoClient:
             contact = await self._search_impl(client, "Contact", email, phone)
             if contact:
                 parent_type = "Contact"
-                parent_id = contact['id']
+                parent_id = contact["id"]
                 logger.info(f"Summary target found: Contact {parent_id}")
             else:
                 lead = await self._search_impl(client, "Lead", email, phone)
                 if lead:
-                    parent_id = lead['id']
+                    parent_id = lead["id"]
                     logger.info(f"Summary target found: Lead {parent_id}")
 
             if not parent_id:
@@ -132,38 +133,32 @@ class EspoClient:
                 return
 
             from app.bot.formatting import ConversationFormatter
+
             formatter = ConversationFormatter(summary)
             desc = formatter.to_markdown()
             create_note_url = f"{self.base_url}/api/v1/Note"
-            payload = {
-                "type": "Post",
-                "post": desc,
-                "parentType": parent_type,
-                "parentId": parent_id
-            }
+            payload = {"type": "Post", "post": desc, "parentType": parent_type, "parentId": parent_id}
 
             logger.info(f"Posting summary to Stream for {parent_type} {parent_id}")
             await client.post(create_note_url, json=payload, headers=self.headers)
 
-            budget = summary.get('detected_budget')
+            budget = summary.get("detected_budget")
             if budget and parent_type == "Lead":
                 try:
                     import re
+
                     clean_budget = 0.0
                     if isinstance(budget, (int, float)):
                         clean_budget = float(budget)
                     elif isinstance(budget, str):
-                        match = re.search(r'[\d,.]+', budget)
+                        match = re.search(r"[\d,.]+", budget)
                         if match:
-                            clean_str = match.group().replace(',', '')
+                            clean_str = match.group().replace(",", "")
                             clean_budget = float(clean_str)
 
                     if clean_budget > 0:
                         update_lead_url = f"{self.base_url}/api/v1/Lead/{parent_id}"
-                        lead_payload = {
-                            "opportunityAmount": clean_budget,
-                            "opportunityAmountCurrency": "USD"
-                        }
+                        lead_payload = {"opportunityAmount": clean_budget, "opportunityAmountCurrency": "USD"}
                         logger.info(f"Updating Lead opportunityAmount to {clean_budget} USD")
                         await client.put(update_lead_url, json=lead_payload, headers=self.headers)
 

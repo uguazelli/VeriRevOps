@@ -1,6 +1,8 @@
-from typing import Optional, AsyncGenerator
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from typing import AsyncGenerator, Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -31,12 +33,13 @@ class Settings(BaseSettings):
         # Fallback/Error
         raise ValueError("DATABASE_URL or POSTGRES_* connection details required in environment.")
 
+
 settings = Settings()
 
 engine = create_async_engine(settings.database_url_resolved, echo=False, future=True)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
+
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         yield session
-

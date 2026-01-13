@@ -1,4 +1,5 @@
-from typing import Dict, Any, Tuple, Optional
+from typing import Any, Dict, Optional, Tuple
+
 
 def extract_contact_info(payload: Dict[str, Any]) -> Dict[str, Optional[str]]:
     email = payload.get("email")
@@ -15,15 +16,12 @@ def extract_contact_info(payload: Dict[str, Any]) -> Dict[str, Optional[str]]:
     if not email and not phone:
         sender = payload.get("sender") or payload.get("meta", {}).get("sender")
         if isinstance(sender, dict):
-             email = sender.get("email")
-             phone = sender.get("phone_number") or sender.get("phone")
-             name = sender.get("name")
+            email = sender.get("email")
+            phone = sender.get("phone_number") or sender.get("phone")
+            name = sender.get("name")
 
-    return {
-        "email": email,
-        "phone": phone,
-        "name": name or "Unknown"
-    }
+    return {"email": email, "phone": phone, "name": name or "Unknown"}
+
 
 def parse_name(full_name: str) -> Tuple[str, str]:
     if not full_name:

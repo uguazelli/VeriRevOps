@@ -4,7 +4,9 @@ from typing import List, Dict, Any, Optional
 from uuid import UUID
 
 from src.config.config import get_global_setting
-from src.config.logging import log_start, log_success, log_error, log_llm, log_skip, log_external_call
+from src.config.logging import (
+    log_error,
+)
 from src.storage.repository import search_documents_hybrid
 from src.services.embeddings import CustomGeminiEmbedding
 from src.services.hyde import generate_hypothetical_answer
@@ -12,14 +14,13 @@ from src.services.rerank import rerank_documents
 from src.services.llm_factory import get_llm
 from src.services.memory import add_message, get_chat_history
 from src.storage.repository import get_tenant_languages
-from src.utils.prompts import (
-    CONTEXTUALIZE_PROMPT_TEMPLATE
-)
+from src.utils.prompts import CONTEXTUALIZE_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
 # Single instance of embedding model
 _embed_model = None
+
 
 def get_embed_model():
     global _embed_model
@@ -29,25 +30,31 @@ def get_embed_model():
             logger.warning("GOOGLE_API_KEY not set.")
         logger.info("Using Google Gemini Embeddings (models/text-embedding-004)")
         _embed_model = CustomGeminiEmbedding(
-            model_name="models/text-embedding-004",
-            api_key=api_key
+            model_name="models/text-embedding-004", api_key=api_key
         )
     return _embed_model
+
 
 # ==================================================================================
 # FLOW HELPER: CONTEXTUALIZE
 # Rewrites the user query to include context from previous messages.
 # Example: "How much is it?" -> "How much is the Standard Plan?"
 # ==================================================================================
-def contextualize_query(query: str, history: List[Dict[str, str]], provider: str = None) -> str:
+def contextualize_query(
+    query: str, history: List[Dict[str, str]], provider: str = None
+) -> str:
     if not history:
         return query
 
-    history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
+    history_str = "\n".join(
+        [f"{msg['role'].upper()}: {msg['content']}" for msg in history]
+    )
 
     try:
         llm = get_llm(step="contextualization", provider=provider)
-        prompt = CONTEXTUALIZE_PROMPT_TEMPLATE.format(history_str=history_str, query=query)
+        prompt = CONTEXTUALIZE_PROMPT_TEMPLATE.format(
+            history_str=history_str, query=query
+        )
         response = llm.complete(prompt)
         rewritten = response.text.strip()
         logger.info(f"Contextualized query: '{query}' -> '{rewritten}'")
@@ -55,6 +62,7 @@ def contextualize_query(query: str, history: List[Dict[str, str]], provider: str
     except Exception as e:
         logger.error(f"Contextualization failed: {e}")
         return query
+
 
 # ==================================================================================
 # RETRIEVAL ENGINE
@@ -69,7 +77,7 @@ async def search_documents(
     limit: int = 5,
     use_hyde: bool = False,
     use_rerank: bool = False,
-    provider: str = "gemini"
+    provider: str = "gemini",
 ) -> List[Dict[str, Any]]:
     search_query = query
     if use_hyde:
@@ -88,9 +96,13 @@ async def search_documents(
     # If using rerank, we fetch more candidates (e.g., 4x the limit) to rerank down
     candidate_limit = limit * 4 if use_rerank else limit
 
-    logger.info(f"🔍 Opt 2 (Accuracy): Performing Hybrid Search (Vector + FTS) with RRF (Limit: {candidate_limit})")
+    logger.info(
+        f"🔍 Opt 2 (Accuracy): Performing Hybrid Search (Vector + FTS) with RRF (Limit: {candidate_limit})"
+    )
 
-    results = await search_documents_hybrid(tenant_id, query_embedding, query, candidate_limit)
+    results = await search_documents_hybrid(
+        tenant_id, query_embedding, query, candidate_limit
+    )
 
     # 4. Reranking
     if use_rerank and results:
@@ -100,14 +112,19 @@ async def search_documents(
 
     return results
 
+
 # --- Flow Helpers ---
 
-def resolve_config(use_hyde: Optional[bool], use_rerank: Optional[bool]) -> tuple[bool, bool]:
+
+def resolve_config(
+    use_hyde: Optional[bool], use_rerank: Optional[bool]
+) -> tuple[bool, bool]:
     if use_hyde is None:
         use_hyde = get_global_setting("use_hyde", False)
     if use_rerank is None:
         use_rerank = get_global_setting("use_rerank", False)
     return use_hyde, use_rerank
+
 
 async def get_language_instruction(tenant_id: UUID) -> str:
     pref_langs = await get_tenant_languages(tenant_id)
@@ -117,10 +134,9 @@ async def get_language_instruction(tenant_id: UUID) -> str:
     logger.info(f"Tenant Preferences [{tenant_id}]: '{pref_langs}'")
     return lang_instruction
 
+
 async def prepare_query_context(
-    session_id: Optional[UUID],
-    query: str,
-    provider: Optional[str]
+    session_id: Optional[UUID], query: str, provider: Optional[str]
 ) -> tuple[str, List[Dict]]:
     search_query = query
     history = []
@@ -129,6 +145,7 @@ async def prepare_query_context(
         if history:
             search_query = contextualize_query(query, history, provider)
     return search_query, history
+
 
 # ==================================================================================
 # FLOW HELPER: INTENT CLASSIFICATION
@@ -148,13 +165,18 @@ def determine_intent(complexity_score: int, pricing_intent: bool) -> tuple[bool,
 
     gen_step = "generation"
     if complexity >= 7:
-        logger.info(f"🧠 Opt 3 (Routing): Complexity {complexity} >= 7. Routing to High-Power model.")
+        logger.info(
+            f"🧠 Opt 3 (Routing): Complexity {complexity} >= 7. Routing to High-Power model."
+        )
         gen_step = "complex_reasoning"
     else:
-        logger.info(f"⚡ Opt 3 (Routing): Complexity {complexity} < 7. Routing to Fast/Cheap model.")
+        logger.info(
+            f"⚡ Opt 3 (Routing): Complexity {complexity} < 7. Routing to Fast/Cheap model."
+        )
         gen_step = "generation"
 
     return requires_rag, gen_step
+
 
 # ==================================================================================
 # FLOW HELPER: RETRIEVE CONTEXT
@@ -169,7 +191,7 @@ async def retrieve_context(
     use_hyde: bool,
     use_rerank: bool,
     provider: Optional[str],
-    lang_instruction: str
+    lang_instruction: str,
 ) -> tuple[str, str]:
     # 1. External (Live) Data
     live_data = ""
@@ -186,10 +208,12 @@ async def retrieve_context(
         search_query,
         use_hyde=use_hyde,
         use_rerank=use_rerank,
-        provider=provider
+        provider=provider,
     )
     if results:
-        doc_context = "\n\n".join([f"Source: {r['filename']}\n{r['content']}" for r in results])
+        doc_context = "\n\n".join(
+            [f"Source: {r['filename']}\n{r['content']}" for r in results]
+        )
 
     # 3. Combine
     context_str = ""
@@ -202,11 +226,12 @@ async def retrieve_context(
 
     return context_str, updated_lang_instruction
 
+
 def generate_llm_response(
     prompt_template: str,
     template_args: Dict[str, Any],
     gen_step: str,
-    provider: Optional[str]
+    provider: Optional[str],
 ) -> str:
     """Generic function to format a prompt and generate a response from the LLM."""
     try:
@@ -217,6 +242,7 @@ def generate_llm_response(
     except Exception as e:
         log_error(logger, f"LLM generation failed: {e}")
         return "Sorry, I encountered an error generating the answer."
+
 
 async def save_interaction(session_id: Optional[UUID], query: str, answer: str):
     if session_id:

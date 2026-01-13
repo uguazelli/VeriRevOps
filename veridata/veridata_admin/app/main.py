@@ -1,17 +1,28 @@
 import asyncio
-from datetime import datetime, timezone
+import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqladmin import Admin, BaseView, expose
 from sqlalchemy import select
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+from app.admin import (
+    BotSessionAdmin,
+    ClientAdmin,
+    ClientConfigAdmin,
+    GlobalConfigAdmin,
+    SubscriptionAdmin,
+    SyncConfigAdmin,
+    authentication_backend,
+)
+from app.core.logging import log_error, log_job, setup_logging
 from app.database import engine, get_session
-from app.admin import authentication_backend, ClientAdmin, SyncConfigAdmin, ClientConfigAdmin, SubscriptionAdmin, BotSessionAdmin, GlobalConfigAdmin
-from app.models import SyncConfig, Client
-import logging
-from app.core.logging import setup_logging, log_job, log_error
+from app.models import Client, SyncConfig
+
 
 class LogsView(BaseView):
     name = "Live Logs"
@@ -21,12 +32,14 @@ class LogsView(BaseView):
     async def logs_redirect(self, request):
         return RedirectResponse(url="/ops/logs/view")
 
+
 # Configure logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
 from app.jobs.auto_resolve import run_auto_resolve_job
 from app.ops import router as ops_router
+
 
 async def sync_worker_loop():
     """Background loop to check for active sync configs and simulate work."""
@@ -46,7 +59,9 @@ async def sync_worker_loop():
 
                     # Smart Scheduler Logic
                     should_run = False
-                    now = datetime.now(timezone.utc).replace(tzinfo=None) # Ensure naive/aware consistency based on DB config
+                    now = datetime.now(timezone.utc).replace(
+                        tzinfo=None
+                    )  # Ensure naive/aware consistency based on DB config
                     # OR just standard datetime.now() if using naive. SQLModel usually uses naive by default for SQLite/PG unless configured.
                     # Safety: Use naive UTC for simplicity if DB is naive
                     now = datetime.utcnow()
@@ -58,15 +73,24 @@ async def sync_worker_loop():
                         delta = now - config.last_run_at
                         if delta.total_seconds() / 60 >= config.frequency_minutes:
                             should_run = True
-                            log_job(logger, f"Job [{config.id}] due (Last run: {config.last_run_at}, Delta: {delta}). Triggering NOW.")
+                            log_job(
+                                logger,
+                                f"Job [{config.id}] due (Last run: {config.last_run_at}, Delta: {delta}). Triggering NOW.",
+                            )
                         else:
-                            log_job(logger, f"Job [{config.id}] SKIP. (Last run: {config.last_run_at}, Freq: {config.frequency_minutes}m, Wait: {config.frequency_minutes - (delta.total_seconds()/60):.1f}m)")
+                            log_job(
+                                logger,
+                                f"Job [{config.id}] SKIP. (Last run: {config.last_run_at}, Freq: {config.frequency_minutes}m, Wait: {config.frequency_minutes - (delta.total_seconds() / 60):.1f}m)",
+                            )
 
                     if should_run:
                         if config.platform == "chatwoot" or config.platform == "chatwoot-auto-resolve":
                             await run_auto_resolve_job(session, config)
                         else:
-                            log_job(logger, f"Simulating generic sync for [{client_name}] (Frequency: {config.frequency_minutes}m)")
+                            log_job(
+                                logger,
+                                f"Simulating generic sync for [{client_name}] (Frequency: {config.frequency_minutes}m)",
+                            )
 
                         # Update last_run_at
                         config.last_run_at = now
@@ -78,21 +102,28 @@ async def sync_worker_loop():
 
         # Determine sleep interval (simplification: fixed sleep for simulation)
         # Real world would calculate next run time based on frequency.
-        await asyncio.sleep(60) # Check every minute
+        await asyncio.sleep(60)  # Check every minute
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables
     async with engine.begin() as conn:
         from app.models import Base
+
         await conn.run_sync(Base.metadata.create_all)
 
         # MIGRATION: Ensure last_run_at exists (create_all doesn't alter existing tables)
         from sqlalchemy import text
+
         try:
             await conn.execute(text("ALTER TABLE service_configs DROP COLUMN IF EXISTS platform"))
-            await conn.execute(text("ALTER TABLE sync_configs ADD COLUMN IF NOT EXISTS last_run_at TIMESTAMP WITHOUT TIME ZONE"))
-            await conn.execute(text("ALTER TABLE sync_configs ADD COLUMN IF NOT EXISTS inactivity_threshold_minutes INTEGER"))
+            await conn.execute(
+                text("ALTER TABLE sync_configs ADD COLUMN IF NOT EXISTS last_run_at TIMESTAMP WITHOUT TIME ZONE")
+            )
+            await conn.execute(
+                text("ALTER TABLE sync_configs ADD COLUMN IF NOT EXISTS inactivity_threshold_minutes INTEGER")
+            )
         except Exception as e:
             logger.warning(f"Migration check failed (safe to ignore if column exists): {e}")
 
@@ -103,7 +134,7 @@ async def lifespan(app: FastAPI):
         authentication_backend=authentication_backend,
         title="Veridata Admin",
         logo_url="/static/logo.png",
-        templates_dir="app/templates"
+        templates_dir="app/templates",
     )
     admin.add_view(ClientAdmin)
     admin.add_view(SyncConfigAdmin)
@@ -125,19 +156,24 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
+
 app = FastAPI(title="Veridata Worker", lifespan=lifespan)
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
 
 @app.get("/", include_in_schema=False)
 async def root():
     return RedirectResponse(url="/admin")
 
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return FileResponse("app/static/favicon.ico")
 
+
 app.include_router(ops_router, prefix="/ops", tags=["ops"])
+
 
 @app.get("/health")
 async def health_check():

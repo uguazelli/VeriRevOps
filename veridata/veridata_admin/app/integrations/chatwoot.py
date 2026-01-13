@@ -1,8 +1,10 @@
-import httpx
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
+import httpx
 
 logger = logging.getLogger(__name__)
+
 
 class ChatwootClient:
     def __init__(self, base_url: str, account_id: str, access_token: str):
@@ -11,8 +13,8 @@ class ChatwootClient:
         self.headers = {"api_access_token": access_token}
 
     async def get_conversations(self, status: str = "open") -> List[Dict[str, Any]]:
-        """
-        Fetch conversations by status.
+        """Fetch conversations by status.
+
         Args:
             status: 'open', 'resolved', 'pending', or 'all'
         """
@@ -30,8 +32,7 @@ class ChatwootClient:
             return []
 
     async def toggle_status(self, conversation_id: int, status: str):
-        """
-        Update conversation status (e.g., to 'resolved').
+        """Update conversation status (e.g., to 'resolved').
         """
         url = f"{self.base_url}/api/v1/accounts/{self.account_id}/conversations/{conversation_id}/toggle_status"
         payload = {"status": status}

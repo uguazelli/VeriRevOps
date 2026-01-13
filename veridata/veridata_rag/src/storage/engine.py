@@ -16,9 +16,11 @@ if DATABASE_URL.startswith("postgresql://"):
 engine = create_async_engine(DATABASE_URL, echo=False, future=True)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
+
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         yield session
+
 
 async def dispose_engine():
     await engine.dispose()

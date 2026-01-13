@@ -1,58 +1,36 @@
 import logging
+from typing import Any, Dict, Optional
+
 import httpx
-from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
+
 
 class HubSpotClient:
     def __init__(self, access_token: str):
         self.access_token = access_token
         self.base_url = "https://api.hubapi.com"
-        self.headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json"
-        }
+        self.headers = {"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"}
 
     async def _search_contact(self, email: Optional[str] = None, phone: Optional[str] = None) -> Optional[str]:
-        """
-        Search for a contact by email or phone. Returns the Contact ID if found.
+        """Search for a contact by email or phone. Returns the Contact ID if found.
         """
         url = f"{self.base_url}/crm/v3/objects/contacts/search"
 
         filters = []
         if email:
-            filters.append({
-                "propertyName": "email",
-                "operator": "EQ",
-                "value": email
-            })
+            filters.append({"propertyName": "email", "operator": "EQ", "value": email})
 
         filter_groups = []
         if email:
-            filter_groups.append({
-                "filters": [{
-                    "propertyName": "email",
-                    "operator": "EQ",
-                    "value": email
-                }]
-            })
+            filter_groups.append({"filters": [{"propertyName": "email", "operator": "EQ", "value": email}]})
         if phone:
-             filter_groups.append({
-                "filters": [{
-                    "propertyName": "phone",
-                    "operator": "EQ",
-                    "value": phone
-                }]
-            })
+            filter_groups.append({"filters": [{"propertyName": "phone", "operator": "EQ", "value": phone}]})
 
         if not filter_groups:
             return None
 
-        payload = {
-            "filterGroups": filter_groups,
-            "properties": ["id", "email", "firstname", "lastname"],
-            "limit": 1
-        }
+        payload = {"filterGroups": filter_groups, "properties": ["id", "email", "firstname", "lastname"], "limit": 1}
 
         async with httpx.AsyncClient() as client:
             resp = await client.post(url, headers=self.headers, json=payload)
@@ -66,8 +44,7 @@ class HubSpotClient:
         return None
 
     async def sync_lead(self, name: str, email: Optional[str] = None, phone_number: Optional[str] = None):
-        """
-        Creates or updates a contact in HubSpot.
+        """Creates or updates a contact in HubSpot.
         """
         if not email and not phone_number:
             logger.warning("HubSpot: Cannot sync lead without email or phone")
@@ -76,10 +53,13 @@ class HubSpotClient:
         existing_id = await self._search_contact(email, phone_number)
 
         properties = {}
-        if email: properties["email"] = email
-        if phone_number: properties["phone"] = phone_number
+        if email:
+            properties["email"] = email
+        if phone_number:
+            properties["phone"] = phone_number
 
         from app.bot.utils import parse_name
+
         first, last = parse_name(name)
 
         properties["firstname"] = first
@@ -99,17 +79,16 @@ class HubSpotClient:
                     logger.error(f"HubSpot Create Error: {resp.text}")
 
     async def sync_contact(self, payload: Dict[str, Any]):
-        """
-        Syncs a contact object (usually from Chatwoot payload) to HubSpot.
+        """Syncs a contact object (usually from Chatwoot payload) to HubSpot.
         """
         from app.bot.utils import extract_contact_info
+
         info = extract_contact_info(payload)
 
         await self.sync_lead(info["name"], info["email"], info["phone"])
 
     async def update_lead_summary(self, email: Optional[str], phone: Optional[str], summary_data: Dict[str, Any]):
-        """
-        Adds a note to the contact with the conversation summary.
+        """Adds a note to the contact with the conversation summary.
         """
         contact_id = await self._search_contact(email, phone)
         if not contact_id:
@@ -117,17 +96,17 @@ class HubSpotClient:
             return
 
         from app.bot.formatting import ConversationFormatter
+
         formatter = ConversationFormatter(summary_data)
         note_body = formatter.to_html()
 
         url = f"{self.base_url}/crm/v3/objects/notes"
 
-        note_properties = {
-            "hs_note_body": note_body
-        }
+        note_properties = {"hs_note_body": note_body}
 
         import time
-        ts_ms = int(time.time() * 1000) # Default to now
+
+        ts_ms = int(time.time() * 1000)  # Default to now
 
         if summary_data.get("end_timestamp"):
             try:
@@ -144,9 +123,11 @@ class HubSpotClient:
             "associations": [
                 {
                     "to": {"id": contact_id},
-                    "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 202}] # 202 is Note to Contact
+                    "types": [
+                        {"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 202}
+                    ],  # 202 is Note to Contact
                 }
-            ]
+            ],
         }
 
         async with httpx.AsyncClient() as client:

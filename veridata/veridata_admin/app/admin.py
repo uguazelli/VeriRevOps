@@ -1,11 +1,14 @@
-from sqladmin import Admin, ModelView, action
+import logging
+
+from sqladmin import ModelView, action
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
-import logging
-from app.database import settings, get_session
-from app.models import Client, SyncConfig, ServiceConfig, Subscription, BotSession, GlobalConfig
+
+from app.database import get_session, settings
 from app.jobs.auto_resolve import run_auto_resolve_job
+from app.models import BotSession, Client, GlobalConfig, ServiceConfig, Subscription, SyncConfig
+
 
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
@@ -26,7 +29,9 @@ class AdminAuth(AuthenticationBackend):
         token = request.session.get("token")
         return bool(token)
 
-authentication_backend = AdminAuth(secret_key="secret-key") # TODO: Move secret to settings
+
+authentication_backend = AdminAuth(secret_key="secret-key")  # TODO: Move secret to settings
+
 
 class ClientAdmin(ModelView, model=Client):
     name = "Client / Tenant"
@@ -37,11 +42,28 @@ class ClientAdmin(ModelView, model=Client):
     can_delete = True
     icon = "fa-solid fa-users"
 
+
 class SyncConfigAdmin(ModelView, model=SyncConfig):
     name = "Job Schedule"
     name_plural = "Job Schedules"
-    column_list = [SyncConfig.id, SyncConfig.client_id, SyncConfig.platform, SyncConfig.is_active, SyncConfig.frequency_minutes, SyncConfig.inactivity_threshold_minutes, SyncConfig.last_run_at]
-    form_columns = [SyncConfig.client, SyncConfig.platform, SyncConfig.config_json, SyncConfig.is_active, SyncConfig.frequency_minutes, SyncConfig.inactivity_threshold_minutes, SyncConfig.last_run_at]
+    column_list = [
+        SyncConfig.id,
+        SyncConfig.client_id,
+        SyncConfig.platform,
+        SyncConfig.is_active,
+        SyncConfig.frequency_minutes,
+        SyncConfig.inactivity_threshold_minutes,
+        SyncConfig.last_run_at,
+    ]
+    form_columns = [
+        SyncConfig.client,
+        SyncConfig.platform,
+        SyncConfig.config_json,
+        SyncConfig.is_active,
+        SyncConfig.frequency_minutes,
+        SyncConfig.inactivity_threshold_minutes,
+        SyncConfig.last_run_at,
+    ]
     icon = "fa-solid fa-clock"
 
     @action("run_now", "Execute Now", add_in_detail=True, add_in_list=True)
@@ -62,6 +84,7 @@ class SyncConfigAdmin(ModelView, model=SyncConfig):
             return RedirectResponse(referer)
         return RedirectResponse(request.url_for("admin:list", identity="syncconfig"))
 
+
 class ClientConfigAdmin(ModelView, model=ServiceConfig):
     name = "Client Configuration"
     name_plural = "Client Configurations"
@@ -69,12 +92,27 @@ class ClientConfigAdmin(ModelView, model=ServiceConfig):
     form_columns = [ServiceConfig.client, ServiceConfig.config]
     icon = "fa-solid fa-robot"
 
+
 class SubscriptionAdmin(ModelView, model=Subscription):
     name = "Usage Quota"
     name_plural = "Usage Quotas"
-    column_list = [Subscription.id, Subscription.client_id, Subscription.quota_limit, Subscription.usage_count, Subscription.start_date, Subscription.end_date]
-    form_columns = [Subscription.client, Subscription.quota_limit, Subscription.usage_count, Subscription.start_date, Subscription.end_date]
+    column_list = [
+        Subscription.id,
+        Subscription.client_id,
+        Subscription.quota_limit,
+        Subscription.usage_count,
+        Subscription.start_date,
+        Subscription.end_date,
+    ]
+    form_columns = [
+        Subscription.client,
+        Subscription.quota_limit,
+        Subscription.usage_count,
+        Subscription.start_date,
+        Subscription.end_date,
+    ]
     icon = "fa-solid fa-file-invoice"
+
 
 class BotSessionAdmin(ModelView, model=BotSession):
     can_create = False
@@ -82,6 +120,7 @@ class BotSessionAdmin(ModelView, model=BotSession):
     name_plural = "Live Sessions"
     column_list = [BotSession.id, BotSession.client_id, BotSession.external_session_id, BotSession.rag_session_id]
     icon = "fa-solid fa-comments"
+
 
 class GlobalConfigAdmin(ModelView, model=GlobalConfig):
     name = "Global Setting"

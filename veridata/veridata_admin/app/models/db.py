@@ -1,13 +1,16 @@
-from datetime import datetime
-from typing import Optional, List, Dict
 import uuid
-from sqlalchemy import String, Integer, Boolean, ForeignKey, JSON, TIMESTAMP
+from datetime import datetime
+from typing import List, Optional
+
+from sqlalchemy import JSON, TIMESTAMP, Boolean, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import UUID
+
 
 class Base(DeclarativeBase):
     pass
+
 
 class Client(Base):
     __tablename__ = "clients"
@@ -24,6 +27,7 @@ class Client(Base):
 
     def __str__(self):
         return self.name
+
 
 class SyncConfig(Base):
     __tablename__ = "sync_configs"
@@ -42,6 +46,7 @@ class SyncConfig(Base):
     def __str__(self):
         return f"{self.platform} ({self.frequency_minutes}m)"
 
+
 class ServiceConfig(Base):
     __tablename__ = "service_configs"
 
@@ -50,6 +55,7 @@ class ServiceConfig(Base):
     config: Mapped[dict] = mapped_column(JSON, default={})
 
     client: Mapped["Client"] = relationship(back_populates="service_configs")
+
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
@@ -63,6 +69,7 @@ class Subscription(Base):
 
     client: Mapped["Client"] = relationship(back_populates="subscriptions")
 
+
 class BotSession(Base):
     __tablename__ = "bot_sessions"
 
@@ -73,9 +80,12 @@ class BotSession(Base):
 
     client: Mapped["Client"] = relationship(back_populates="bot_sessions")
 
+
 class GlobalConfig(Base):
     __tablename__ = "global_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     config: Mapped[dict] = mapped_column(JSON, default={})
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

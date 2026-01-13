@@ -2,6 +2,7 @@ from pydantic import computed_field
 from pydantic_core import MultiHostUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     postgres_user: str = "veridata_user"
     postgres_password: str = "veridata_pass"
@@ -20,13 +21,16 @@ class Settings(BaseSettings):
 
     @computed_field
     def database_url(self) -> str:
-        return str(MultiHostUrl.build(
-            scheme="postgresql+asyncpg",
-            username=self.postgres_user,
-            password=self.postgres_password,
-            host=self.postgres_host,
-            port=self.postgres_port,
-            path=self.postgres_db,
-        ))
+        return str(
+            MultiHostUrl.build(
+                scheme="postgresql+asyncpg",
+                username=self.postgres_user,
+                password=self.postgres_password,
+                host=self.postgres_host,
+                port=self.postgres_port,
+                path=self.postgres_db,
+            )
+        )
+
 
 settings = Settings()

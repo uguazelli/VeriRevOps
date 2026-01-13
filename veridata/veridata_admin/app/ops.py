@@ -1,5 +1,6 @@
 import asyncio
 import os
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
@@ -102,17 +103,19 @@ html = """
 </html>
 """
 
+
 @router.get("/logs/view", response_class=HTMLResponse)
 async def live_logs_page():
     return html
+
 
 @router.websocket("/logs/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
         if not os.path.exists(LOG_FILE):
-             await websocket.send_text(f"Log file not waiting: {LOG_FILE}")
-             return
+            await websocket.send_text(f"Log file not waiting: {LOG_FILE}")
+            return
 
         # Tail existing logs (last 50 lines)
         with open(LOG_FILE, "r") as f:
@@ -125,9 +128,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 else:
                     f.seek(0)
                 content = f.read()
-                lines = content.splitlines()[-50:] # Keep last 50
+                lines = content.splitlines()[-50:]  # Keep last 50
                 for line in lines:
-                     await websocket.send_text(line)
+                    await websocket.send_text(line)
             except Exception as e:
                 await websocket.send_text(f"Error reading history: {e}")
 
@@ -142,5 +145,5 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except Exception:
         pass

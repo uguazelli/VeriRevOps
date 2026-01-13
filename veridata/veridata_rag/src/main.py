@@ -10,11 +10,13 @@ from src.config.logging import setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await load_config_from_db()
     yield
     await dispose_engine()
+
 
 app = FastAPI(title="VeriRag Core", lifespan=lifespan)
 

@@ -1,1 +1,1 @@
-from .db import Base, Client, SyncConfig, ServiceConfig, Subscription, BotSession, GlobalConfig
+from .db import Base, BotSession, Client, GlobalConfig, ServiceConfig, Subscription, SyncConfig

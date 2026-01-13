@@ -6,6 +6,7 @@ from fastapi.security import APIKeyCookie
 
 security = APIKeyCookie(name="session_token", auto_error=False)
 
+
 def get_current_username(request: Request):
     token = request.cookies.get("session_token")
     if not token:
@@ -17,6 +18,7 @@ def get_current_username(request: Request):
         return None
 
     return "admin"
+
 
 def require_auth(username: Annotated[Optional[str], Depends(get_current_username)]):
     if not username:

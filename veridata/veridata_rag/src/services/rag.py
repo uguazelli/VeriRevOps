@@ -3,14 +3,10 @@ from typing import Optional
 from uuid import UUID
 from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
-from src.services.embeddings import CustomGeminiEmbedding
-from src.config.logging import log_start, log_error, log_skip
+from src.config.logging import log_start, log_skip
 from src.storage.repository import insert_document_chunk
 from src.services.vlm import describe_image
-from src.utils.prompts import (
-    RAG_ANSWER_PROMPT_TEMPLATE,
-    SMALL_TALK_PROMPT_TEMPLATE
-)
+from src.utils.prompts import RAG_ANSWER_PROMPT_TEMPLATE, SMALL_TALK_PROMPT_TEMPLATE
 from src.services.rag_flow import (
     get_embed_model,
     resolve_config,
@@ -19,10 +15,11 @@ from src.services.rag_flow import (
     determine_intent,
     retrieve_context,
     generate_llm_response,
-    save_interaction
+    save_interaction,
 )
 
 logger = logging.getLogger(__name__)
+
 
 # ==================================================================================
 # INGESTION FLOW
@@ -32,10 +29,12 @@ logger = logging.getLogger(__name__)
 # 4. Embedding: Convert chunks to vectors using Gemini.
 # 5. Storage: Insert text + vectors into Postgres (via Repository).
 # ==================================================================================
-async def ingest_document(tenant_id: UUID, filename: str, content: str = None, file_bytes: bytes = None):
+async def ingest_document(
+    tenant_id: UUID, filename: str, content: str = None, file_bytes: bytes = None
+):
     logger.info(f"Ingesting document {filename} for tenant {tenant_id}")
 
-    is_image = filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))
+    is_image = filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
 
     if is_image:
         if not file_bytes:
@@ -57,8 +56,8 @@ async def ingest_document(tenant_id: UUID, filename: str, content: str = None, f
         metadata={
             "filename": filename,
             "tenant_id": str(tenant_id),
-            "original_type": "image" if is_image else "text"
-        }
+            "original_type": "image" if is_image else "text",
+        },
     )
 
     # 2. Chunking
@@ -79,7 +78,9 @@ async def ingest_document(tenant_id: UUID, filename: str, content: str = None, f
 
     # 4. Insert into DB (Delegated to Repository)
     for node, embedding in zip(nodes, embeddings):
-        success = await insert_document_chunk(tenant_id, filename, node.get_content(), embedding)
+        success = await insert_document_chunk(
+            tenant_id, filename, node.get_content(), embedding
+        )
         if not success:
             logger.error(f"Failed to insert chunk for {filename}")
 
@@ -105,9 +106,8 @@ async def generate_answer(
     session_id: Optional[UUID] = None,
     complexity_score: int = 5,
     pricing_intent: bool = False,
-    external_context: Optional[str] = None
+    external_context: Optional[str] = None,
 ) -> tuple[str, bool]:
-
     log_start(logger, f"Generating answer for query: '{query}'")
 
     # 1. Config
@@ -116,7 +116,11 @@ async def generate_answer(
 
     # 2. Contextualization
     search_query, history = await prepare_query_context(session_id, query, provider)
-    history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history]) if history else ""
+    history_str = (
+        "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
+        if history
+        else ""
+    )
 
     # 3. Intent & Routing
     requires_rag, gen_step = determine_intent(complexity_score, pricing_intent)
@@ -126,7 +130,13 @@ async def generate_answer(
     if requires_rag:
         # Retrieve docs & Generate Answer
         context_str, final_lang_instruction = await retrieve_context(
-            tenant_id, search_query, external_context, use_hyde, use_rerank, provider, lang_instruction
+            tenant_id,
+            search_query,
+            external_context,
+            use_hyde,
+            use_rerank,
+            provider,
+            lang_instruction,
         )
         answer = generate_llm_response(
             prompt_template=RAG_ANSWER_PROMPT_TEMPLATE,
@@ -134,10 +144,10 @@ async def generate_answer(
                 "lang_instruction": final_lang_instruction,
                 "history_str": history_str,
                 "context_str": context_str,
-                "search_query": search_query
+                "search_query": search_query,
             },
             gen_step=gen_step,
-            provider=provider
+            provider=provider,
         )
     else:
         # Small Talk (No RAG)
@@ -147,10 +157,10 @@ async def generate_answer(
             template_args={
                 "lang_instruction": lang_instruction,
                 "history_str": history_str,
-                "search_query": search_query
+                "search_query": search_query,
             },
             gen_step=gen_step,
-            provider=provider
+            provider=provider,
         )
 
     # 5. Persistence
@@ -158,4 +168,3 @@ async def generate_answer(
 
     # Return (Answer, Requires Human Handover - unused for now defaults to False)
     return answer, False
-

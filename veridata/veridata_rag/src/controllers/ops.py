@@ -1,7 +1,6 @@
 import asyncio
 import os
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
-from src.config.logging import log_start, log_success, log_error
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -11,17 +10,19 @@ LOG_FILE = "logs/veridata_rag.log"
 
 templates = Jinja2Templates(directory="src/templates")
 
+
 @router.get("/logs/view", response_class=HTMLResponse)
 async def live_logs_page(request: Request):
     return templates.TemplateResponse("logs.html", {"request": request})
+
 
 @router.websocket("/logs/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
         if not os.path.exists(LOG_FILE):
-             await websocket.send_text(f"Log file not waiting: {LOG_FILE}")
-             return
+            await websocket.send_text(f"Log file not waiting: {LOG_FILE}")
+            return
 
         with open(LOG_FILE, "r") as f:
             try:
@@ -34,7 +35,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 content = f.read()
                 lines = content.splitlines()[-50:]
                 for line in lines:
-                     await websocket.send_text(line)
+                    await websocket.send_text(line)
             except Exception as e:
                 await websocket.send_text(f"Error reading history: {e}")
 
@@ -48,5 +49,5 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except Exception:
         pass

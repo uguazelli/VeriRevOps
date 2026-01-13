@@ -1,15 +1,18 @@
-import logging
 import asyncio
-from sqlalchemy.ext.asyncio import create_async_engine
+import logging
+
 from sqlalchemy import text
-from app.core.config import settings
+from sqlalchemy.ext.asyncio import create_async_engine
 from tenacity import retry, stop_after_attempt, wait_fixed
+
+from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 max_tries = 60 * 5
 wait_seconds = 1
+
 
 @retry(
     stop=stop_after_attempt(max_tries),
@@ -26,10 +29,12 @@ async def init() -> None:
         logger.error(f"Database unavailable: {e}")
         raise e
 
+
 def main() -> None:
     logger.info("Initializing service")
     asyncio.run(init())
     logger.info("Service finished initializing")
+
 
 if __name__ == "__main__":
     main()

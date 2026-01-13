@@ -1,12 +1,15 @@
-from fastapi import APIRouter, UploadFile, File, Form
+from fastapi import APIRouter
 from uuid import UUID
 from src.services.rag import generate_answer
-from src.services.vlm import describe_image
-from src.models.schemas import QueryRequest, QueryResponse, ChatMessage, ChatHistoryResponse
+from src.models.schemas import (
+    QueryRequest,
+    QueryResponse,
+    ChatHistoryResponse,
+)
 from src.services.memory import get_full_chat_history, create_session, delete_session
-from src.config.logging import log_start, log_success, log_error
 
 router = APIRouter()
+
 
 # ==================================================================================
 # API: SESSION
@@ -53,14 +56,8 @@ async def api_query_rag(request: QueryRequest):
         session_id=session_id,
         complexity_score=request.complexity_score,
         pricing_intent=request.pricing_intent,
-        external_context=request.external_context
+        external_context=request.external_context,
     )
     return QueryResponse(
-        answer=answer,
-        requires_human=requires_human,
-        session_id=session_id
+        answer=answer, requires_human=requires_human, session_id=session_id
     )
-
-
-
-

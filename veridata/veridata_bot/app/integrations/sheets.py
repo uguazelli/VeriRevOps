@@ -1,9 +1,11 @@
-import httpx
 import csv
 import logging
 from io import StringIO
 
+import httpx
+
 logger = logging.getLogger(__name__)
+
 
 async def fetch_google_sheet_data(url: str) -> str:
     try:

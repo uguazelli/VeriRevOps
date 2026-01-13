@@ -1,8 +1,8 @@
 from typing import Any, List, Optional
-from src.config.config import get_global_setting
 import google.generativeai as genai
 from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.bridge.pydantic import PrivateAttr
+
 
 class CustomGeminiEmbedding(BaseEmbedding):
     _model_name: str = PrivateAttr()
@@ -41,4 +41,4 @@ class CustomGeminiEmbedding(BaseEmbedding):
             content=text,
             task_type="retrieval_document",
         )
-        return result['embedding']
+        return result["embedding"]

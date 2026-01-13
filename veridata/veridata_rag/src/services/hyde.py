@@ -5,6 +5,7 @@ logger = logging.getLogger(__name__)
 
 from src.utils.prompts import HYDE_PROMPT_TEMPLATE
 
+
 def generate_hypothetical_answer(query: str, provider: str = None) -> str:
     try:
         llm = get_llm(step="rag_search", provider=provider)

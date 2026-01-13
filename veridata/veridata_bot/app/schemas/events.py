@@ -1,8 +1,10 @@
 # Moved to app/schemas/events.py
-from pydantic import BaseModel, Field, AliasChoices
-from typing import Optional, List, Any, Dict, Union
+from typing import Any, Dict, List, Optional, Union
+
+from pydantic import BaseModel, Field
 
 # --- Shared / Base Models ---
+
 
 class Sender(BaseModel):
     id: Optional[int] = None
@@ -11,11 +13,13 @@ class Sender(BaseModel):
     phone_number: Optional[str] = None
     thumbnail: Optional[str] = None
 
+
 class Conversation(BaseModel):
     id: Union[int, str]
     status: Optional[str] = None
     channel: Optional[str] = None
-    created_at: Optional[int] = None # Unix timestamp usually
+    created_at: Optional[int] = None  # Unix timestamp usually
+
 
 class Attachment(BaseModel):
     id: Optional[int] = None
@@ -23,7 +27,9 @@ class Attachment(BaseModel):
     data_url: Optional[str] = None
     extension: Optional[str] = None
 
+
 # --- Chatwoot Webhook Event ---
+
 
 class ChatwootEvent(BaseModel):
     event: str
@@ -63,8 +69,10 @@ class ChatwootEvent(BaseModel):
 
 # --- Integration / CRM Event ---
 
+
 class IntegrationMeta(BaseModel):
     sender: Optional[Sender] = None
+
 
 class IntegrationEvent(BaseModel):
     event: str
