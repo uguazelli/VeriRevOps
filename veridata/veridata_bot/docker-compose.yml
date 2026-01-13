@@ -3,7 +3,7 @@ name: veridata
 services:
   veridata_bot:
     build: .
-    container_name: veridata_bot
+    container_name: veridata.bot
     restart: always
     ports:
       - "${APP_PORT:-4019}:4019"

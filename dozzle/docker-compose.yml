@@ -1,3 +1,4 @@
+name: dozzle
 services:
   dozzle:
     container_name: dozzle

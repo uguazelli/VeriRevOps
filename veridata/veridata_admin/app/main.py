@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
         app,
         engine,
         authentication_backend=authentication_backend,
-        title="VeriWorker",
+        title="Veridata Admin",
         logo_url="/static/logo.png",
         templates_dir="app/templates"
     )

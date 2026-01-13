@@ -1,13 +1,13 @@
 name: veridata
 
 services:
-  veridata_worker:
+  veridata_admin:
     build: .
-    container_name: veridata.worker
+    container_name: veridata.admin
     env_file:
       - .env
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "${VERIDATA_ADMIN_PORT:-8000}:8000"
     volumes:
       - ./app:/app/app
       - ./logs:/app/logs
@@ -15,7 +15,7 @@ services:
     networks:
       veridata.network:
         aliases:
-          - veridata.worker
+          - veridata.admin
     develop:
       watch:
         - action: sync
