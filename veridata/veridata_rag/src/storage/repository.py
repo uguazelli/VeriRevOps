@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 async def get_tenant_languages(tenant_id: UUID) -> Optional[str]:
     async for session in get_session():
         try:
+            # Set RLS variable
+            await session.execute(
+                text("SELECT set_config('app.current_tenant', :tenant_id, false)"), {"tenant_id": str(tenant_id)}
+            )
             result = await session.execute(
                 select(Tenant.preferred_languages).where(Tenant.id == tenant_id)
             )
@@ -25,6 +29,10 @@ async def insert_document_chunk(
 ) -> bool:
     async for session in get_session():
         try:
+            # Set RLS variable
+            await session.execute(
+                text("SELECT set_config('app.current_tenant', :tenant_id, false)"), {"tenant_id": str(tenant_id)}
+            )
             # We use ORM for insertion, but need to handle fts_vector generation.
             # SQLAlchemy defaults don't easily do to_tsvector on insert unless defined in model or trigger.
             # So generic insert with specific SQL for fts might be cleaner, OR we trust a trigger (not present?),
@@ -77,6 +85,10 @@ async def search_documents_hybrid(
     results = []
     async for session in get_session():
         try:
+            # Set RLS variable
+            await session.execute(
+                text("SELECT set_config('app.current_tenant', :tenant_id, false)"), {"tenant_id": str(tenant_id)}
+            )
             # Hybrid search with RRF (Reciprocal Rank Fusion)
             # Note: We use CAST(:embedding AS vector) because parameter passing might be typeless string/json.
             stmt = text("""
