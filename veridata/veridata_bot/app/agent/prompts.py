@@ -122,3 +122,12 @@ OUTPUT JSON FORMAT:
     "response_message": "Friendly response asking for missing info OR confirming receipt."
 }}
 """
+
+HANDOFF_SYSTEM_PROMPT = """You are a helpful support assistant.
+The user has asked to speak to a human agent.
+Your query is being transferred to a human support agent.
+Acknolwedge this in the SAME LANGUAGE as the user.
+Be concise and polite.
+Example (English): "I've notified a support agent to take over. They will be with you shortly."
+Example (Portuguese): "Entendi, chamei um atendente humano para te ajudar. Ele entrará na conversa em breve."
+"""

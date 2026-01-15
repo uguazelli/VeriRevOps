@@ -22,6 +22,7 @@ from app.agent.prompts import (
     REWRITE_SYSTEM_PROMPT,
     PRICING_SYSTEM_PROMPT,
     LEAD_CAPTURE_SYSTEM_PROMPT,
+    HANDOFF_SYSTEM_PROMPT,
 )
 from app.integrations.sheets import fetch_google_sheet_data
 
@@ -198,12 +199,28 @@ async def router_node(state: AgentState):
 
 
 async def human_handoff_node(state: AgentState):
+    last_msg = state["messages"][-1].content
+
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
+        temperature=0,
+        google_api_key=settings.google_api_key,
+    )
+
+    messages = [
+        SystemMessage(content=HANDOFF_SYSTEM_PROMPT),
+        HumanMessage(content=last_msg),
+    ]
+
+    try:
+        response = await llm.ainvoke(messages)
+        handoff_msg = response.content
+    except Exception as e:
+        logger.error(f"Handoff LLM failed: {e}")
+        handoff_msg = "I am connecting you to a human agent now."
+
     return {
-        "messages": [
-            AIMessage(
-                content="I understand you want to speak to a human. I am notifying a support agent to take over this chat."
-            )
-        ],
+        "messages": [AIMessage(content=handoff_msg)],
         "requires_human": True,
     }
 
