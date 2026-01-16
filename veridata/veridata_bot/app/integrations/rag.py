@@ -17,6 +17,36 @@ class RagClient:
         self.api_key = api_key
         self.tenant_id = tenant_id
 
+    async def create_session(self) -> str | None:
+        """Explicitly create a new details session."""
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            url = f"{self.base_url}/api/session"
+            headers = self._get_headers()
+            payload = {"tenant_id": self.tenant_id}
+
+            try:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                return str(data.get("session_id"))
+            except Exception as e:
+                logger.error(f"Failed to create RAG session: {e}")
+                return None
+
+    async def append_message(self, session_id: uuid.UUID, role: str, content: str):
+        """Manually append a message to the RAG history."""
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            url = f"{self.base_url}/api/session/{session_id}/messages"
+            headers = self._get_headers()
+            payload = {"role": role, "content": content}
+
+            try:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                logger.info(f"✅ RAG Append Success: {role} message added to session {session_id}")
+            except Exception as e:
+                logger.error(f"Failed to append message to RAG session {session_id}: {e}")
+
     def _get_headers(self):
         """Helper to construct Authorization headers."""
         headers = {}

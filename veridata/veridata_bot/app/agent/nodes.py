@@ -390,6 +390,7 @@ async def rag_node(state: AgentState):
             "messages": [AIMessage(content=rag_response)],
             "requires_human": requires_human,
             "session_id": new_session_id,
+            "history_saved": True,
         }
 
     except Exception as e:

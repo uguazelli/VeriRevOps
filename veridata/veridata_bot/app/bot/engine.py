@@ -292,19 +292,51 @@ async def process_bot_event(client_slug: str, payload_dict: dict, db: AsyncSessi
         requires_human = result.get("requires_human", False)
         rag_session_id = result.get("session_id")
 
-        # Persist RAG Session ID if newly created
-        if rag_session_id:
-            try:
-                # import uuid (removed)
+        try:
+            rag_client_for_save = RagClient(
+                base_url=rag_config["base_url"],
+                api_key=rag_config.get("api_key", ""),
+                tenant_id=rag_config["tenant_id"],
+            )
 
+            # 1. Update Session ID if newly created by RAG Node
+            if rag_session_id:
                 rag_uuid = uuid.UUID(str(rag_session_id))
-                stmt = update(BotSession).where(BotSession.id == session.id).values(rag_session_id=rag_uuid)
-                await db.execute(stmt)
-                await db.commit()
-                session.rag_session_id = rag_uuid
-                logger.info(f"💾 Persisted RAG Session ID via SQL: {rag_session_id}")
-            except Exception as e:
-                logger.warning(f"Failed to persist RAG Session ID: {e}")
+                if session.rag_session_id != rag_uuid:
+                    stmt = update(BotSession).where(BotSession.id == session.id).values(rag_session_id=rag_uuid)
+                    await db.execute(stmt)
+                    await db.commit()
+                    session.rag_session_id = rag_uuid
+                    logger.info(f"💾 Persisted RAG Session ID via SQL: {rag_session_id}")
+
+            # 2. Check if we need to manually persist the interaction
+            # If the RAG node ran, it returns "history_saved=True" (and we trust it).
+            # If NOT, we must save manually.
+            history_saved = result.get("history_saved", False)
+
+            if not history_saved:
+                 # Check if we have an active RAG session to append to
+                target_rag_id = session.rag_session_id
+
+                # If no session exists yet, create one
+                if not target_rag_id:
+                     new_id_str = await rag_client_for_save.create_session()
+                     if new_id_str:
+                        target_rag_id = uuid.UUID(new_id_str)
+                        stmt = update(BotSession).where(BotSession.id == session.id).values(rag_session_id=target_rag_id)
+                        await db.execute(stmt)
+                        await db.commit()
+                        session.rag_session_id = target_rag_id
+                        logger.info(f"🆕 Created new RAG Session ID manually: {target_rag_id}")
+
+                if target_rag_id:
+                    # Append User Query and Agent Answer
+                    await rag_client_for_save.append_message(target_rag_id, "user", user_query)
+                    await rag_client_for_save.append_message(target_rag_id, "ai", answer)
+                    logger.info(f"💾 Manually appended interaction to RAG Session {target_rag_id}")
+
+        except Exception as e:
+            logger.warning(f"Failed to persist RAG Session/History: {e}")
 
     except Exception as e:
         logger.error(f"LangGraph execution failed: {e}", exc_info=True)

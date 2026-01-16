@@ -26,11 +26,15 @@ async def summarize_start_conversation(session_id: uuid.UUID, rag_client: RagCli
                 "urgency_level": "Low",
                 "sentiment_score": "Neutral",
                 "ai_summary": "No history available.",
+                "detected_budget": None,
+                "detected_language": None,
                 "contact_info": {},
             }
 
         # Format history
         history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history_list])
+
+        logger.info(f"📝 SUMMARY HISTORY INPUT:\n{history_str}\n--------------------------------------------------")
 
         # 2. Local Summarization with Gemini
         llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0, google_api_key=settings.google_api_key)
@@ -59,6 +63,8 @@ async def summarize_start_conversation(session_id: uuid.UUID, rag_client: RagCli
                 "urgency_level": "Low",
                 "sentiment_score": "Neutral",
                 "ai_summary": "Summarization failed (JSON error).",
+                "detected_budget": None,
+                "detected_language": None,
                 "contact_info": {},
             }
 
@@ -69,5 +75,7 @@ async def summarize_start_conversation(session_id: uuid.UUID, rag_client: RagCli
             "urgency_level": "Low",
             "sentiment_score": "Neutral",
             "ai_summary": f"Error: {str(e)}",
+            "detected_budget": None,
+            "detected_language": None,
             "contact_info": {},
         }

@@ -8,14 +8,14 @@ class ConversationFormatter:
         self.ai_summary = summary_data.get("ai_summary") or summary_data.get("summary", "No summary provided")
         self.start = summary_data.get("conversation_start", "N/A")
         self.end = summary_data.get("conversation_end", "N/A")
-        self.language = summary_data.get("language", "N/A")
+        self.language = summary_data.get("detected_language") or summary_data.get("language", "N/A")
         self.client_desc = summary_data.get("client_description", "N/A")
 
         # Analysis fields
         self.intent = summary_data.get("purchase_intent", "N/A")
         self.urgency = summary_data.get("urgency_level", "N/A")
         self.sentiment = summary_data.get("sentiment_score") or summary_data.get("sentiment", "N/A")
-        self.budget = summary_data.get("detected_budget", "N/A")
+        self.budget = summary_data.get("detected_budget") or "N/A"
 
     def to_markdown(self) -> str:
         return (

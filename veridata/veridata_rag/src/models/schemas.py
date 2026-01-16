@@ -45,3 +45,16 @@ class ChatMessage(BaseModel):
 
 class ChatHistoryResponse(BaseModel):
     messages: list[ChatMessage]
+
+
+class AppendMessageRequest(BaseModel):
+    role: str
+    content: str
+
+
+class CreateSessionRequest(BaseModel):
+    tenant_id: UUID
+
+
+class CreateSessionResponse(BaseModel):
+    session_id: UUID

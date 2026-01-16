@@ -5,8 +5,11 @@ from src.models.schemas import (
     QueryRequest,
     QueryResponse,
     ChatHistoryResponse,
+    AppendMessageRequest,
+    CreateSessionRequest,
+    CreateSessionResponse,
 )
-from src.services.memory import get_full_chat_history, create_session, delete_session
+from src.services.memory import get_full_chat_history, create_session, delete_session, add_message
 
 router = APIRouter()
 
@@ -16,6 +19,12 @@ router = APIRouter()
 # CLEANUP
 # Removes session history from Postgres/Memory.
 # ==================================================================================
+@router.post("/session", response_model=CreateSessionResponse)
+async def api_create_session(request: CreateSessionRequest):
+    session_id_str = await create_session(request.tenant_id)
+    return {"session_id": UUID(session_id_str)}
+
+
 @router.delete("/session/{session_id}")
 async def api_delete_session(session_id: UUID):
     await delete_session(session_id)
@@ -32,6 +41,12 @@ async def api_delete_session(session_id: UUID):
 async def api_get_history(session_id: UUID):
     history = await get_full_chat_history(session_id)
     return {"messages": history}
+
+
+@router.post("/session/{session_id}/messages")
+async def api_append_message(session_id: UUID, request: AppendMessageRequest):
+    await add_message(session_id, request.role, request.content)
+    return {"status": "added"}
 
 
 # ==================================================================================
