@@ -165,13 +165,17 @@ async def router_node(state: AgentState):
         convert_system_message_to_human=True,  # Gemini sometimes prefers this
     )
 
-    # Contextual Routing: Get previous AI message
-    last_ai_msg = "None"
-    if len(state["messages"]) >= 2:
-        last_ai_msg = state["messages"][-2].content
+    # Contextual Routing: Get last 6 messages for full context
+    recent_msgs = state["messages"][-6:]
+    history_str = ""
+    for msg in recent_msgs:
+        role = "User" if isinstance(msg, (HumanMessage, str)) and (not hasattr(msg, "type") or msg.type == "human") else "Bot"
+        # Safety check for content
+        content = getattr(msg, "content", str(msg))
+        history_str += f"{role}: {content}\n"
 
     # Inject Context
-    prompt_with_context = INTENT_SYSTEM_PROMPT + f"\n\nCONTEXT - Last Bot Message: '{last_ai_msg}'"
+    prompt_with_context = INTENT_SYSTEM_PROMPT + f"\n\n### CONVERSATION HISTORY (CTX):\n{history_str}"
 
     messages = [SystemMessage(content=prompt_with_context + "\nJSON Output:"), HumanMessage(content=last_msg)]
 
