@@ -2,6 +2,10 @@ import logging
 
 import httpx
 
+import re
+from app.integrations.crm.formatting import ConversationFormatter
+from app.bot.utils import extract_contact_info, parse_name
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +40,7 @@ class EspoClient:
         return None
 
     async def sync_contact(self, payload: dict):
-        from app.bot.utils import extract_contact_info, parse_name
+
 
         info = extract_contact_info(payload)
 
@@ -132,7 +136,7 @@ class EspoClient:
                 logger.warning(f"Entity not found for summary update: {email or phone}")
                 return
 
-            from app.bot.formatting import ConversationFormatter
+
 
             formatter = ConversationFormatter(summary)
             desc = formatter.to_markdown()
@@ -145,7 +149,7 @@ class EspoClient:
             budget = summary.get("detected_budget")
             if budget and parent_type == "Lead":
                 try:
-                    import re
+
 
                     clean_budget = 0.0
                     if isinstance(budget, (int, float)):

@@ -3,6 +3,10 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+import time
+from app.integrations.crm.formatting import ConversationFormatter
+from app.bot.utils import extract_contact_info, parse_name
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,7 +62,7 @@ class HubSpotClient:
         if phone_number:
             properties["phone"] = phone_number
 
-        from app.bot.utils import parse_name
+
 
         first, last = parse_name(name)
 
@@ -81,7 +85,7 @@ class HubSpotClient:
     async def sync_contact(self, payload: Dict[str, Any]):
         """Syncs a contact object (usually from Chatwoot payload) to HubSpot.
         """
-        from app.bot.utils import extract_contact_info
+
 
         info = extract_contact_info(payload)
 
@@ -95,7 +99,7 @@ class HubSpotClient:
             logger.warning("HubSpot: Could not find contact to attach summary")
             return
 
-        from app.bot.formatting import ConversationFormatter
+
 
         formatter = ConversationFormatter(summary_data)
         note_body = formatter.to_html()
@@ -104,7 +108,7 @@ class HubSpotClient:
 
         note_properties = {"hs_note_body": note_body}
 
-        import time
+
 
         ts_ms = int(time.time() * 1000)  # Default to now
 

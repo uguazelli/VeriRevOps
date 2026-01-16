@@ -5,6 +5,8 @@ from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import uuid
+from langfuse.langchain import CallbackHandler
 from app.agent.graph import agent_app
 from app.bot.actions import (
     check_subscription_quota,
@@ -18,7 +20,7 @@ from app.bot.actions import (
 from app.core.logging import log_db, log_error, log_skip, log_start, log_success
 from app.integrations.rag import RagClient
 from app.models.session import BotSession
-from app.schemas.events import ChatwootEvent, IntegrationEvent
+from app.dtos.webhook import ChatwootEvent, IntegrationEvent
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +255,7 @@ async def process_bot_event(client_slug: str, payload_dict: dict, db: AsyncSessi
     logger.info(f"DEBUG: Graph Input Messages: {[m.content for m in full_messages]}")
 
     try:
-        from langfuse.langchain import CallbackHandler
+
 
         # Prepare Langfuse Context (Session & User)
         lf_user_id = "unknown_user"
@@ -293,7 +295,7 @@ async def process_bot_event(client_slug: str, payload_dict: dict, db: AsyncSessi
         # Persist RAG Session ID if newly created
         if rag_session_id:
             try:
-                import uuid
+                # import uuid (removed)
 
                 rag_uuid = uuid.UUID(str(rag_session_id))
                 stmt = update(BotSession).where(BotSession.id == session.id).values(rag_session_id=rag_uuid)

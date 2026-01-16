@@ -3,7 +3,7 @@ from fastcrud import crud_router
 
 from app.core.db import async_session_maker
 from app.models import BotSession, Client, ServiceConfig, Subscription
-from app.schemas import (
+from app.dtos import (
     BotSessionCreate,
     BotSessionRead,
     BotSessionUpdate,

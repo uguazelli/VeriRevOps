@@ -8,10 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.summarizer import summarize_start_conversation
 from app.core.logging import log_db, log_error, log_external_call, log_skip, log_start, log_success
 from app.integrations.chatwoot import ChatwootClient
-from app.integrations.espocrm import EspoClient
-from app.integrations.hubspot import HubSpotClient
+from app.integrations.crm.espocrm import EspoClient
+from app.integrations.crm.hubspot import HubSpotClient
 from app.integrations.rag import RagClient
 from app.models import BotSession, Client, ServiceConfig, Subscription
+
+import datetime
+from app.integrations.transcription import transcribe_audio
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +161,7 @@ async def handle_audio_message(attachments, rag_config) -> str:
                     logger.info(f"Download complete. Size: {len(audio_bytes)} bytes")
 
                     # Transcribe locally
-                    from app.integrations.transcription import transcribe_audio
+
 
                     transcript_text = await transcribe_audio(audio_bytes, att.data_url)
 
@@ -237,7 +240,7 @@ async def handle_conversation_resolution(client, configs, conversation_data, sen
                 summary = await summarize_start_conversation(session_id=session.rag_session_id, rag_client=rag_client)
                 log_success(logger, "Summary generated successfully (Local LLM)")
 
-                import datetime
+                # import datetime (removed)
 
                 # 1. Try to get start time from RAG history (Real Session Start)
                 rag_start_str = summary.get("session_start_time")

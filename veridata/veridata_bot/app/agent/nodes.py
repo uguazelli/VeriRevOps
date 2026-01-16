@@ -25,6 +25,9 @@ from app.agent.prompts import (
     HANDOFF_SYSTEM_PROMPT,
     CALENDAR_RESPONSE_SYSTEM_PROMPT,
 )
+from app.models.client import Client
+from app.integrations.crm.espocrm import EspoClient
+from app.integrations.crm.hubspot import HubSpotClient
 from app.integrations.sheets import fetch_google_sheet_data
 
 logger = logging.getLogger(__name__)
@@ -104,7 +107,6 @@ async def lead_node(state: AgentState):
             if client_slug:
                 try:
                      async with async_session_maker() as session:
-                        from app.models.client import Client
                         # Fetch Configs
                         stmt = select(ServiceConfig).join(Client).where(Client.slug == client_slug)
                         result = await session.execute(stmt)
@@ -112,8 +114,6 @@ async def lead_node(state: AgentState):
                         configs = service_config.config if service_config else {}
 
                         # Initialize CRMs
-                        from app.integrations.espocrm import EspoClient
-                        from app.integrations.hubspot import HubSpotClient
 
                         crms = []
                         espo_conf = configs.get("espocrm")

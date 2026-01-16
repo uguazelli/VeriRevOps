@@ -1,8 +1,6 @@
 import logging
-
 from fastapi import BackgroundTasks, FastAPI, Request
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-
 from app.api.endpoints import router as api_router
 from app.bot.engine import process_bot_event, process_integration_event
 from app.core.db import async_session_maker

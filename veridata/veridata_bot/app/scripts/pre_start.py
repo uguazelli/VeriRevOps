@@ -1,10 +1,8 @@
 import asyncio
 import logging
-
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from tenacity import retry, stop_after_attempt, wait_fixed
-
 from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
