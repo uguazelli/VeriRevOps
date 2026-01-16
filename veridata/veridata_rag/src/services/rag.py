@@ -166,5 +166,12 @@ async def generate_answer(
     # 5. Persistence
     await save_interaction(session_id, query, answer)
 
+    # 6. Handoff Detection
+    requires_human_handoff = False
+    if "[HANDOFF]" in answer:
+        requires_human_handoff = True
+        # Optional: We could strip it, but user prompt implies keeping it "followed by".
+        # We will keep it strictly as explicitly requested.
+
     # Return (Answer, Requires Human Handover, Context)
-    return answer, False, context_str if requires_rag else ""
+    return answer, requires_human_handoff, context_str if requires_rag else ""
