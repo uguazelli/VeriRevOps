@@ -215,7 +215,7 @@ async def query_rag(
     if not session_id:
         session_id = await create_session(tenant_id)
 
-    answer, requires_human = await generate_answer(
+    answer, requires_human, _ = await generate_answer(
         tenant_id,
         query,
         use_hyde=use_hyde,

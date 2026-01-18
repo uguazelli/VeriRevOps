@@ -24,21 +24,13 @@ from app.database import engine, get_session
 from app.models import Client, SyncConfig
 
 
-class LogsView(BaseView):
-    name = "Live Logs"
-    icon = "fa-solid fa-terminal"
-
-    @expose("/logs", methods=["GET"])
-    async def logs_redirect(self, request):
-        return RedirectResponse(url="/ops/logs/view")
-
 
 # Configure logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
 from app.jobs.auto_resolve import run_auto_resolve_job
-from app.ops import router as ops_router
+
 
 
 async def sync_worker_loop():
@@ -142,7 +134,7 @@ async def lifespan(app: FastAPI):
     admin.add_view(SubscriptionAdmin)
     admin.add_view(BotSessionAdmin)
     admin.add_view(GlobalConfigAdmin)
-    admin.add_view(LogsView)
+
 
     # Start worker
     task = asyncio.create_task(sync_worker_loop())
@@ -172,7 +164,7 @@ async def favicon():
     return FileResponse("app/static/favicon.ico")
 
 
-app.include_router(ops_router, prefix="/ops", tags=["ops"])
+
 
 
 @app.get("/health")
