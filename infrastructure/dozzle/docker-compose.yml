@@ -1,4 +1,4 @@
-name: dozzle
+name: infrastructure
 services:
   dozzle:
     container_name: dozzle
