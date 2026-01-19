@@ -2,11 +2,28 @@ name: ${CONTAINER_NAME:-espocrm}
 
 services:
   # ---------------------------------------------------------------------------
-  # 1. Main Application (Web/API) - Alias: .rails
+  # 1. DB Creator (The Automator)
+  # ---------------------------------------------------------------------------
+  db-init:
+    image: postgres:15-alpine
+    container_name: init_${CONTAINER_NAME}
+    restart: "no" # Run just once and stops
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    # Checks if db exists, if not, creates it
+    command: >
+      sh -c "psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB}'\" | grep -q 1 || psql -h ${POSTGRES_HOST} -U ${POSTGRES_USER} -d postgres -c \"CREATE DATABASE ${POSTGRES_DB}\""
+    networks:
+      veridata.network:
+
+  # ---------------------------------------------------------------------------
+  # 2. Main Application (Web/API)
   # ---------------------------------------------------------------------------
   espocrm:
     image: espocrm/espocrm:9.2.7-apache
     container_name: veridata.${CONTAINER_NAME:-espocrm}
+    depends_on:
+      - db-init
     environment:
       - ESPOCRM_DATABASE_PLATFORM=Postgresql
       - ESPOCRM_DATABASE_HOST=${POSTGRES_HOST}
@@ -37,7 +54,7 @@ services:
           memory: 512M        # Prevents memory leaks crashing the host
 
   # ---------------------------------------------------------------------------
-  # 2. Daemon (Cron Jobs/Background Tasks) - Alias: .daemon
+  # 3. Daemon (Cron Jobs/Background Tasks) - Alias: .daemon
   # ---------------------------------------------------------------------------
   espocrm-daemon:
     image: espocrm/espocrm:9.2.7-apache
@@ -59,7 +76,7 @@ services:
     restart: always
 
   # ---------------------------------------------------------------------------
-  # 3. WebSocket (Real-time notifications)
+  # 4. WebSocket (Real-time notifications)
   # ---------------------------------------------------------------------------
   espocrm-websocket:
     image: espocrm/espocrm:9.2.7-apache
