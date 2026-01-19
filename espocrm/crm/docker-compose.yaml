@@ -20,13 +20,14 @@ services:
       - espocrm_custom:/var/www/html/custom
       - espocrm_client_custom:/var/www/html/client/custom
       - espocrm_logs:/var/www/html/data/logs
+
     networks:
       veridata.network:
         aliases:
           - veridata.${CONTAINER_NAME-espocrm}.rails
 
   espocrm-daemon:
-    image: espocrm/espocrm:latest
+    image: espocrm/espocrm:9.2.7-apache # CHANGED: Match main version
     container_name: ${CONTAINER_NAME-espocrm}-daemon
     command: bash -c "while true; do php /var/www/html/cron.php; sleep 60; done"
     restart: always
@@ -37,7 +38,7 @@ services:
           - veridata.${CONTAINER_NAME-espocrm}.daemon
 
   espocrm-websocket:
-    image: espocrm/espocrm:latest
+    image: espocrm/espocrm:9.2.7-apache # CHANGED: Match main version
     container_name: ${CONTAINER_NAME-espocrm}-websocket
     command: php /var/www/html/bin/websocket.php
     restart: always
