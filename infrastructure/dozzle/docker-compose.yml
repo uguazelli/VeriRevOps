@@ -1,7 +1,7 @@
 name: infrastructure
 services:
   dozzle:
-    container_name: veridatadozzle
+    container_name: veridata.dozzle
     image: amir20/dozzle:latest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
