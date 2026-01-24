@@ -99,42 +99,7 @@ async def execute_crm_action(crms, action_desc, action_func):
             log_error(logger, f"CRM Sync failed for {platform_name}: {e}")
 
 
-# ==================================================================================
-# ACTION: EXECUTE RAG QUERY (Unused - moved to Agent Node)
-# Kept for reference or direct calls bypassing the agent.
-# ==================================================================================
-async def query_rag_system(user_query, session, rag_config) -> dict:
-    rag_provider = rag_config.get("provider")
-    rag_use_hyde = rag_config.get("use_hyde")
-    rag_use_rerank = rag_config.get("use_rerank")
 
-    rag_client = RagClient(
-        base_url=rag_config["base_url"], api_key=rag_config.get("api_key", ""), tenant_id=rag_config["tenant_id"]
-    )
-
-    try:
-        query_params = {}
-        if rag_provider:
-            query_params["provider"] = rag_provider
-        if rag_use_hyde is not None:
-            query_params["use_hyde"] = rag_use_hyde
-        if rag_use_rerank is not None:
-            query_params["use_rerank"] = rag_use_rerank
-        handoff_rules = rag_config.get("handoff_rules")
-        if handoff_rules:
-            query_params["handoff_rules"] = handoff_rules
-
-        gs_url = rag_config.get("google_sheets_url")
-        if gs_url:
-            query_params["google_sheets_url"] = gs_url
-
-        log_external_call(logger, "Veridata RAG", f"Query: '{user_query}' | Params: {query_params}")
-        rag_response = await rag_client.query(message=user_query, session_id=session.rag_session_id, **query_params)
-        log_success(logger, "RAG response received successfully")
-        return rag_response
-    except Exception as e:
-        log_error(logger, f"RAG Error: {e}", exc_info=True)
-        return {"error": str(e)}
 
 
 # ==================================================================================

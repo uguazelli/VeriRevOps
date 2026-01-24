@@ -59,6 +59,7 @@ async def pricing_node(state: AgentState):
 
 async def router_node(state: AgentState):
     last_msg = state["messages"][-1].content
+    handoff_rules = state.get("handoff_rules", "")
 
     config = await get_llm_config()
     llm = ChatGoogleGenerativeAI(
@@ -79,6 +80,9 @@ async def router_node(state: AgentState):
 
     # Inject Context
     prompt_with_context = INTENT_SYSTEM_PROMPT + f"\n\n### CONVERSATION HISTORY (CTX):\n{history_str}"
+
+    if handoff_rules:
+        prompt_with_context += f"\n\n### HANDOFF RULES (STRICT):\n{handoff_rules}\n(If the user's input matches these rules, you MUST set 'requires_human': true)"
 
     messages = [SystemMessage(content=prompt_with_context + "\nJSON Output:"), HumanMessage(content=last_msg)]
 
@@ -276,6 +280,7 @@ async def rag_node(state: AgentState):
     complexity_score = state.get("complexity_score", 5)
     pricing_intent = state.get("pricing_intent", False)
     google_sheets_url = state.get("google_sheets_url")
+    handoff_rules = state.get("handoff_rules")
 
     external_context = None
     if google_sheets_url and pricing_intent:
@@ -295,6 +300,7 @@ async def rag_node(state: AgentState):
             external_context=external_context,
             use_hyde=config["use_hyde"],
             use_rerank=config["use_rerank"],
+            handoff_rules=handoff_rules,
         )
 
         rag_response = response_data.get("answer", "No answer returned.")

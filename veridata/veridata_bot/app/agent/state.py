@@ -22,4 +22,5 @@ class AgentState(TypedDict):
     sender_email: str
     history_saved: bool
     rag_context: str
+    handoff_rules: str
 

@@ -250,6 +250,7 @@ async def process_bot_event(client_slug: str, payload_dict: dict, db: AsyncSessi
         "sender_name": event.sender.name if event.sender else "",
         "sender_email": event.sender.email if event.sender else "",
         "sender_phone": event.sender.phone_number if event.sender else "",
+        "handoff_rules": rag_config.get("handoff_rules"),
     }
 
     logger.info(f"DEBUG: Graph Input Messages: {[m.content for m in full_messages]}")
