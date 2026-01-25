@@ -104,7 +104,7 @@ async def execute_crm_action(crms, action_desc, action_func):
 
 # ==================================================================================
 # ACTION: HANDLE AUDIO
-# Downloads audio from Chatwoot URL -> Transcribes via OpenAI/Gemini
+# Downloads audio from Chatwoot URL -> Transcribes via Gemini
 # ==================================================================================
 async def handle_audio_message(attachments, rag_config) -> str:
     if not attachments:

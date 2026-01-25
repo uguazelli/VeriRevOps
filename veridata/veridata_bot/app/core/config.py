@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     rag_service_url: str = "http://veridata.rag:8000"
     rag_api_key: str = ""
     google_api_key: str = ""
-    openai_api_key: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
