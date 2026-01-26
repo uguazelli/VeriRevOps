@@ -45,3 +45,25 @@ class ChatwootClient:
             resp = await client.post(url, json=payload, headers=self.headers)
             resp.raise_for_status()
             return resp.json()
+
+    # ==================================================================================
+    # METHOD: UPDATE CONTACT (Auto-Sync)
+    # Updates Lead's email/phone in Chatwoot if discovered by AI.
+    # ==================================================================================
+    async def update_contact(self, contact_id: int, email: str = None, phone_number: str = None):
+        async with httpx.AsyncClient() as client:
+            url = f"{self.base_url}/api/v1/accounts/{self.account_id}/contacts/{contact_id}"
+            payload = {}
+            if email: payload["email"] = email
+            if phone_number: payload["phone_number"] = phone_number
+
+            if not payload: return
+
+            logger.info(f"Updating Chatwoot Contact {contact_id}: {payload}")
+            resp = await client.put(url, json=payload, headers=self.headers)
+            # Chatwoot sometimes returns 422 if email already taken by another contact.
+            # We log warning but don't crash.
+            if resp.status_code != 200:
+                logger.warning(f"Chatwoot Update Failed: {resp.text}")
+            else:
+                return resp.json()

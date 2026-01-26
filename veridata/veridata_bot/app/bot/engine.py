@@ -1,13 +1,7 @@
 import logging
-
 from fastapi import HTTPException
-from langchain_core.messages import AIMessage, HumanMessage
-from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-import uuid
-from langfuse.langchain import CallbackHandler
-from app.agent.graph import agent_app
+from app.dtos.webhook import ChatwootEvent, IntegrationEvent
 from app.bot.actions import (
     check_subscription_quota,
     execute_crm_action,
@@ -17,10 +11,7 @@ from app.bot.actions import (
     handle_chatwoot_response,
     handle_conversation_resolution,
 )
-from app.core.logging import log_db, log_error, log_skip, log_start, log_success
-from app.integrations.rag import RagClient
-from app.models.session import BotSession
-from app.dtos.webhook import ChatwootEvent, IntegrationEvent
+from app.core.logging import log_error, log_skip, log_start, log_success
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +107,6 @@ async def process_bot_event(client_slug: str, payload_dict: dict, db: AsyncSessi
 
     # ==================================================================================
     # STEP 1: VALIDATE PAYLOAD
-    # Convert the raw JSON payload into a strict Pydantic model (ChatwootEvent).
-    # If this fails, the payload is malformed, and we stop immediately.
     # ==================================================================================
     try:
         event = ChatwootEvent(**payload_dict)
@@ -127,47 +116,33 @@ async def process_bot_event(client_slug: str, payload_dict: dict, db: AsyncSessi
 
     # ==================================================================================
     # STEP 2: LOAD CLIENT & CONFIGURATION
-    # Fetch the Client and its ServiceConfigs (RAG settings, Chatwoot credentials, etc.)
-    # from the database based on the 'client_slug'.
     # ==================================================================================
     client, configs = await get_client_and_config(client_slug, db)
 
     # ==================================================================================
     # STEP 3: CHECK SUBSCRIPTION QUOTA
-    # Ensure the client has not exceeded their monthly message limit.
-    # If quota is exceeded, we return early and the bot stays silent.
     # ==================================================================================
     subscription = await check_subscription_quota(client.id, client_slug, db)
     if not subscription:
         return {"status": "quota_exceeded"}
 
-    # Extract specific configs for easy access
+    # Validate essential configs
     rag_config = configs.get("rag")
     chatwoot_config = configs.get("chatwoot")
-
-    # Validate that essential configurations exist
     if not rag_config or not chatwoot_config:
-        log_error(logger, f"Missing configs for {client_slug}. Found: {list(configs.keys())}")
+        log_error(logger, f"Missing configs for {client_slug}")
         raise HTTPException(status_code=500, detail="Configuration missing")
 
     # ==================================================================================
     # STEP 4: FILTER EVENTS
-    # We only care about:
-    # 1. Incoming messages (from users, not bot)
-    # 2. Private messages or public tweets depending on valid command logic
-    # 3. Conversations that are NOT already 'snoozed' or 'open' (handled by humans)
     # ==================================================================================
     if not event.is_valid_bot_command:
         if event.event != "message_created":
-            log_skip(logger, f"Ignored event type: {event.event}")
             return {"status": "ignored_event"}
         if not event.is_incoming:
-            log_skip(logger, "Ignored outgoing message")
             return {"status": "ignored_outgoing"}
         if event.conversation and event.conversation.status in ("snoozed", "open"):
-            log_skip(logger, f"Ignored conversation with status: {event.conversation.status}")
             return {"status": f"ignored_{event.conversation.status}"}
-
         return {"status": "ignored_generic"}
 
     # Basic Message Data
@@ -175,189 +150,57 @@ async def process_bot_event(client_slug: str, payload_dict: dict, db: AsyncSessi
     user_query = event.content
     logger.info(f"Message from {event.message_type} in conversation {conversation_id}")
 
-    # ==================================================================================
-    # STEP 5: HANDLE AUDIO ATTACHMENTS (Voice Notes)
-    # If the message has no text but has audio, we download and transcribe it locally.
-    # ==================================================================================
-    if not user_query and event.attachments:
-        transcript = await handle_audio_message(event.attachments, rag_config)
-        if transcript:
-            user_query = transcript
+    try:
+        # ==================================================================================
+        # STEP 5: HANDLE AUDIO ATTACHMENTS
+        # ==================================================================================
+        if not user_query and event.attachments:
+            transcript = await handle_audio_message(event.attachments, rag_config)
+            if transcript:
+                user_query = transcript
 
-    # If still empty (e.g. image only, or empty audio), skip.
-    if not user_query:
-        log_skip(logger, "Empty message content and no valid audio transcription")
-        return {"status": "empty_message"}
+        if not user_query:
+            log_skip(logger, "Empty message content")
+            return {"status": "empty_message"}
 
-    # ==================================================================================
-    # STEP 6: SESSION MANAGEMENT
-    # Find the existing BotSession map (External Chatwoot ID <-> Internal BotSession).
-    # If none exists, create a new one.
-    # ==================================================================================
-    session_query = select(BotSession).where(
-        BotSession.client_id == client.id, BotSession.external_session_id == conversation_id
-    )
+        # ==================================================================================
+        # STEP 6: SESSION MANAGEMENT (Delegated to Service)
+        # ==================================================================================
+        from app.services.session_service import get_or_create_bot_session
+        session = await get_or_create_bot_session(db, client.id, conversation_id)
 
-    sess_result = await db.execute(session_query)
-    session = sess_result.scalars().first()
+        # ==================================================================================
+        # STEP 7 & 8: EXECUTE AGENT (Delegated to Service)
+        # ==================================================================================
+        from app.services.agent_service import run_agent_pipeline
 
-    if not session:
-        log_start(logger, f"Creating new BotSession for conversation {conversation_id}")
-        session = BotSession(client_id=client.id, external_session_id=conversation_id)
+        answer, requires_human = await run_agent_pipeline(
+            db=db,
+            session=session,
+            user_query=user_query,
+            configs=configs,
+            event_data=event
+        )
+
+        # ==================================================================================
+        # STEP 9: SEND RESPONSE
+        # ==================================================================================
+        await handle_chatwoot_response(conversation_id, answer, requires_human, chatwoot_config)
+
+        # ==================================================================================
+        # STEP 10: UPDATE USAGE QUOTA
+        # ==================================================================================
+        subscription.usage_count += 1
+        db.add(subscription)
+        # session is already refreshed/attached in service, but we ensure it persists if needed
         db.add(session)
         await db.commit()
-        await db.refresh(session)
-    else:
-        log_db(logger, f"Found existing BotSession: {session.id}, RAG ID: {session.rag_session_id}")
-
-    # ==================================================================================
-    # STEP 7: BUILD CONVERSATION HISTORY
-    # If this session is linked to a RAG session, fetch previous messages from the RAG Service.
-    # This gives the Agent "Long Term Memory".
-    # ==================================================================================
-    history_messages = []
-    if session and session.rag_session_id:
-        try:
-            rag_client = RagClient(
-                base_url=rag_config["base_url"],
-                api_key=rag_config.get("api_key", ""),
-                tenant_id=rag_config["tenant_id"],
-            )
-            history_data = await rag_client.get_history(session.rag_session_id)
-            for msg in history_data:
-                if msg["role"] == "user":
-                    history_messages.append(HumanMessage(content=msg["content"]))
-                elif msg["role"] == "ai":
-                    history_messages.append(AIMessage(content=msg["content"]))
-        except Exception as e:
-            logger.warning(f"Failed to fetch chat history: {e}")
-
-    # Combine History + Current Message
-    full_messages = history_messages + [HumanMessage(content=user_query)]
-
-    # ==================================================================================
-    # STEP 8: EXECUTE AGENT (LangGraph)
-    # 1. Router Node: Decides usage (RAG vs Human Handoff).
-    # 2. Execution Node: Runs RAG query or generates Handoff message.
-    # 3. Output: Returns final Answer and Metadata (requires_human).
-    # ==================================================================================
-    initial_state = {
-        "messages": full_messages,
-        "tenant_id": rag_config.get("tenant_id"),
-        "session_id": str(session.rag_session_id) if session.rag_session_id else None,
-        "google_sheets_url": rag_config.get("google_sheets_url"),
-        "client_slug": client_slug,
-        "sender_name": event.sender.name if event.sender else "",
-        "sender_email": event.sender.email if event.sender else "",
-        "sender_phone": event.sender.phone_number if event.sender else "",
-        "handoff_rules": rag_config.get("handoff_rules"),
-    }
-
-    logger.info(f"DEBUG: Graph Input Messages: {[m.content for m in full_messages]}")
-
-    try:
-
-
-        # Prepare Langfuse Context (Session & User)
-        lf_user_id = "unknown_user"
-        if event.sender:
-            # Priority: Email -> Phone -> ID -> Name
-            if event.sender.email:
-                lf_user_id = event.sender.email
-            elif event.sender.phone_number:
-                lf_user_id = event.sender.phone_number
-            elif event.sender.id:
-                lf_user_id = str(event.sender.id)
-            elif event.sender.name:
-                lf_user_id = event.sender.name
-
-        # Use Chatwoot Conversation ID as the Trace Session
-        lf_session_id = conversation_id or "unknown_session"
-
-        langfuse_handler = CallbackHandler()
-
-        # Pass context via metadata (Langfuse specific keys)
-        result = await agent_app.ainvoke(
-            initial_state,
-            config={
-                "callbacks": [langfuse_handler],
-                "metadata": {
-                    "langfuse_user_id": lf_user_id,
-                    "langfuse_session_id": lf_session_id,
-                },
-            },
-        )
-        answer = result["messages"][-1].content
-        logger.info(f"DEBUG: Agent Answer: {answer}")
-
-        requires_human = result.get("requires_human", False)
-        rag_session_id = result.get("session_id")
-
-        try:
-            rag_client_for_save = RagClient(
-                base_url=rag_config["base_url"],
-                api_key=rag_config.get("api_key", ""),
-                tenant_id=rag_config["tenant_id"],
-            )
-
-            # 1. Update Session ID if newly created by RAG Node
-            if rag_session_id:
-                rag_uuid = uuid.UUID(str(rag_session_id))
-                if session.rag_session_id != rag_uuid:
-                    stmt = update(BotSession).where(BotSession.id == session.id).values(rag_session_id=rag_uuid)
-                    await db.execute(stmt)
-                    await db.commit()
-                    session.rag_session_id = rag_uuid
-                    logger.info(f"💾 Persisted RAG Session ID via SQL: {rag_session_id}")
-
-            # 2. Check if we need to manually persist the interaction
-            # If the RAG node ran, it returns "history_saved=True" (and we trust it).
-            # If NOT, we must save manually.
-            history_saved = result.get("history_saved", False)
-
-            if not history_saved:
-                 # Check if we have an active RAG session to append to
-                target_rag_id = session.rag_session_id
-
-                # If no session exists yet, create one
-                if not target_rag_id:
-                     new_id_str = await rag_client_for_save.create_session()
-                     if new_id_str:
-                        target_rag_id = uuid.UUID(new_id_str)
-                        stmt = update(BotSession).where(BotSession.id == session.id).values(rag_session_id=target_rag_id)
-                        await db.execute(stmt)
-                        await db.commit()
-                        session.rag_session_id = target_rag_id
-                        logger.info(f"🆕 Created new RAG Session ID manually: {target_rag_id}")
-
-                if target_rag_id:
-                    # Append User Query and Agent Answer
-                    await rag_client_for_save.append_message(target_rag_id, "user", user_query)
-                    await rag_client_for_save.append_message(target_rag_id, "ai", answer)
-                    logger.info(f"💾 Manually appended interaction to RAG Session {target_rag_id}")
-
-        except Exception as e:
-            logger.warning(f"Failed to persist RAG Session/History: {e}")
-
     except Exception as e:
-        logger.error(f"LangGraph execution failed: {e}", exc_info=True)
-        return {"status": "agent_error"}
-
-    # ==================================================================================
-    # STEP 9: SEND RESPONSE TO CHATWOOT
-    # Send the agent's answer back to the user via Chatwoot API.
-    # If 'requires_human' is True, also toggle conversation status to Open.
-    # ==================================================================================
-    await handle_chatwoot_response(conversation_id, answer, requires_human, chatwoot_config)
-
-    # ==================================================================================
-    # STEP 10: UPDATE USAGE QUOTA
-    # Increment the usage count for this client's subscription.
-    # ==================================================================================
-    subscription.usage_count += 1
-    db.add(subscription)
-    db.add(session)
-    await db.commit()
+        logger.error(f"Global Bot Error: {e}", exc_info=True)
+        # Fallback Message
+        fallback_msg = "I apologize, but I am experiencing a temporary system error. I am connecting you to a human agent now."
+        await handle_chatwoot_response(conversation_id, fallback_msg, True, chatwoot_config)
+        return {"status": "error_handled"}
 
     log_success(logger, "Bot Event Processed Successfully")
     return {"status": "processed"}

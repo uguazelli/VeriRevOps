@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Any
 from llama_index.llms.gemini import Gemini
-from llama_index.llms.openai import OpenAI
+
 from src.config.config import get_llm_settings
 
 logger = logging.getLogger(__name__)
@@ -34,16 +34,7 @@ def get_llm(step: str = "generation", provider: str = None, model_name: str = No
 
     llm = None
 
-    if provider == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            logger.error("OPENAI_API_KEY not found. Fallback to Gemini.")
-            return get_llm(step=step, provider="gemini", model_name=model_name)
-
-        final_model_name = final_model_name or os.getenv("OPENAI_MODEL", "gpt-4o")
-        llm = OpenAI(model=final_model_name, api_key=api_key)
-
-    elif provider == "gemini":
+    if provider == "gemini" or True:
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not set.")
@@ -51,6 +42,7 @@ def get_llm(step: str = "generation", provider: str = None, model_name: str = No
         llm = Gemini(model=final_model_name, api_key=api_key)
 
     else:
+        # Should be unreachable due to 'or True' above, but good for safety
         logger.warning(f"Unknown provider '{provider}'. Defaulting to Gemini.")
         return get_llm(step=step, provider="gemini")
 
