@@ -243,9 +243,47 @@ async def handle_conversation_resolution(client, configs, conversation_data, sen
                 summary["conversation_end"] = end_str
 
                 crms = get_crm_integrations(configs)
-                if crms:
-                    pass
 
+                # ==================================================================================
+                # MAGIC: AUTO-UPDATE CONTACT INFO
+                # If the AI extracted new contact info (email/phone) that Chatwoot doesn't have,
+                # we update Chatwoot AND use it for CRM syncing.
+                # ==================================================================================
+                extracted_contact = summary.get("contact_info", {})
+                new_email = extracted_contact.get("email")
+                new_phone = extracted_contact.get("phone")
+
+                # Check if we learned something new
+                update_chatwoot = False
+                if new_email and not sender.email:
+                    sender.email = new_email
+                    update_chatwoot = True
+                    logger.info(f"✨ AI discovered Email: {new_email}")
+
+                if new_phone and not sender.phone_number:
+                    sender.phone_number = new_phone
+                    update_chatwoot = True
+                    logger.info(f"✨ AI discovered Phone: {new_phone}")
+
+                if update_chatwoot and sender.id:
+                    try:
+                        cw_conf = configs.get("chatwoot", {})
+                        cw_client = ChatwootClient(
+                            base_url=cw_conf["base_url"],
+                            api_token=cw_conf["api_key"],
+                            account_id=cw_conf.get("account_id", 1),
+                        )
+                        # We assume sender.id is the Chatwoot Contact ID
+                        await cw_client.update_contact(
+                            contact_id=sender.id,
+                            email=sender.email,
+                            phone_number=sender.phone_number
+                        )
+                        log_success(logger, f"Updated Chatwoot Contact {sender.id} with new info")
+                    except Exception as e:
+                        logger.warning(f"Failed to auto-update Chatwoot Contact: {e}")
+
+                if crms:
                     if sender and (sender.email or sender.phone_number):
                         await execute_crm_action(
                             crms,

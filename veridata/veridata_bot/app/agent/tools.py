@@ -1,19 +1,19 @@
-from typing import Optional
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from app.integrations.rag import RagClient
 from app.integrations.sheets import fetch_google_sheet_data
 import logging
 import uuid
-import json
 
 logger = logging.getLogger(__name__)
 
 @tool
 async def search_knowledge_base(query: str, config: RunnableConfig) -> str:
     """
-    Search the knowledge base (RAG) for information about the company, products, or services.
-    Use this for any user question that requires factual information.
+    Search the company's knowledge base for policies, services, contact info, and general questions.
+    Use this for anything NOT related to specific product pricing if you have the product name.
+    Args:
+        query: The search question or keywords.
     """
     # 1. Extract Config from Runtime
     # The 'configurable' dict is passed via ainvoke(..., config={"configurable": {...}})
@@ -83,13 +83,9 @@ async def lookup_pricing(query: str, config: RunnableConfig) -> str:
 
     # Enterprise Logic: Force specific search
     if is_enterprise:
-        # Heuristic: If query is too broad, refuse to dump.
+        # We rely on the search function/tool to filter results.
+        # This allows multi-language support without hardcoded lists.
         clean_query = query.lower().strip()
-        broad_terms = ["price", "prices", "cost", "list", "all", "product", "products", "preço", "lista", "tudo"]
-
-        # If query is short or generic, ask for specifics
-        if len(clean_query) < 4 or clean_query in broad_terms:
-            return "DATABASE TIP: There are too many products to list. Please search for a specific item (e.g., 'red bottle', 'haircut')."
 
         # Perform filtered search
         try:
@@ -121,5 +117,8 @@ def transfer_to_human() -> str:
     """
     Call this tool when the user explicitly asks to speak with a human or support agent,
     OR when you cannot resolve the user's issue after trying.
+    IMPORTANT: Before calling this, check if you have the user's Name and Contact Info (Email/Phone).
+    If missing, ASK them for it first (e.g. "To ensure we can reach you...").
+    Only call this tool AFTER they provide it or if they refuse.
     """
     return "TRANSFERRED_TO_HUMAN"
