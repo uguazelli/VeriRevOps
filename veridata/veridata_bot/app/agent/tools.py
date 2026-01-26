@@ -70,7 +70,9 @@ async def lookup_pricing(query: str, config: RunnableConfig) -> str:
     """
     Fetch the product price list.
     Args:
-        query: What the user is looking for (e.g., "shampoo", "haircut", "prices").
+        query: What the user is looking for.
+               - If looking for a specific item, pass the name (e.g. "shampoo", "haircut").
+               - If the user asks for the "menu", "price list", "services", "everything", or anything else that can indicate the user wants to see the entire prices's catalog, pass the exact string "ALL".
     """
     configuration = config.get("configurable", {})
     google_sheets_url = configuration.get("google_sheets_url")
@@ -81,8 +83,12 @@ async def lookup_pricing(query: str, config: RunnableConfig) -> str:
     if not google_sheets_url:
         return "Error: No pricing sheet configured."
 
-    # Enterprise Logic: Force specific search
-    if is_enterprise:
+    # Handle "ALL" intent from Agent
+    if query.strip().upper() == "ALL":
+        query = None # This triggers "show all" in sheets logic
+
+    # Enterprise Logic: Force specific search (unless query is None/ALL)
+    if is_enterprise and query:
         # We rely on the search function/tool to filter results.
         # This allows multi-language support without hardcoded lists.
         clean_query = query.lower().strip()
@@ -97,7 +103,7 @@ async def lookup_pricing(query: str, config: RunnableConfig) -> str:
             logger.error(f"Pricing Tool Error: {e}")
             return "Could not fetch pricing data."
 
-    # Standard Logic (Small Catalog): Dump everything or filter lightly
+    # Standard Logic (Small Catalog or "ALL" request): Dump everything
     try:
         # We pass the query just in case, but usually we dump all for small clients
         # unless they asked for something specific.
