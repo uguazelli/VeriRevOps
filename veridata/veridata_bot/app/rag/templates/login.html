@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeriRag Admin Login</title>
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+
+    <style>
+        :root {
+            /* VS Code / Veridata Bot Theme */
+            --bg-color: #f8fafc;
+            --text-color: #1e293b;
+            --primary-color: #2563eb;
+            --border-color: #e2e8f0;
+            --text-muted: #64748b;
+            --danger-color: #ef4444;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            border-top: 6px solid var(--text-color);
+        }
+
+        .form-control {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        input {
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            background-color: #f8fafc;
+            color: var(--text-color);
+            font-size: 0.95rem;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            background-color: var(--text-color);
+            color: white;
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <div style="text-align: center; margin-bottom: 2rem;">
+            <img src="/static/logo.png" alt="VeriData" style="height: 64px; width: auto; opacity: 0.9;">
+        </div>
+
+        <div
+            style="background-color: #f1f5f9; padding: 0.5rem; border-radius: 0.5rem; text-align: center; margin-bottom: 2rem;">
+            <h1 style="margin: 0; font-size: 1.25rem; color: var(--text-color);">System Administration</h1>
+            <p
+                style="margin: 0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); font-weight: 600; margin-top: 0.25rem;">
+                Authorized Access Only</p>
+        </div>
+
+        <form action="/login" method="post" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            <div class="form-control">
+                <label>Admin Username</label>
+                <input type="text" name="username" required autofocus>
+            </div>
+            <div class="form-control">
+                <label>Password</label>
+                <input type="password" name="password" required>
+            </div>
+            <button type="submit" class="btn">
+                🔒 Admin Login
+            </button>
+            {% if error %}
+            <p
+                style="color: var(--danger-color); text-align: center; background: #fee2e2; padding: 0.5rem; border-radius: 0.5rem;">
+                {{ error }}</p>
+            {% endif %}
+        </form>
+
+        <div
+            style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); text-align: center; font-size: 0.85rem; color: var(--text-muted);">
+            &copy; 2025 VeriData. All rights reserved.
+        </div>
+    </div>
+</body>
+
+</html>

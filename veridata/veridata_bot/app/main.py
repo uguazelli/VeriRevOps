@@ -30,7 +30,14 @@ async def run_integration_bg(client_slug: str, payload: dict):
         await process_integration_event(client_slug, payload, db)
 
 
+from fastapi.staticfiles import StaticFiles
+from app.rag.controllers.api import router as rag_api_router
+from app.rag.controllers.web import router as rag_web_router
+
 app.include_router(api_router, prefix="/api/v1")
+app.mount("/rag-ui/static", StaticFiles(directory="app/rag/static"), name="rag-static")
+app.include_router(rag_api_router, prefix="/api/v1/rag", tags=["RAG"])
+app.include_router(rag_web_router, prefix="/rag-ui", tags=["RAG-UI"])
 
 
 @app.post("/bot/chatwoot/{client_slug}")

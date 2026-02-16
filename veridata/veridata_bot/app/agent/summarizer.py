@@ -5,21 +5,24 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.core.config import settings
 from app.agent.prompts import SUMMARY_PROMPT_TEMPLATE
-from app.integrations.rag import RagClient
+
 
 logger = logging.getLogger(__name__)
 
 async def summarize_start_conversation(
     session_id: uuid.UUID,
-    rag_client: RagClient,
+    start_time: str = None,
     language_instruction: str = None
 ) -> dict:
     """
-    Fetches chat history from RAG and generates a structured summary using Gemini.
+    Fetches chat history from internal DB and generates a structured summary using Gemini.
     """
     try:
         # 1. Fetch History
-        history_data = await rag_client.get_history(session_id)
+        # We use the internal service function
+        from app.rag.services.rag_service import get_chat_history
+        history_data = await get_chat_history(session_id, limit=50) # Fetch more context for summary
+
         if not history_data:
             logger.warning("No history found for summarization.")
             return {}
@@ -31,11 +34,8 @@ async def summarize_start_conversation(
         for msg in history_data:
             role = msg.get("role", "unknown")
             content = msg.get("content", "")
-            timestamp = msg.get("timestamp") # Assuming RAG returns this?
-
-            # Capture start time if available in metadata
-            if not first_msg_time and timestamp:
-                first_msg_time = timestamp
+            # Internal history doesn't strictly return timestamp in the dict currently (just role/content)
+            # unless we modify get_chat_history. For now, we skip timestamp extraction from messages.
 
             history_str += f"{role.upper()}: {content}\n"
 

@@ -136,13 +136,19 @@ async def process_bot_event(client_slug: str, payload_dict: dict, db: AsyncSessi
     # ==================================================================================
     # STEP 4: FILTER EVENTS
     # ==================================================================================
+    logger.info(f"Event Filter Check: event='{event.event}', incoming={event.is_incoming}, status='{event.conversation.status if event.conversation else 'None'}'")
+
     if not event.is_valid_bot_command:
         if event.event != "message_created":
+            logger.info("Ignored: Not message_created or valid command")
             return {"status": "ignored_event"}
         if not event.is_incoming:
+            logger.info("Ignored: Outgoing message (not incoming)")
             return {"status": "ignored_outgoing"}
         if event.conversation and event.conversation.status in ("snoozed", "open"):
+            logger.info(f"Ignored: Conversation status is {event.conversation.status}")
             return {"status": f"ignored_{event.conversation.status}"}
+        logger.info("Ignored: Generic filter")
         return {"status": "ignored_generic"}
 
     # Basic Message Data

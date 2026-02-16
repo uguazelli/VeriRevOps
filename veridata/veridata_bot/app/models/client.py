@@ -15,6 +15,8 @@ class Client(Base):
     subscriptions = relationship("Subscription", back_populates="client", cascade="all, delete-orphan")
     configs = relationship("ServiceConfig", back_populates="client", cascade="all, delete-orphan")
     sessions = relationship("BotSession", back_populates="client", cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="client", cascade="all, delete-orphan")
+    chat_sessions = relationship("ChatSession", back_populates="client", cascade="all, delete-orphan")
 
     def __str__(self):
         return f"Client {self.name}"

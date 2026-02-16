@@ -10,7 +10,7 @@ from langfuse.langchain import CallbackHandler
 from app.agent.graph import get_agent_app
 from app.agent.prompts import AGENT_SYSTEM_PROMPT
 from app.core.llm_config import get_llm_config
-from app.integrations.rag import RagClient
+from app.rag.models.sql import ChatSession, ChatMessage
 from app.models.session import BotSession
 
 logger = logging.getLogger(__name__)
@@ -39,17 +39,15 @@ async def run_agent_pipeline(
     history_messages = []
     if session.rag_session_id:
         try:
-            rag_client = RagClient(
-                base_url=rag_config["base_url"],
-                api_key=rag_config.get("api_key", ""),
-                tenant_id=rag_config["tenant_id"],
-            )
-            history_data = await rag_client.get_history(session.rag_session_id)
+            from app.rag.services.rag_service import get_chat_history
+            history_data = await get_chat_history(session.rag_session_id)
             for msg in history_data:
                 if msg["role"] == "user":
                     history_messages.append(HumanMessage(content=msg["content"]))
-                elif msg["role"] == "ai":
+                elif msg["role"] == "assistant": # RAG internal role is 'assistant'
                     history_messages.append(AIMessage(content=msg["content"]))
+                elif msg["role"] == "ai": # Fallback for old data
+                     history_messages.append(AIMessage(content=msg["content"]))
         except Exception as e:
             logger.warning(f"Failed to fetch chat history: {e}")
 
@@ -145,30 +143,41 @@ async def run_agent_pipeline(
 
 async def _persist_history(db: AsyncSession, session: BotSession, rag_config: dict, query: str, answer: str):
     """
-    Helper to sync the interaction back to the RAG service history.
+    Helper to sync the interaction back to the RAG service history (Internal DB).
     Handles session creation if RAG session does not exist.
     """
     try:
-        rag_client = RagClient(
-            base_url=rag_config["base_url"],
-            api_key=rag_config.get("api_key", ""),
-            tenant_id=rag_config["tenant_id"],
-        )
-
         # Ensure RAG ID exists
         if not session.rag_session_id:
-             new_id_str = await rag_client.create_session()
-             if new_id_str:
-                new_uuid = uuid.UUID(new_id_str)
-                stmt = update(BotSession).where(BotSession.id == session.id).values(rag_session_id=new_uuid)
-                await db.execute(stmt)
-                await db.commit()
-                session.rag_session_id = new_uuid
-                logger.info(f"🆕 Created/Linked RAG Session: {new_uuid}")
+             new_uuid = uuid.uuid4()
+             # Update BotSession link
+             stmt = update(BotSession).where(BotSession.id == session.id).values(rag_session_id=new_uuid)
+             await db.execute(stmt)
+             await db.commit()
+             session.rag_session_id = new_uuid
+             logger.info(f"🆕 Created/Linked RAG Session: {new_uuid}")
+
+             # Create RAG ChatSession entry
+             client_id = 1
+             try:
+                 client_id = int(rag_config.get("client_id") or rag_config.get("tenant_id", 1))
+             except:
+                 pass
+
+             new_rag_session = ChatSession(id=new_uuid, client_id=client_id)
+             db.add(new_rag_session)
+             await db.commit()
 
         if session.rag_session_id:
-            await rag_client.append_message(session.rag_session_id, "user", query)
-            await rag_client.append_message(session.rag_session_id, "ai", answer)
+            # We must ensure the session exists in RAG tables (if it was created before migration)
+            # But let's assume it exists or was just created above.
+            # Insert messages directly
+            user_msg = ChatMessage(session_id=session.rag_session_id, role="user", content=query)
+            ai_msg = ChatMessage(session_id=session.rag_session_id, role="assistant", content=answer)
+
+            db.add(user_msg)
+            db.add(ai_msg)
+            await db.commit()
 
     except Exception as e:
         logger.warning(f"Failed to persist history: {e}")

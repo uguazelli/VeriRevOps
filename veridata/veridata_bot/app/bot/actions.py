@@ -10,7 +10,7 @@ from app.core.logging import log_db, log_error, log_external_call, log_skip, log
 from app.integrations.chatwoot import ChatwootClient
 from app.integrations.crm.espocrm import EspoClient
 from app.integrations.crm.hubspot import HubSpotClient
-from app.integrations.rag import RagClient
+from app.rag.models.sql import ChatSession
 from app.models import BotSession, Client, ServiceConfig, Subscription
 
 import datetime
@@ -193,119 +193,115 @@ async def handle_conversation_resolution(client, configs, conversation_data, sen
 
     if session and session.rag_session_id:
         rag_config = configs.get("rag")
-        if rag_config:
-            try:
-                rag_client = RagClient(
-                    base_url=rag_config["base_url"],
-                    api_key=rag_config.get("api_key", ""),
-                    tenant_id=rag_config["tenant_id"],
-                )
+        # Even if rag_config is missing, we can summarize using internal logic if we have rag_session_id
 
-                # New Local Summarization Flow
-                target_lang = configs.get("client_config", {}).get("summary_language")
-                summary = await summarize_start_conversation(
-                    session_id=session.rag_session_id,
-                    rag_client=rag_client,
-                    language_instruction=target_lang
-                )
-                log_success(logger, "Summary generated successfully (Local LLM)")
+        try:
+            # New Local Summarization Flow
+            target_lang = configs.get("client_config", {}).get("summary_language")
+            summary = await summarize_start_conversation(
+                session_id=session.rag_session_id,
+                language_instruction=target_lang
+            )
+            log_success(logger, "Summary generated successfully (Local LLM)")
 
-                # import datetime (removed)
+            # import datetime (already imported)
 
-                # 1. Try to get start time from RAG history (Real Session Start)
-                rag_start_str = summary.get("session_start_time")
-                start_str = "Unknown"
+            # 1. Try to get start time from RAG history (Real Session Start)
+            rag_start_str = summary.get("session_start_time")
+            start_str = "Unknown"
 
-                if rag_start_str:
-                    # Parse ISO format from RAG (e.g., 2026-01-11T12:00:00+00:00)
-                    try:
-                        # Handle ISO format
-                        start_dt = datetime.datetime.fromisoformat(rag_start_str)
-                        start_str = start_dt.strftime("%d/%m/%Y %H:%M")
-                    except ValueError as e:
-                        logger.warning(f"Failed to parse RAG timestamp: {rag_start_str} | Error: {e}")
-
-                # 2. Fallback to Chatwoot Conversation Create Date
-                if start_str == "Unknown":
-                    created_at_ts = conversation_data.get("created_at")
-                    if created_at_ts:
-                        try:
-                            start_dt = datetime.datetime.fromtimestamp(int(created_at_ts))
-                            start_str = start_dt.strftime("%d/%m/%Y %H:%M")
-                        except Exception:
-                            pass
-
-                now = datetime.datetime.now()
-
-                end_str = now.strftime("%d/%m/%Y %H:%M")
-
-                summary["conversation_start"] = start_str
-                summary["conversation_end"] = end_str
-
-                crms = get_crm_integrations(configs)
-
-                # ==================================================================================
-                # MAGIC: AUTO-UPDATE CONTACT INFO
-                # If the AI extracted new contact info (email/phone) that Chatwoot doesn't have,
-                # we update Chatwoot AND use it for CRM syncing.
-                # ==================================================================================
-                extracted_contact = summary.get("contact_info", {})
-                new_email = extracted_contact.get("email")
-                new_phone = extracted_contact.get("phone")
-
-                # Check if we learned something new
-                update_chatwoot = False
-                if new_email and not sender.email:
-                    sender.email = new_email
-                    update_chatwoot = True
-                    logger.info(f"✨ AI discovered Email: {new_email}")
-
-                if new_phone and not sender.phone_number:
-                    sender.phone_number = new_phone
-                    update_chatwoot = True
-                    logger.info(f"✨ AI discovered Phone: {new_phone}")
-
-                if update_chatwoot and sender.id:
-                    try:
-                        cw_conf = configs.get("chatwoot", {})
-                        cw_client = ChatwootClient(
-                            base_url=cw_conf["base_url"],
-                            api_token=cw_conf["api_key"],
-                            account_id=cw_conf.get("account_id", 1),
-                        )
-                        # We assume sender.id is the Chatwoot Contact ID
-                        await cw_client.update_contact(
-                            contact_id=sender.id,
-                            email=sender.email,
-                            phone_number=sender.phone_number
-                        )
-                        log_success(logger, f"Updated Chatwoot Contact {sender.id} with new info")
-                    except Exception as e:
-                        logger.warning(f"Failed to auto-update Chatwoot Contact: {e}")
-
-                if crms:
-                    if sender and (sender.email or sender.phone_number):
-                        await execute_crm_action(
-                            crms,
-                            "conversation summary",
-                            lambda crm: crm.update_lead_summary(sender.email, sender.phone_number, summary),
-                        )
-                    else:
-                        log_skip(logger, "Skipping CRM update: No email or phone to match lead")
-
+            if rag_start_str:
+                # Parse ISO format from RAG (e.g., 2026-01-11T12:00:00+00:00)
                 try:
-                    log_external_call(logger, "Veridata RAG", f"Deleting RAG session {session.rag_session_id}")
-                    await rag_client.delete_session(session.rag_session_id)
+                    # Handle ISO format
+                    start_dt = datetime.datetime.fromisoformat(rag_start_str)
+                    start_str = start_dt.strftime("%d/%m/%Y %H:%M")
+                except ValueError as e:
+                    logger.warning(f"Failed to parse RAG timestamp: {rag_start_str} | Error: {e}")
+
+            # 2. Fallback to Chatwoot Conversation Create Date
+            if start_str == "Unknown":
+                created_at_ts = conversation_data.get("created_at")
+                if created_at_ts:
+                    try:
+                        start_dt = datetime.datetime.fromtimestamp(int(created_at_ts))
+                        start_str = start_dt.strftime("%d/%m/%Y %H:%M")
+                    except Exception:
+                        pass
+
+            now = datetime.datetime.now()
+
+            end_str = now.strftime("%d/%m/%Y %H:%M")
+
+            summary["conversation_start"] = start_str
+            summary["conversation_end"] = end_str
+
+            crms = get_crm_integrations(configs)
+
+            # ==================================================================================
+            # MAGIC: AUTO-UPDATE CONTACT INFO
+            # If the AI extracted new contact info (email/phone) that Chatwoot doesn't have,
+            # we update Chatwoot AND use it for CRM syncing.
+            # ==================================================================================
+            extracted_contact = summary.get("contact_info", {})
+            new_email = extracted_contact.get("email")
+            new_phone = extracted_contact.get("phone")
+
+            # Check if we learned something new
+            update_chatwoot = False
+            if new_email and not sender.email:
+                sender.email = new_email
+                update_chatwoot = True
+                logger.info(f"✨ AI discovered Email: {new_email}")
+
+            if new_phone and not sender.phone_number:
+                sender.phone_number = new_phone
+                update_chatwoot = True
+                logger.info(f"✨ AI discovered Phone: {new_phone}")
+
+            if update_chatwoot and sender.id:
+                try:
+                    cw_conf = configs.get("chatwoot", {})
+                    cw_client = ChatwootClient(
+                        base_url=cw_conf["base_url"],
+                        api_token=cw_conf["api_key"],
+                        account_id=cw_conf.get("account_id", 1),
+                    )
+                    # We assume sender.id is the Chatwoot Contact ID
+                    await cw_client.update_contact(
+                        contact_id=sender.id,
+                        email=sender.email,
+                        phone_number=sender.phone_number
+                    )
+                    log_success(logger, f"Updated Chatwoot Contact {sender.id} with new info")
                 except Exception as e:
-                    log_error(logger, f"Failed to delete RAG session: {e}")
+                    logger.warning(f"Failed to auto-update Chatwoot Contact: {e}")
 
-                log_db(logger, f"Deleting BotSession {session.id} for resolved conversation")
-                await db.delete(session)
-                await db.commit()
+            if crms:
+                if sender and (sender.email or sender.phone_number):
+                    await execute_crm_action(
+                        crms,
+                        "conversation summary",
+                        lambda crm: crm.update_lead_summary(sender.email, sender.phone_number, summary),
+                    )
+                else:
+                    log_skip(logger, "Skipping CRM update: No email or phone to match lead")
 
+            # Clean up RAG Session from DB
+            try:
+                log_db(logger, f"Deleting ChatSession {session.rag_session_id}")
+                rag_session = await db.get(ChatSession, session.rag_session_id)
+                if rag_session:
+                    await db.delete(rag_session)
             except Exception as e:
-                log_error(logger, f"Summarization flow failed: {e}", exc_info=True)
-        else:
-            log_skip(logger, "RAG config missing, cannot summarize")
+                log_error(logger, f"Failed to delete RAG session: {e}")
+
+            log_db(logger, f"Deleting BotSession {session.id} for resolved conversation")
+            await db.delete(session)
+            await db.commit()
+
+        except Exception as e:
+            log_error(logger, f"Summarization flow failed: {e}", exc_info=True)
+
     else:
         log_skip(logger, "No active BotSession found for this conversation, skipping summary.")
