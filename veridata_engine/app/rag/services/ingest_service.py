@@ -3,7 +3,7 @@ import io
 import os
 from typing import List
 
-import google.generativeai as genai
+from google import genai
 from PIL import Image
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -14,22 +14,30 @@ from app.rag.storage.repository import insert_document_chunk
 
 logger = logging.getLogger(__name__)
 
-# Configure GenAI once
-if settings.google_api_key:
-    genai.configure(api_key=settings.google_api_key)
+def get_genai_client():
+    if not settings.google_api_key:
+        return None
+    return genai.Client(api_key=settings.google_api_key)
 
 
 def describe_image(image_bytes: bytes, filename: str) -> str:
     """
-    Generates a description for an image using Gemini Vision.
+    Generates a description for an image using Gemini Vision (google-genai SDK).
     """
+    client = get_genai_client()
+    if not client:
+        logger.error("Google AI Client could not be initialized (missing API key).")
+        return f"Image: {filename} (Config error)"
+
     try:
         logger.info(f"Generating caption for image: {filename}")
-        # We use a vision-capable model
-        model = genai.GenerativeModel("gemini-2.0-flash")
         image = Image.open(io.BytesIO(image_bytes))
 
-        response = model.generate_content([IMAGE_DESCRIPTION_PROMPT_TEMPLATE, image])
+        # New SDK uses client.models.generate_content
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[IMAGE_DESCRIPTION_PROMPT_TEMPLATE, image]
+        )
         description = response.text
         logger.info(f"Caption generated: {description[:100]}...")
         return description
