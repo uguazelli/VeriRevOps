@@ -40,5 +40,6 @@ class CustomGeminiEmbedding(BaseEmbedding):
             model=self._model_name,
             content=text,
             task_type="retrieval_document",
+            output_dimensionality=768,
         )
         return result["embedding"]

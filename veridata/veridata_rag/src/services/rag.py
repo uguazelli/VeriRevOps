@@ -9,7 +9,6 @@ from src.services.vlm import describe_image
 from src.utils.prompts import RAG_ANSWER_PROMPT_TEMPLATE, SMALL_TALK_PROMPT_TEMPLATE
 from src.services.rag_flow import (
     get_embed_model,
-    resolve_config,
     get_language_instruction,
     prepare_query_context,
     determine_intent,
@@ -34,6 +33,7 @@ logger = logging.getLogger(__name__)
 async def ingest_document(
     tenant_id: UUID, filename: str, content: str = None, file_bytes: bytes = None
 ):
+    print(f"DEBUG: Starting ingest_document task for {filename} (tenant: {tenant_id})", flush=True)
     logger.info(f"Ingesting document {filename} for tenant {tenant_id}")
 
     is_image = filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
@@ -72,25 +72,32 @@ async def ingest_document(
     nodes = splitter.get_nodes_from_documents([doc])
 
     logger.info(f"Split into {len(nodes)} chunks")
+    print(f"DEBUG: Split into {len(nodes)} chunks", flush=True)
 
     # 3. Embedding
     embed_model = get_embed_model()
     texts = [node.get_content() for node in nodes]
 
     try:
+        print(f"DEBUG: Starting embedding for {len(texts)} chunks...", flush=True)
         embeddings = embed_model.get_text_embedding_batch(texts)
+        print("DEBUG: Embedding complete.", flush=True)
     except Exception as e:
+        print(f"DEBUG: Embedding failed: {e}", flush=True)
         logger.error(f"Embedding failed: {e}")
         return
 
     # 4. Insert into DB (Delegated to Repository)
+    print("DEBUG: Starting DB insertion...", flush=True)
     for node, embedding in zip(nodes, embeddings):
         success = await insert_document_chunk(
             tenant_id, filename, node.get_content(), embedding
         )
         if not success:
+            print(f"DEBUG: Failed to insert chunk for {filename}", flush=True)
             logger.error(f"Failed to insert chunk for {filename}")
 
+    print(f"DEBUG: Successfully ingested {filename}", flush=True)
     logger.info(f"Successfully ingested {filename}")
 
 
@@ -107,8 +114,6 @@ async def ingest_document(
 async def generate_answer(
     tenant_id: UUID,
     query: str,
-    use_hyde: Optional[bool] = None,
-    use_rerank: Optional[bool] = None,
     provider: Optional[str] = None,
     session_id: Optional[UUID] = None,
     complexity_score: int = 5,
@@ -122,16 +127,9 @@ async def generate_answer(
     db_model_name = config.get("model_name")
 
     # Resolving flags: DB > Request > Default
-    db_use_hyde = config.get("use_hyde")
-    db_use_rerank = config.get("use_rerank")
+    # Resolving flags: DB > Request > Default
+    # use_hyde and use_rerank are now mandatory and handled in rag_flow.py
 
-    if use_hyde is None:
-        use_hyde = db_use_hyde
-    if use_rerank is None:
-        use_rerank = db_use_rerank
-
-    # 1. Config Resolving (Fallback to env/default)
-    use_hyde, use_rerank = resolve_config(use_hyde, use_rerank)
     lang_instruction = await get_language_instruction(tenant_id)
 
     # 2. Contextualization
@@ -153,8 +151,7 @@ async def generate_answer(
             tenant_id,
             search_query,
             external_context,
-            use_hyde,
-            use_rerank,
+
             provider,
             lang_instruction,
             model_name=db_model_name,

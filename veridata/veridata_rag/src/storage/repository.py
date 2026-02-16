@@ -75,6 +75,7 @@ async def insert_document_chunk(
             await session.commit()
             return True
         except Exception as e:
+            print(f"DEBUG: DB INSERT ERROR: {e}", flush=True)
             logger.error(f"Failed to insert document chunk for {filename}: {e}")
             return False
 

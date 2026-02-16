@@ -29,9 +29,9 @@ def get_embed_model():
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             logger.warning("GOOGLE_API_KEY not set.")
-        logger.info("Using Google Gemini Embeddings (models/text-embedding-004)")
+        logger.info("Using Google Gemini Embeddings (models/gemini-embedding-001)")
         _embed_model = CustomGeminiEmbedding(
-            model_name="models/text-embedding-004", api_key=api_key
+            model_name="models/gemini-embedding-001", api_key=api_key
         )
     return _embed_model
 
@@ -76,15 +76,14 @@ async def search_documents(
     tenant_id: UUID,
     query: str,
     limit: int = 5,
-    use_hyde: bool = False,
-    use_rerank: bool = False,
     provider: str = "gemini",
     model_name: str = None,
 ) -> List[Dict[str, Any]]:
     search_query = query
-    if use_hyde:
-        logger.info(f"🔍 Opt 1 (Accuracy): Using HyDE expansion with {provider}")
-        search_query = generate_hypothetical_answer(query, provider=provider, model_name=model_name)
+    search_query = query
+    # 1. HyDE (Mandatory)
+    logger.info(f"🔍 Opt 1 (Accuracy): Using HyDE expansion with {provider}")
+    search_query = generate_hypothetical_answer(query, provider=provider, model_name=model_name)
 
     # 2. Embed Query
     embed_model = get_embed_model()
@@ -95,8 +94,8 @@ async def search_documents(
         return []
 
     # 3. Retrieve Candidates (Delegated to Repository)
-    # If using rerank, we fetch more candidates (e.g., 4x the limit) to rerank down
-    candidate_limit = limit * 4 if use_rerank else limit
+    # Always fetch more candidates for reranking
+    candidate_limit = limit * 4
 
     logger.info(
         f"🔍 Opt 2 (Accuracy): Performing Hybrid Search (Vector + FTS) with RRF (Limit: {candidate_limit})"
@@ -106,8 +105,8 @@ async def search_documents(
         tenant_id, query_embedding, query, candidate_limit
     )
 
-    # 4. Reranking
-    if use_rerank and results:
+    # 4. Reranking (Mandatory)
+    if results:
         logger.info(f"Reranking results with {provider}")
         # We rerank against the ORIGINAL query, not the HyDE query
         results = rerank_documents(query, results, top_k=limit, provider=provider, model_name=model_name)
@@ -118,14 +117,7 @@ async def search_documents(
 # --- Flow Helpers ---
 
 
-def resolve_config(
-    use_hyde: Optional[bool], use_rerank: Optional[bool]
-) -> tuple[bool, bool]:
-    if use_hyde is None:
-        use_hyde = get_global_setting("use_hyde", False)
-    if use_rerank is None:
-        use_rerank = get_global_setting("use_rerank", False)
-    return use_hyde, use_rerank
+    return
 
 
 async def get_language_instruction(tenant_id: UUID) -> str:
@@ -190,8 +182,6 @@ async def retrieve_context(
     tenant_id: UUID,
     search_query: str,
     external_context: Optional[str],
-    use_hyde: bool,
-    use_rerank: bool,
     provider: Optional[str],
     lang_instruction: str,
     model_name: Optional[str] = None,
@@ -209,8 +199,6 @@ async def retrieve_context(
     results = await search_documents(
         tenant_id,
         search_query,
-        use_hyde=use_hyde,
-        use_rerank=use_rerank,
         provider=provider,
         model_name=model_name,
     )

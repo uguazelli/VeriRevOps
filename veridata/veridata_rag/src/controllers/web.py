@@ -166,6 +166,7 @@ async def ingest_file(
     file: Annotated[UploadFile, File()],
     username: str = Depends(require_auth),
 ):
+    print(f"DEBUG: Ingest request received. tenant_id: {tenant_id}, filename: {file.filename}", flush=True)
     logger.info(f"Ingest request received. tenant_id: {tenant_id}, filename: {file.filename}")
     try:
         tenant_uuid = UUID(tenant_id)
@@ -212,8 +213,6 @@ async def query_rag(
     request: Request,
     tenant_id: Annotated[UUID, Form()],
     query: Annotated[str, Form()],
-    use_hyde: Annotated[bool, Form()] = False,
-    use_rerank: Annotated[bool, Form()] = False,
     provider: Annotated[str, Form()] = "gemini",
     session_id: Annotated[Optional[str], Form()] = None,
     username: str = Depends(require_auth),
@@ -224,8 +223,6 @@ async def query_rag(
     answer, _ = await generate_answer(
         tenant_id,
         query,
-        use_hyde=use_hyde,
-        use_rerank=use_rerank,
         provider=provider,
         session_id=UUID(session_id),
     )

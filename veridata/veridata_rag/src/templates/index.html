@@ -187,37 +187,89 @@
         <!-- Upload Area -->
         <section class="bg-gray-50 rounded-lg p-6 border-2 border-dashed border-gray-300">
             <h3 class="text-lg font-medium text-gray-900 mb-2">Ingest Documents</h3>
-            <form hx-encoding="multipart/form-data" enctype="multipart/form-data" hx-post="/ingest" hx-target="#upload-status" class="space-y-4">
+            <form id="ingest-form" class="space-y-4" onsubmit="handleIngest(event)">
                 <input type="hidden" name="tenant_id" value="{{ selected_tenant.id }}">
                 <div class="flex items-center space-x-4">
                     <input type="file" name="file" accept=".txt,.md,.jpg,.jpeg,.png,.webp" required
                         class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    <button type="submit"
-                        class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium">Upload</button>
+                    <button type="submit" id="ingest-btn"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Upload</button>
                 </div>
                 <!-- Status area -->
-                <div id="upload-status" class="text-sm"></div>
+                <div id="upload-status" class="text-sm min-h-[20px]"></div>
             </form>
         </section>
+
+        <script>
+            async function handleIngest(event) {
+                event.preventDefault();
+                const form = event.target;
+                const statusDiv = document.getElementById('upload-status');
+                const btn = document.getElementById('ingest-btn');
+
+                // Reset status
+                statusDiv.innerHTML = '<div class="text-gray-500">Init...</div>';
+                btn.disabled = true;
+                const originalBtnText = btn.innerHTML;
+                btn.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Uploading...
+                    </div>
+                `;
+
+                try {
+                    const formData = new FormData(form);
+                    console.log('DEBUG: Sending ingest request...', Object.fromEntries(formData));
+                    const response = await fetch('/ingest', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    console.log('DEBUG: Response received', response.status, response.statusText);
+
+                    if (response.ok) {
+                        // The backend returns HTML fragment
+                        const html = await response.text();
+                        statusDiv.innerHTML = html;
+                        form.reset();
+
+                        // Reload the page after 2 seconds to show the new file
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        statusDiv.innerHTML = `<div class="text-red-500">Upload failed: ${response.status} ${response.statusText}</div>`;
+                    }
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    statusDiv.innerHTML = `<div class="text-red-500">Network error: ${error.message}</div>`;
+                } finally {
+                    // We don't re-enable immediately on success if we are reloading,
+                    // but on error we must.
+                    // Actually, let's just keep it disabled on success to prevent double submit
+                    // until reload happens.
+                    if (!statusDiv.innerHTML.includes('text-green')) {
+                        btn.disabled = false;
+                        btn.innerHTML = originalBtnText;
+                    }
+                }
+            }
+        </script>
 
         <!-- Playground -->
         <section>
             <h3 class="text-lg font-medium text-gray-900 mb-4">Playground / Chat</h3>
             <div class="bg-white border rounded-lg shadow-sm">
                 <div class="p-4 border-b bg-gray-50">
-                    <form hx-post="/query" hx-target="#chat-results" class="flex flex-col gap-2">
+                    <form hx-post="/query" hx-target="#chat-results"
+                        hx-on::before-request="document.getElementById('search-btn-text').classList.add('hidden'); document.getElementById('search-spinner').classList.remove('hidden'); document.getElementById('search-btn').disabled = true;"
+                        hx-on::after-request="document.getElementById('search-btn-text').classList.remove('hidden'); document.getElementById('search-spinner').classList.add('hidden'); document.getElementById('search-btn').disabled = false;"
+                        class="flex flex-col gap-2">
                         <div class="flex items-center gap-4 text-sm text-gray-700 mb-1">
-                            <label class="flex items-center gap-1 cursor-pointer">
-                                <input type="checkbox" name="use_hyde" value="true"
-                                    class="rounded text-blue-600 focus:ring-blue-500">
-                                <span>Use HyDE (Query Expansion)</span>
-                            </label>
-                            <label class="flex items-center gap-1 cursor-pointer">
-                                <input type="checkbox" name="use_rerank" value="true"
-                                    class="rounded text-blue-600 focus:ring-blue-500">
-                                <span>Use Reranking</span>
-                            </label>
-                            <span class="text-xs text-gray-400 ml-auto italic">Adds ~3-5s latency</span>
+                            <span class="text-xs text-gray-400 ml-auto italic">Enhanced with HyDE & Reranking</span>
                         </div>
                         <div class="flex gap-2 mb-2">
                             <select name="provider"
@@ -232,8 +284,18 @@
                             </div>
                             <input type="text" name="query" placeholder="Ask a question..."
                                 class="flex-1 px-4 py-2 border rounded focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                            <button type="submit"
-                                class="px-6 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700">Search</button>
+                            <button type="submit" id="search-btn"
+                                class="px-6 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:opacity-70 disabled:cursor-wait flex items-center justify-center min-w-[100px]">
+                                <span id="search-btn-text">Search</span>
+                                <svg id="search-spinner" class="animate-spin h-5 w-5 text-white hidden"
+                                    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                        stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                    </path>
+                                </svg>
+                            </button>
                         </div>
                     </form>
                 </div>

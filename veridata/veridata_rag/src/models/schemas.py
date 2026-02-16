@@ -6,8 +6,6 @@ from typing import Optional, Union
 class QueryRequest(BaseModel):
     tenant_id: UUID
     query: str
-    use_hyde: Optional[bool] = None
-    use_rerank: Optional[bool] = None
     provider: Optional[str] = None
     session_id: Optional[UUID] = None
     complexity_score: Optional[int] = 5
