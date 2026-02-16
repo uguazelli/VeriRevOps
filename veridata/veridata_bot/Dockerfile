@@ -5,7 +5,8 @@ ENV UV_LINK_MODE=copy
 ENV UV_PROJECT_ENVIRONMENT="/opt/venv"
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev
+# Remove --frozen to allow lockfile update during build if needed
+RUN uv sync --no-install-project --no-dev
 
 FROM python:3.13-slim-bookworm
 

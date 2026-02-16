@@ -17,6 +17,7 @@ class Client(Base):
     sessions = relationship("BotSession", back_populates="client", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="client", cascade="all, delete-orphan")
     chat_sessions = relationship("ChatSession", back_populates="client", cascade="all, delete-orphan")
+    sync_configs = relationship("SyncConfig", back_populates="client", cascade="all, delete-orphan")
 
     def __str__(self):
         return f"Client {self.name}"

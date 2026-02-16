@@ -1,6 +1,6 @@
 from typing import Any
-
-from sqlalchemy import ForeignKey
+from datetime import datetime
+from sqlalchemy import ForeignKey, DateTime, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,6 +25,4 @@ class GlobalConfig(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    # updated_at is in the screenshot, so good to map it even if unused
-    # updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
-    # Skipping updated_at for now to avoid datetime imports if not strictly needed for reading.
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
