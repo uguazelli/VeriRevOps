@@ -187,10 +187,10 @@
         <!-- Upload Area -->
         <section class="bg-gray-50 rounded-lg p-6 border-2 border-dashed border-gray-300">
             <h3 class="text-lg font-medium text-gray-900 mb-2">Ingest Documents</h3>
-            <form hx-encoding="multipart/form-data" hx-post="/ingest" hx-target="#upload-status" class="space-y-4">
+            <form hx-encoding="multipart/form-data" enctype="multipart/form-data" hx-post="/ingest" hx-target="#upload-status" class="space-y-4">
                 <input type="hidden" name="tenant_id" value="{{ selected_tenant.id }}">
                 <div class="flex items-center space-x-4">
-                    <input type="file" name="file" accept=".txt,.md,.jpg,.jpeg,.png,.webp"
+                    <input type="file" name="file" accept=".txt,.md,.jpg,.jpeg,.png,.webp" required
                         class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                     <button type="submit"
                         class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium">Upload</button>

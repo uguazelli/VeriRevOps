@@ -162,10 +162,16 @@ async def update_tenant_settings(
 async def ingest_file(
     request: Request,
     background_tasks: BackgroundTasks,
-    tenant_id: Annotated[UUID, Form()],
+    tenant_id: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
     username: str = Depends(require_auth),
 ):
+    logger.info(f"Ingest request received. tenant_id: {tenant_id}, filename: {file.filename}")
+    try:
+        tenant_uuid = UUID(tenant_id)
+    except ValueError:
+        logger.error(f"Invalid tenant_id format: {tenant_id}")
+        return HTMLResponse(f'<div class="text-red-500">Invalid Tenant ID format: {tenant_id}</div>')
     if not file.filename.lower().endswith(
         (".txt", ".md", ".jpg", ".jpeg", ".png", ".webp")
     ):
@@ -185,7 +191,7 @@ async def ingest_file(
 
         background_tasks.add_task(
             ingest_document,
-            tenant_id,
+            tenant_uuid,
             file.filename,
             content=text_content,
             file_bytes=file_bytes,
@@ -215,7 +221,7 @@ async def query_rag(
     if not session_id:
         session_id = await create_session(tenant_id)
 
-    answer, requires_human, _ = await generate_answer(
+    answer, _ = await generate_answer(
         tenant_id,
         query,
         use_hyde=use_hyde,
