@@ -59,9 +59,10 @@ admin = Admin(
     app,
     engine,
     authentication_backend=authentication_backend,
-    title="Veridata Admin",
+    title="VeriBot Admin",
     base_url="/admin-bot",
     logo_url="/admin-rag/static/logo.png", # Reusing RAG static map
+    templates_dir="app/templates",
 )
 
 admin.add_view(ClientAdmin)
