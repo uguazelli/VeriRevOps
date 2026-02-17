@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 # Add app to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from app.integrations.calendar.factory import get_calendar_provider
-from app.integrations.calendar.calcom import CalComProvider
+from bot.integrations.calendar.factory import get_calendar_provider
+from bot.integrations.calendar.calcom import CalComProvider
 
 def test_calcom_factory():
     print("Testing Calendar Factory...")

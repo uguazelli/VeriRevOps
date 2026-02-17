@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.agent.graph import agent_app
-from app.agent.state import AgentState
+from bot.agent.graph import agent_app
+from bot.agent.state import AgentState
 from langchain_core.messages import HumanMessage, AIMessage
 
 @pytest.mark.asyncio

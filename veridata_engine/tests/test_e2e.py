@@ -1,9 +1,9 @@
 import pytest
 import uuid
 from sqlalchemy import select
-from app.models import Client, Subscription, ServiceConfig
-from app.core.config import settings
-from app.bot.engine import handle_chatwoot_response
+from bot.models import Client, Subscription, ServiceConfig
+from bot.core.config import settings
+from bot.bot.engine import handle_chatwoot_response
 
 @pytest.mark.asyncio
 async def test_bot_webhook_flow(client, db_session, mock_chatwoot_response):
@@ -95,7 +95,7 @@ async def test_bot_webhook_flow(client, db_session, mock_chatwoot_response):
     # OR simple waiting. For correctness, let's call the Logic directly using the same payload
     # to catch exceptions immediately, effectively integration testing the SERVICE layer.
 
-    from app.bot.engine import process_bot_event
+    from bot.bot.engine import process_bot_event
 
     # Pass the session we are part of
     result = await process_bot_event(unique_slug, webhook_payload, db_session)

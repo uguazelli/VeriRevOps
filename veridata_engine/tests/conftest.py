@@ -7,11 +7,11 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import settings
-from app.core.db import get_session
-from app.main import app as fastapi_app
-import app.main  # Import for patching
-import app.core.db # Import for patching
+from bot.core.config import settings
+from bot.core.db import get_session
+from bot.main import bot as fastapi_app
+import bot.main  # Import for patching
+import bot.core.db # Import for patching
 
 # Override host for local testing
 settings.postgres_host = "127.0.0.1"

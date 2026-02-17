@@ -23,10 +23,8 @@ COPY --from=builder --chown=veridata:veridata /opt/venv /opt/venv
 # Copy application files with correct ownership
 COPY --chown=veridata:veridata . .
 
-# Ensure start script is executable
-RUN chmod +x /app/start.sh
-
 # Switch to non-root user
 USER veridata
 
-CMD ["/app/start.sh"]
+# Run pre-start script (DB check/init) then start the application
+CMD ["sh", "-c", "python -m bot.scripts.pre_start && exec uvicorn bot.main:app --host 0.0.0.0 --port 8000 --reload"]
