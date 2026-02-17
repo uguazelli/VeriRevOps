@@ -46,6 +46,7 @@ admin = Admin(
     templates_dir="admin/templates",
 )
 
+
 admin.add_view(ClientAdmin)
 admin.add_view(SyncConfigAdmin)
 admin.add_view(ClientConfigAdmin)
