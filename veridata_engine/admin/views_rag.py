@@ -28,8 +28,8 @@ from rag.services.rag_service import generate_answer
 
 logger = logging.getLogger(__name__)
 
-# Verify path is correct relative to where main.py is run
-templates = Jinja2Templates(directory="rag/templates")
+# Update template directory to point to the new location within admin
+templates = Jinja2Templates(directory="admin/templates/rag")
 router = APIRouter()
 security = HTTPBasic()
 

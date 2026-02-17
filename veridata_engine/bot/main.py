@@ -13,6 +13,7 @@ from admin import (
     GlobalConfigAdmin,
     SubscriptionAdmin,
     SyncConfigAdmin,
+    views_rag,
     authentication_backend,
 )
 from bot.api.endpoints import router as api_router
@@ -20,7 +21,7 @@ from bot.bot.engine import process_bot_event, process_integration_event
 from bot.core.db import async_session_maker, engine
 from bot.core.logging import setup_logging
 from rag.controllers.api import router as rag_api_router
-from rag.controllers.web import router as rag_web_router
+
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -51,7 +52,8 @@ async def run_integration_bg(client_slug: str, payload: dict):
 app.include_router(api_router, prefix="/api/v1")
 app.mount("/admin-rag/static", StaticFiles(directory="rag/static"), name="rag-static")
 app.include_router(rag_api_router, prefix="/api/v1/rag", tags=["RAG"])
-app.include_router(rag_web_router, prefix="/admin-rag", tags=["RAG-UI"])
+app.include_router(views_rag.router, prefix="/admin-rag", tags=["RAG-UI"])
+
 # ==================================================================================
 # ADMIN PANEL (SQLAdmin)
 # ==================================================================================

@@ -19,4 +19,6 @@ __all__ = [
     "GlobalConfigAdmin",
     "SubscriptionAdmin",
     "SyncConfigAdmin",
+    "views_rag",
 ]
+
