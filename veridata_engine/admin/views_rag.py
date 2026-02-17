@@ -14,11 +14,11 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import HTMLResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, func, select
 
+from admin.auth import authentication_backend
 from bot.core.config import settings
 from bot.core.db import get_session
 from bot.models.client import Client
@@ -31,25 +31,25 @@ logger = logging.getLogger(__name__)
 # Update template directory to point to the new location within admin
 templates = Jinja2Templates(directory="admin/templates/rag")
 router = APIRouter()
-security = HTTPBasic()
 
 
-def require_auth(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
-    """Simple Basic Auth using env vars from Settings.
-    """
-    correct_user = settings.admin_user
-    correct_pass = settings.admin_password
-
-    is_correct_username = secrets.compare_digest(credentials.username, correct_user)
-    is_correct_password = secrets.compare_digest(credentials.password, correct_pass)
-
-    if not (is_correct_username and is_correct_password):
+async def require_auth(request: Request):
+    """Check if user is authenticated via session."""
+    is_authenticated = await authentication_backend.authenticate(request)
+    if not is_authenticated:
+        # Redirect to Admin Login
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Basic"},
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={"Location": "/admin-bot/login"},
         )
-    return credentials.username
+    return True
+
+
+@router.get("/logout")
+async def logout(request: Request):
+    """Logout and clear session."""
+    await authentication_backend.logout(request)
+    return RedirectResponse(url="/admin-bot/login", status_code=status.HTTP_303_SEE_OTHER)
 
 
 async def get_clients():
@@ -89,7 +89,7 @@ async def get_client_documents(client_id: int):
 
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, username: str = Depends(require_auth)):
+async def dashboard(request: Request, authenticated: bool = Depends(require_auth)):
     clients = await get_clients()
     return templates.TemplateResponse(
         "index.html",
@@ -97,14 +97,14 @@ async def dashboard(request: Request, username: str = Depends(require_auth)):
             "request": request,
             "tenants": clients, # Template expects 'tenants' (renamed logic but kept var name for compatibility)
             "selected_tenant": None,
-            "username": username,
+            "username": settings.admin_user,
         },
     )
 
 
 @router.get("/clients/{client_id}", response_class=HTMLResponse)
 async def view_client(
-    request: Request, client_id: int, username: str = Depends(require_auth)
+    request: Request, client_id: int, authenticated: bool = Depends(require_auth)
 ):
     clients = await get_clients()
     documents = await get_client_documents(client_id)
@@ -125,7 +125,7 @@ async def view_client(
             "tenants": clients,
             "selected_tenant": client_data,
             "documents": documents,
-            "username": username,
+            "username": settings.admin_user,
         },
     )
 
@@ -137,7 +137,7 @@ async def query_rag_web(
     query: Annotated[str, Form()],
     provider: Annotated[str, Form()] = "gemini",
     session_id: Annotated[Optional[str], Form()] = None,
-    username: str = Depends(require_auth),
+    authenticated: bool = Depends(require_auth),
 ):
     if not session_id:
         session_id = uuid.uuid4()
@@ -169,7 +169,7 @@ async def ingest_file_web(
     background_tasks: BackgroundTasks,
     tenant_id: Annotated[int, Form()],
     file: Annotated[UploadFile, File()],
-    username: str = Depends(require_auth),
+    authenticated: bool = Depends(require_auth),
 ):
     if not file.filename.lower().endswith(
         (".txt", ".md", ".jpg", ".jpeg", ".png", ".webp")
@@ -204,7 +204,7 @@ async def delete_document_web(
     request: Request,
     client_id: int,
     filename: str,
-    username: str = Depends(require_auth),
+    authenticated: bool = Depends(require_auth),
 ):
     async for session in get_session():
         stmt = delete(Document).where(

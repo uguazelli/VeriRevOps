@@ -1,22 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
-<script>
-    async function performLogout() {
-        // 1. Send request with invalid credentials to "poison" the browser cache for this realm
-        try {
-            await fetch("/", {
-                headers: { "Authorization": "Basic " + btoa("logout:logout") }
-            });
-        } catch (e) {
-            // Ignore network errors, finding 401 is expected
-        }
-        // 2. Reload page to trigger the native login prompt (since cached creds are now invalid)
-        window.location.href = "/";
-    }
 
+
+
+<script>
     function toggleSidebar() {
+
         const sidebar = document.getElementById('sidebar');
+
         const backdrop = document.getElementById('sidebar-backdrop');
 
         if (sidebar.classList.contains('-translate-x-full')) {
@@ -33,7 +25,10 @@
     function copyToClipboard(text, btn) {
         navigator.clipboard.writeText(text).then(() => {
             const originalContent = btn.innerHTML;
-            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
+    <polyline points="20 6 9 17 4 12"></polyline>
+</svg>`;
             setTimeout(() => {
                 btn.innerHTML = originalContent;
             }, 2000);
@@ -123,7 +118,7 @@
 
 
     <div class="h-16 flex items-center px-4 border-t border-gray-800 shrink-0">
-        <a href="/logout"
+        <a href="/admin-rag/logout"
             class="flex items-center justify-between w-full text-gray-400 hover:text-white transition no-underline group"
             title="Logout">
             <span class="text-sm font-medium">Logout</span>

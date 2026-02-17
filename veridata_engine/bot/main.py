@@ -3,7 +3,10 @@ import logging
 from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from sqladmin import Admin
+from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+from bot.core.config import settings
 
 from admin import (
     BotSessionAdmin,
@@ -35,6 +38,7 @@ async def root():
 
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
 
 async def run_bot_bg(client_slug: str, payload: dict):
