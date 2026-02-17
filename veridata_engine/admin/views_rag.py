@@ -1,8 +1,16 @@
 import logging
-import secrets
 import uuid
 from typing import Annotated, Optional
-
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import delete, func, select
+from admin.auth import authentication_backend
+from bot.core.config import settings
+from bot.core.db import get_session
+from bot.models.client import Client
+from rag.models.sql import Document
+from rag.services.ingest_service import ingest_document
+from rag.services.rag_service import generate_answer
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -14,22 +22,12 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
-from sqlalchemy import delete, func, select
 
-from admin.auth import authentication_backend
-from bot.core.config import settings
-from bot.core.db import get_session
-from bot.models.client import Client
-from rag.models.sql import Document
-from rag.services.ingest_service import ingest_document
-from rag.services.rag_service import generate_answer
 
 logger = logging.getLogger(__name__)
 
-# Update template directory to point to the new location within admin
 templates = Jinja2Templates(directory="admin/templates/rag")
+
 router = APIRouter()
 
 
@@ -37,19 +35,11 @@ async def require_auth(request: Request):
     """Check if user is authenticated via session."""
     is_authenticated = await authentication_backend.authenticate(request)
     if not is_authenticated:
-        # Redirect to Admin Login
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             headers={"Location": "/admin-bot/login"},
         )
     return True
-
-
-@router.get("/logout")
-async def logout(request: Request):
-    """Logout and clear session."""
-    await authentication_backend.logout(request)
-    return RedirectResponse(url="/admin-bot/login", status_code=status.HTTP_303_SEE_OTHER)
 
 
 async def get_clients():
@@ -100,6 +90,15 @@ async def dashboard(request: Request, authenticated: bool = Depends(require_auth
             "username": settings.admin_user,
         },
     )
+
+
+
+@router.get("/logout")
+async def logout(request: Request):
+    """Logout and clear session."""
+    await authentication_backend.logout(request)
+    return RedirectResponse(url="/admin-bot/login", status_code=status.HTTP_303_SEE_OTHER)
+
 
 
 @router.get("/clients/{client_id}", response_class=HTMLResponse)

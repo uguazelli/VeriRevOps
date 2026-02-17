@@ -1,5 +1,5 @@
 from .auth import AdminAuth, authentication_backend
-from .views import (
+from .views_bot import (
     BotSessionAdmin,
     ClientAdmin,
     ClientConfigAdmin,

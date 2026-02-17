@@ -1,5 +1,4 @@
 from sqladmin import ModelView
-
 from bot.models import BotSession, Client, GlobalConfig, ServiceConfig, Subscription, SyncConfig
 from rag.models.sql import Document
 
