@@ -27,4 +27,4 @@ COPY --chown=veridata:veridata . .
 USER veridata
 
 # Run pre-start script (DB check/init) then start the application
-CMD ["sh", "-c", "python -m bot.scripts.pre_start && exec uvicorn bot.main:app --host 0.0.0.0 --port 8000 --reload"]
+CMD ["sh", "-c", "python -m bot.scripts.pre_start && exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload"]
