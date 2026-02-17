@@ -13,7 +13,6 @@ from bot.integrations.crm.espocrm import EspoClient
 from bot.integrations.crm.hubspot import HubSpotClient
 from bot.integrations.transcription import transcribe_audio
 from bot.models import BotSession, Client, ServiceConfig, Subscription
-from rag.models.sql import ChatSession
 
 logger = logging.getLogger(__name__)
 
@@ -286,12 +285,11 @@ async def handle_conversation_resolution(client, configs, conversation_data, sen
                 else:
                     log_skip(logger, "Skipping CRM update: No email or phone to match lead")
 
-            # Clean up RAG Session from DB
+            # Clean up RAG Session via Service
             try:
                 log_db(logger, f"Deleting ChatSession {session.rag_session_id}")
-                rag_session = await db.get(ChatSession, session.rag_session_id)
-                if rag_session:
-                    await db.delete(rag_session)
+                from rag.services.rag_service import delete_chat_session
+                await delete_chat_session(session.rag_session_id, db)
             except Exception as e:
                 log_error(logger, f"Failed to delete RAG session: {e}")
 

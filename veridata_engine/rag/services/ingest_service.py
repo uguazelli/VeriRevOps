@@ -2,14 +2,14 @@ import io
 import logging
 
 from google import genai
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from PIL import Image
 
 from bot.core.config import settings
+from bot.core.ai import get_embeddings
 from bot.services.global_config_service import get_llm_config
 from rag.storage.repository import insert_document_chunk
-from rag.utils.prompts import IMAGE_DESCRIPTION_PROMPT_TEMPLATE
+from utils.prompts import IMAGE_DESCRIPTION_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -88,17 +88,10 @@ async def ingest_document(
 
     # 2. Embeddings
     # Using LangChain's GoogleGenerativeAIEmbeddings
-    if not settings.google_api_key:
-        logger.error("GOOGLE_API_KEY not set in settings.")
-        return
-
-    embeddings_model = GoogleGenerativeAIEmbeddings(
-        model="models/gemini-embedding-001",
-        google_api_key=settings.google_api_key
-    )
-
     # 3. Process Chunks
     try:
+        embeddings_model = get_embeddings()
+
         # Batch embedding might be more efficient, but let's do simple loop or batch if supported
         # langchain embeddings.embed_documents takes a list
         vectors = embeddings_model.embed_documents(chunks)

@@ -5,8 +5,9 @@ import uuid
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from bot.agent.prompts import SUMMARY_PROMPT_TEMPLATE
+from utils.prompts import SUMMARY_PROMPT_TEMPLATE
 from bot.core.config import settings
+from bot.core.ai import get_llm
 from bot.services.global_config_service import get_llm_config
 
 logger = logging.getLogger(__name__)
@@ -53,11 +54,7 @@ async def summarize_start_conversation(
         config = await get_llm_config()
         model_name = config["steps"]["contextualization"]["model"]
 
-        model = ChatGoogleGenerativeAI(
-            model=model_name,
-            temperature=0,
-            google_api_key=settings.google_api_key,
-        )
+        model = get_llm(model_name=model_name, temperature=0)
 
         messages = [
             SystemMessage(content=prompt),

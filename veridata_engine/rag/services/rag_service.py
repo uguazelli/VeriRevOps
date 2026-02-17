@@ -4,15 +4,16 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from langchain_core.prompts import PromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_core.prompts import PromptTemplate
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.core.config import settings
 from bot.core.db import async_session_maker
 from bot.services.global_config_service import get_llm_config
 from rag.models.sql import ChatMessage, ChatSession
 from rag.storage.repository import search_documents_hybrid
-from rag.utils.prompts import (
+from utils.prompts import (
     CONTEXTUALIZE_PROMPT_TEMPLATE,
     HYDE_PROMPT_TEMPLATE,
     RAG_ANSWER_PROMPT_TEMPLATE,
@@ -23,23 +24,7 @@ from rag.utils.prompts import (
 logger = logging.getLogger(__name__)
 
 
-def get_llm(model_name: str, temperature: float = 0.0):
-    if not settings.google_api_key:
-        raise ValueError("GOOGLE_API_KEY is not set.")
-    return ChatGoogleGenerativeAI(
-        model=model_name,
-        google_api_key=settings.google_api_key,
-        temperature=temperature,
-    )
-
-
-def get_embeddings():
-    if not settings.google_api_key:
-        raise ValueError("GOOGLE_API_KEY is not set.")
-    return GoogleGenerativeAIEmbeddings(
-        model="models/gemini-embedding-001",
-        google_api_key=settings.google_api_key
-    )
+from bot.core.ai import get_llm, get_embeddings
 
 
 async def get_chat_history(session_id: UUID, limit: int = 5) -> List[Dict[str, str]]:
@@ -180,30 +165,43 @@ def determine_intent(complexity_score: int, pricing_intent: bool) -> bool:
     return True
 
 
-async def save_interaction(session_id: UUID, query: str, answer: str, client_id: int):
+async def _save_interaction_to_db(session: AsyncSession, session_id: UUID, query: str, answer: str, client_id: int):
+    try:
+        # We insert directly to ChatMessage logic
+        # Ensure session exists
+        existing_session = await session.get(ChatSession, session_id)
+        if not existing_session:
+            new_session = ChatSession(id=session_id, client_id=client_id)
+            session.add(new_session)
+            await session.flush() # Ensure ID is available
+
+        # Insert messages
+        user_msg = ChatMessage(session_id=session_id, role="user", content=query)
+        ai_msg = ChatMessage(session_id=session_id, role="assistant", content=answer)
+
+        session.add(user_msg)
+        session.add(ai_msg)
+        await session.commit()
+    except Exception as e:
+        logger.error(f"Failed to save history: {e}")
+
+
+async def save_interaction(
+    session_id: UUID,
+    query: str,
+    answer: str,
+    client_id: int,
+    db: Optional[AsyncSession] = None
+):
     # We need to make sure session_id is UUID object
     if isinstance(session_id, str):
         session_id = UUID(session_id)
 
-    async with async_session_maker() as session:
-        try:
-            # We insert directly to ChatMessage logic
-            # Ensure session exists
-            existing_session = await session.get(ChatSession, session_id)
-            if not existing_session:
-                new_session = ChatSession(id=session_id, client_id=client_id)
-                session.add(new_session)
-                await session.flush() # Ensure ID is available
-
-            # Insert messages
-            user_msg = ChatMessage(session_id=session_id, role="user", content=query)
-            ai_msg = ChatMessage(session_id=session_id, role="assistant", content=answer)
-
-            session.add(user_msg)
-            session.add(ai_msg)
-            await session.commit()
-        except Exception as e:
-            logger.error(f"Failed to save history: {e}")
+    if db:
+        await _save_interaction_to_db(db, session_id, query, answer, client_id)
+    else:
+        async with async_session_maker() as session:
+            await _save_interaction_to_db(session, session_id, query, answer, client_id)
 
 
 async def prepare_conversation_context(
@@ -314,3 +312,13 @@ async def generate_answer(
         await save_interaction(session_id, query, answer, client_id)
 
     return answer, session_id, context_str
+
+
+async def delete_chat_session(session_id: UUID, db: AsyncSession):
+    """Deletes a RAG chat session and its history."""
+    stmt = select(ChatSession).where(ChatSession.id == session_id)
+    result = await db.execute(stmt)
+    session = result.scalars().first()
+    if session:
+        await db.delete(session)
+

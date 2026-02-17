@@ -1,33 +1,24 @@
 import logging
 import uuid
 from typing import Any, Dict, Tuple
-
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langfuse.langchain import CallbackHandler
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from bot.agent.graph import get_agent_app
-from bot.agent.prompts import AGENT_SYSTEM_PROMPT
+from utils.prompts import AGENT_SYSTEM_PROMPT
 from bot.services.global_config_service import get_llm_config
 from bot.models.session import BotSession
-from rag.models.sql import ChatMessage, ChatSession
+from rag.services.rag_service import save_interaction
 
 logger = logging.getLogger(__name__)
 
-async def run_agent_pipeline(
-    db: AsyncSession,
-    session: BotSession,
-    user_query: str,
-    configs: Dict[str, Any],
-    event_data: Any # ChatwootEvent
-) -> Tuple[str, bool]:
+async def run_agent_pipeline(db: AsyncSession, session: BotSession, user_query: str, configs: Dict[str, Any], event_data: Any) -> Tuple[str, bool]:
     """Executes the full Agent pipeline:
     1. Fetches history (RAG).
     2. Builds Context (System Prompt + Custom Instructions).
     3. Runs LangGraph Agent.
     4. Persists interaction to RAG history.
-
     Returns:
         (answer: str, requires_human: bool)
     """
@@ -155,27 +146,21 @@ async def _persist_history(db: AsyncSession, session: BotSession, rag_config: di
              session.rag_session_id = new_uuid
              logger.info(f"🆕 Created/Linked RAG Session: {new_uuid}")
 
-             # Create RAG ChatSession entry
-             client_id = 1
-             try:
-                 client_id = int(rag_config.get("client_id") or rag_config.get("tenant_id", 1))
-             except:
-                 pass
+        # Extract client_id
+        client_id = 1
+        try:
+             client_id = int(rag_config.get("client_id") or rag_config.get("tenant_id", 1))
+        except:
+             pass
 
-             new_rag_session = ChatSession(id=new_uuid, client_id=client_id)
-             db.add(new_rag_session)
-             await db.commit()
-
-        if session.rag_session_id:
-            # We must ensure the session exists in RAG tables (if it was created before migration)
-            # But let's assume it exists or was just created above.
-            # Insert messages directly
-            user_msg = ChatMessage(session_id=session.rag_session_id, role="user", content=query)
-            ai_msg = ChatMessage(session_id=session.rag_session_id, role="assistant", content=answer)
-
-            db.add(user_msg)
-            db.add(ai_msg)
-            await db.commit()
+        # Defer to RAG service for storage
+        await save_interaction(
+            session_id=session.rag_session_id,
+            query=query,
+            answer=answer,
+            client_id=client_id,
+            db=db
+        )
 
     except Exception as e:
         logger.warning(f"Failed to persist history: {e}")
