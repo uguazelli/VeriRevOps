@@ -206,6 +206,70 @@ async def save_interaction(session_id: UUID, query: str, answer: str, client_id:
             logger.error(f"Failed to save history: {e}")
 
 
+async def prepare_conversation_context(
+    session_id: Optional[UUID],
+    query: str,
+    include_history_in_prompt: bool
+) -> Tuple[str, str]:
+    """Prepares the conversation context:
+    1. Fetches history.
+    2. Contextualizes the query (rewrites it based on history).
+    3. Formats history into a string for the LLM.
+    """
+    history = []
+    if session_id:
+        history = await get_chat_history(session_id)
+        query = await contextualize_query(query, history)
+
+    history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
+    if not include_history_in_prompt:
+        history_str = ""
+
+    return query, history_str
+
+
+async def generate_rag_response(
+    client_id: int,
+    query: str,
+    history_str: str,
+    external_context: Optional[str],
+    llm: Any
+) -> Tuple[str, str]:
+    """Executes the RAG flow:
+    1. Retrieves context (HyDE -> Embed -> Hybrid Search -> Rerank).
+    2. Generates answer using RAG prompt.
+    """
+    context_str = await retrieve_context(client_id, query, external_context)
+    prompt = PromptTemplate.from_template(RAG_ANSWER_PROMPT_TEMPLATE)
+    chain = prompt | llm
+
+    response = await chain.ainvoke({
+        "lang_instruction": "Language: Same as the User's Latest Question (Detect it)", # Dynamic
+        "history_str": history_str,
+        "context_str": context_str,
+        "search_query": query
+    })
+    return response.content, context_str
+
+    return response.content, context_str
+
+
+async def generate_small_talk_response(
+    query: str,
+    history_str: str,
+    llm: Any
+) -> str:
+    """Generates a small talk response using the LLM."""
+    prompt = PromptTemplate.from_template(SMALL_TALK_PROMPT_TEMPLATE)
+    chain = prompt | llm
+    response = await chain.ainvoke({
+        "lang_instruction": "Language: Same as the User's Latest Question (Detect it)",
+        "history_str": history_str,
+        "search_query": query
+    })
+    return response.content
+
+
 async def generate_answer(
     client_id: int,
     query: str,
@@ -218,14 +282,7 @@ async def generate_answer(
 ) -> Tuple[str, Optional[UUID], Optional[str]]:
 
     # 1. History & Contextualization
-    history = []
-    if session_id:
-        history = await get_chat_history(session_id)
-        query = await contextualize_query(query, history)
-
-    history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
-    if not include_history_in_prompt:
-        history_str = ""
+    query, history_str = await prepare_conversation_context(session_id, query, include_history_in_prompt)
 
     # 2. Intent
     requires_rag = determine_intent(complexity_score, pricing_intent)
@@ -234,10 +291,10 @@ async def generate_answer(
     answer = ""
     context_str = ""
 
-    # Fetch Dynamic Config for Generation
+    # 4. Fetch Dynamic Config for Generation
     config = await get_llm_config()
 
-    # Logic for model selection based on complexity
+    # 5. Logic for model selection based on complexity
     if complexity_score > 7:
         llm_model_name = config["steps"]["complex_reasoning"]["model"]
     else:
@@ -246,32 +303,13 @@ async def generate_answer(
     llm = get_llm(model_name=llm_model_name)
 
     if requires_rag:
-        context_str = await retrieve_context(client_id, query, external_context)
-        prompt = PromptTemplate.from_template(RAG_ANSWER_PROMPT_TEMPLATE)
-        chain = prompt | llm
-
-        response = await chain.ainvoke({
-            "lang_instruction": "Language: Same as the User's Latest Question (Detect it)", # Dynamic
-            "history_str": history_str,
-            "context_str": context_str,
-            "search_query": query
-        })
-        answer = response.content
+        answer, context_str = await generate_rag_response(
+            client_id, query, history_str, external_context, llm
+        )
     else:
-        # For small talk, we might use generation model or a lighter one?
-        # Let's use generation model for consistency (or could be mapped to 'small_talk' if config had it)
-        # Using generation model as fallback
-        prompt = PromptTemplate.from_template(SMALL_TALK_PROMPT_TEMPLATE)
-        chain = prompt | llm
-        response = await chain.ainvoke({
-            "lang_instruction": "Language: Same as the User's Latest Question (Detect it)",
-            "history_str": history_str,
-            "search_query": query
-        })
-        answer = response.content
+        answer = await generate_small_talk_response(query, history_str, llm)
 
-    # 4. Save Interaction
-    # 4. Save Interaction
+    # 6. Save Interaction
     if session_id and save_history:
         await save_interaction(session_id, query, answer, client_id)
 
