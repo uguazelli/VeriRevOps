@@ -1,11 +1,12 @@
-from datetime import datetime
-from typing import Optional, List
 import uuid
-from sqlalchemy import String, Text, TIMESTAMP, ForeignKey, JSON
+from datetime import datetime
+from typing import List, Optional
+
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import TIMESTAMP, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import UUID, TSVECTOR
-from pgvector.sqlalchemy import Vector
 
 from bot.models.base import Base
 

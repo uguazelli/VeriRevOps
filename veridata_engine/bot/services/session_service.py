@@ -1,8 +1,10 @@
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from bot.core.logging import log_db, log_start
 from bot.models.session import BotSession
-from bot.core.logging import log_start, log_db
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +13,7 @@ async def get_or_create_bot_session(
     client_id: int,
     conversation_id: str
 ) -> BotSession:
-    """
-    Finds an existing BotSession or creates a new one.
+    """Finds an existing BotSession or creates a new one.
     Links the external Chatwoot Conversation ID to our internal tracking.
     """
     session_query = select(BotSession).where(

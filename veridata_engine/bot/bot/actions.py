@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 import httpx
@@ -10,11 +11,9 @@ from bot.core.logging import log_db, log_error, log_external_call, log_skip, log
 from bot.integrations.chatwoot import ChatwootClient
 from bot.integrations.crm.espocrm import EspoClient
 from bot.integrations.crm.hubspot import HubSpotClient
-from rag.models.sql import ChatSession
-from bot.models import BotSession, Client, ServiceConfig, Subscription
-
-import datetime
 from bot.integrations.transcription import transcribe_audio
+from bot.models import BotSession, Client, ServiceConfig, Subscription
+from rag.models.sql import ChatSession
 
 logger = logging.getLogger(__name__)
 

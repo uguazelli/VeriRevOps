@@ -1,17 +1,17 @@
 import logging
 import uuid
-from typing import Dict, Any, Tuple
+from typing import Any, Dict, Tuple
 
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langfuse.langchain import CallbackHandler
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agent.graph import get_agent_app
 from bot.agent.prompts import AGENT_SYSTEM_PROMPT
 from bot.core.llm_config import get_llm_config
-from rag.models.sql import ChatSession, ChatMessage
 from bot.models.session import BotSession
+from rag.models.sql import ChatMessage, ChatSession
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,7 @@ async def run_agent_pipeline(
     configs: Dict[str, Any],
     event_data: Any # ChatwootEvent
 ) -> Tuple[str, bool]:
-    """
-    Executes the full Agent pipeline:
+    """Executes the full Agent pipeline:
     1. Fetches history (RAG).
     2. Builds Context (System Prompt + Custom Instructions).
     3. Runs LangGraph Agent.
@@ -142,8 +141,7 @@ async def run_agent_pipeline(
 
 
 async def _persist_history(db: AsyncSession, session: BotSession, rag_config: dict, query: str, answer: str):
-    """
-    Helper to sync the interaction back to the RAG service history (Internal DB).
+    """Helper to sync the interaction back to the RAG service history (Internal DB).
     Handles session creation if RAG session does not exist.
     """
     try:

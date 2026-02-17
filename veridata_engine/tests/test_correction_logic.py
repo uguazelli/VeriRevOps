@@ -1,8 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from langchain_core.messages import HumanMessage
+
 from bot.agent.graph import agent_app
-from bot.agent.state import AgentState
-from langchain_core.messages import HumanMessage, AIMessage
+
 
 @pytest.mark.asyncio
 async def test_self_correction_loop(mocker):

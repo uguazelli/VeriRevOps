@@ -10,8 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from bot.core.config import settings
 from bot.core.db import get_session
 from bot.main import bot as fastapi_app
-import bot.main  # Import for patching
-import bot.core.db # Import for patching
 
 # Override host for local testing
 settings.postgres_host = "127.0.0.1"
@@ -38,8 +36,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest.fixture(autouse=True)
 def patch_db_maker(mocker):
-    """
-    Patch the async_session_maker used by background tasks (app.main.run_bot_bg)
+    """Patch the async_session_maker used by background tasks (app.main.run_bot_bg)
     to use our test engine.
     """
     mocker.patch("app.main.async_session_maker", TestingSessionLocal)
@@ -62,8 +59,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 @pytest.fixture(autouse=True)
 def mock_chatwoot_response(mocker):
-    """
-    Mock the handle_chatwoot_response function to prevent actual API calls
+    """Mock the handle_chatwoot_response function to prevent actual API calls
     and allow verification of what would have been sent.
     """
     mock = mocker.patch("app.bot.engine.handle_chatwoot_response", new_callable=AsyncMock)
@@ -71,8 +67,7 @@ def mock_chatwoot_response(mocker):
 
 @pytest.fixture(autouse=True)
 def mock_llm_router(mocker):
-    """
-    Mock the LLM used in the router node to avoid external API calls.
+    """Mock the LLM used in the router node to avoid external API calls.
     Returns a JSON that forces 'rag' intent.
     """
     mock_llm_class = mocker.patch("app.agent.nodes.ChatGoogleGenerativeAI")

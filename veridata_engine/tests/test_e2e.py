@@ -1,9 +1,10 @@
-import pytest
 import uuid
-from sqlalchemy import select
-from bot.models import Client, Subscription, ServiceConfig
+
+import pytest
+
 from bot.core.config import settings
-from bot.bot.engine import handle_chatwoot_response
+from bot.models import Client, ServiceConfig, Subscription
+
 
 @pytest.mark.asyncio
 async def test_bot_webhook_flow(client, db_session, mock_chatwoot_response):

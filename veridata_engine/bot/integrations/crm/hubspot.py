@@ -1,11 +1,11 @@
 import logging
+import time
 from typing import Any, Dict, Optional
 
 import httpx
 
-import time
-from bot.integrations.crm.formatting import ConversationFormatter
 from bot.bot.utils import extract_contact_info, parse_name
+from bot.integrations.crm.formatting import ConversationFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +85,6 @@ class HubSpotClient:
     async def sync_contact(self, payload: Dict[str, Any]):
         """Syncs a contact object (usually from Chatwoot payload) to HubSpot.
         """
-
-
         info = extract_contact_info(payload)
 
         await self.sync_lead(info["name"], info["email"], info["phone"])

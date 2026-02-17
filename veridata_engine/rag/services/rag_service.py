@@ -1,20 +1,21 @@
-import logging
 import json
-from typing import List, Dict, Any, Optional, Tuple
+import logging
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+
 from langchain_core.prompts import PromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from bot.core.config import settings
-from bot.core.db import get_session, async_session_maker
-from rag.models.sql import ChatSession, ChatMessage
+from bot.core.db import async_session_maker
+from rag.models.sql import ChatMessage, ChatSession
 from rag.storage.repository import search_documents_hybrid
 from rag.utils.prompts import (
     CONTEXTUALIZE_PROMPT_TEMPLATE,
     HYDE_PROMPT_TEMPLATE,
-    RERANK_PROMPT_TEMPLATE,
     RAG_ANSWER_PROMPT_TEMPLATE,
+    RERANK_PROMPT_TEMPLATE,
     SMALL_TALK_PROMPT_TEMPLATE,
 )
 

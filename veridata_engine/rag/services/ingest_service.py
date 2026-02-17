@@ -1,16 +1,14 @@
-import logging
 import io
-import os
-from typing import List
+import logging
 
 from google import genai
-from PIL import Image
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from PIL import Image
 
 from bot.core.config import settings
-from rag.utils.prompts import IMAGE_DESCRIPTION_PROMPT_TEMPLATE
 from rag.storage.repository import insert_document_chunk
+from rag.utils.prompts import IMAGE_DESCRIPTION_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +19,7 @@ def get_genai_client():
 
 
 def describe_image(image_bytes: bytes, filename: str) -> str:
-    """
-    Generates a description for an image using Gemini Vision (google-genai SDK).
+    """Generates a description for an image using Gemini Vision (google-genai SDK).
     """
     client = get_genai_client()
     if not client:
@@ -49,8 +46,7 @@ def describe_image(image_bytes: bytes, filename: str) -> str:
 async def ingest_document(
     client_id: int, filename: str, content: str = None, file_bytes: bytes = None
 ):
-    """
-    Ingests a document (text or image) into the RAG system.
+    """Ingests a document (text or image) into the RAG system.
     1. Extract Content (Text or VLM)
     2. Split (RecursiveCharacterTextSplitter)
     3. Embed (GoogleGenerativeAIEmbeddings)

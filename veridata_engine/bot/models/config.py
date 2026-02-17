@@ -1,6 +1,7 @@
-from typing import Any
 from datetime import datetime
-from sqlalchemy import ForeignKey, DateTime, func
+from typing import Any
+
+from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

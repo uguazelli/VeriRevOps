@@ -1,12 +1,12 @@
 import asyncio
 import logging
+
 from sqlalchemy import text
 
 from bot.core.db import engine
-from bot.models.base import Base
+
 # Import all models to ensure they are registered with Base.metadata
-from bot.models import Client, BotSession, Subscription, ServiceConfig, SyncConfig, GlobalConfig
-from rag.models.sql import Document, ChatSession, ChatMessage
+from bot.models.base import Base
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

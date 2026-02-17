@@ -1,12 +1,13 @@
 import sys
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # Add app to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from bot.integrations.calendar.factory import get_calendar_provider
 from bot.integrations.calendar.calcom import CalComProvider
+from bot.integrations.calendar.factory import get_calendar_provider
+
 
 def test_calcom_factory():
     print("Testing Calendar Factory...")

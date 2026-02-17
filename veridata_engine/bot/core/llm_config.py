@@ -1,13 +1,14 @@
+import logging
+
 from sqlalchemy import select
+
 from bot.core.db import async_session_maker
 from bot.models.config import GlobalConfig
-import logging
 
 logger = logging.getLogger(__name__)
 
 async def get_llm_config() -> dict:
-    """
-    Fetches the full LLM configuration from GlobalConfig.
+    """Fetches the full LLM configuration from GlobalConfig.
     Returns a dict with:
       - model_name: str (default: "gemini-2.0-flash")
       - use_hyde: bool (default: False)

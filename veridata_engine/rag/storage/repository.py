@@ -1,9 +1,9 @@
 import logging
-from typing import List, Dict, Any, Optional
-from sqlalchemy import select, text
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import text
+
 from bot.core.db import get_session
-from rag.models.sql import Document
-from bot.models.client import Client
 
 logger = logging.getLogger(__name__)
 

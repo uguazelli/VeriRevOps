@@ -1,11 +1,12 @@
-import logging
 import json
+import logging
 import uuid
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
-from bot.core.config import settings
-from bot.agent.prompts import SUMMARY_PROMPT_TEMPLATE
 
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+from bot.agent.prompts import SUMMARY_PROMPT_TEMPLATE
+from bot.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +15,7 @@ async def summarize_start_conversation(
     start_time: str = None,
     language_instruction: str = None
 ) -> dict:
-    """
-    Fetches chat history from internal DB and generates a structured summary using Gemini.
+    """Fetches chat history from internal DB and generates a structured summary using Gemini.
     """
     try:
         # 1. Fetch History

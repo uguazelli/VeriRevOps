@@ -1,8 +1,11 @@
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
 from sqlalchemy import JSON, TIMESTAMP, Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from bot.models.base import Base
+
 
 class SyncConfig(Base):
     __tablename__ = "sync_configs"

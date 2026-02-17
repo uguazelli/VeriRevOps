@@ -1,7 +1,8 @@
 import logging
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from bot.dtos.webhook import ChatwootEvent, IntegrationEvent
+
 from bot.bot.actions import (
     check_subscription_quota,
     execute_crm_action,
@@ -12,6 +13,7 @@ from bot.bot.actions import (
     handle_conversation_resolution,
 )
 from bot.core.logging import log_error, log_skip, log_start, log_success
+from bot.dtos.webhook import ChatwootEvent, IntegrationEvent
 
 logger = logging.getLogger(__name__)
 

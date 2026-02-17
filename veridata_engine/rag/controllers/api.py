@@ -2,12 +2,12 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, status
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from rag.models.schemas import QueryRequest, QueryResponse
-from rag.services.rag_service import generate_answer
 from rag.services.ingest_service import ingest_document
+from rag.services.rag_service import generate_answer
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +16,7 @@ router = APIRouter()
 
 @router.post("/query", response_model=QueryResponse)
 async def query_rag(request: QueryRequest):
-    """
-    Execute a RAG query against the knowledge base.
+    """Execute a RAG query against the knowledge base.
     """
     try:
         session_id = request.session_id
@@ -49,8 +48,7 @@ async def ingest_file(
     client_id: Annotated[int, Form()],
     file: Annotated[UploadFile, File()],
 ):
-    """
-    Ingest a file (text or image) into the RAG system.
+    """Ingest a file (text or image) into the RAG system.
     """
     if not file.filename.lower().endswith(
         (".txt", ".md", ".jpg", ".jpeg", ".png", ".webp")

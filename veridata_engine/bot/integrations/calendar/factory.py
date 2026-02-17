@@ -3,9 +3,9 @@ from typing import Any, Dict, Optional
 from bot.integrations.calendar.base import CalendarProvider
 from bot.integrations.calendar.calcom import CalComProvider
 
+
 def get_calendar_provider(config: Dict[str, Any]) -> Optional[CalendarProvider]:
-    """
-    Factory function to return a CalendarProvider instance.
+    """Factory function to return a CalendarProvider instance.
 
     Expected config structure:
     {

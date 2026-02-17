@@ -1,13 +1,12 @@
 import logging
 import os
+from google import genai
+from google.genai import types
+
 from bot.core.config import settings
 from bot.core.llm_config import get_llm_config
 
 logger = logging.getLogger(__name__)
-
-
-from google import genai
-from google.genai import types
 
 
 async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> str:

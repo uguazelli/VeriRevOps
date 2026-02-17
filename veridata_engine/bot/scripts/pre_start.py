@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from tenacity import retry, stop_after_attempt, wait_fixed
+
 from bot.core.config import settings
 
 logging.basicConfig(level=logging.INFO)

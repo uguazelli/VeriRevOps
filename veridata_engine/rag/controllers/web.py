@@ -1,31 +1,30 @@
 import logging
-import os
 import secrets
 import uuid
 from typing import Annotated, Optional
 
 from fastapi import (
     APIRouter,
-    Request,
+    BackgroundTasks,
     Depends,
-    UploadFile,
     File,
     Form,
-    BackgroundTasks,
-    status,
     HTTPException,
+    Request,
+    UploadFile,
+    status,
 )
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from sqlalchemy import select, delete, func, desc
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import delete, func, select
 
 from bot.core.config import settings
 from bot.core.db import get_session
 from bot.models.client import Client
 from rag.models.sql import Document
-from rag.services.rag_service import generate_answer
 from rag.services.ingest_service import ingest_document
+from rag.services.rag_service import generate_answer
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +35,7 @@ security = HTTPBasic()
 
 
 def require_auth(credentials: Annotated[HTTPBasicCredentials, Depends(security)]):
-    """
-    Simple Basic Auth using env vars from Settings.
+    """Simple Basic Auth using env vars from Settings.
     """
     correct_user = settings.admin_user
     correct_pass = settings.admin_password

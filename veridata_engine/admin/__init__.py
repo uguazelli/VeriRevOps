@@ -1,11 +1,11 @@
-from sqladmin import Admin, ModelView, action
+from sqladmin import ModelView
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
+
 from bot.core.config import settings
-from bot.core.db import get_session
 from bot.models import BotSession, Client, GlobalConfig, ServiceConfig, Subscription, SyncConfig
-from rag.models.sql import Document, ChatSession
+from rag.models.sql import Document
+
 
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:

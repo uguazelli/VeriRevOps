@@ -1,10 +1,10 @@
 import logging
+import re
 
 import httpx
 
-import re
-from bot.integrations.crm.formatting import ConversationFormatter
 from bot.bot.utils import extract_contact_info, parse_name
+from bot.integrations.crm.formatting import ConversationFormatter
 
 logger = logging.getLogger(__name__)
 

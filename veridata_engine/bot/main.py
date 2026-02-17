@@ -1,25 +1,26 @@
 import logging
+
 from fastapi import BackgroundTasks, FastAPI, Request
+from fastapi.staticfiles import StaticFiles
+from sqladmin import Admin
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+from admin import (
+    BotSessionAdmin,
+    ClientAdmin,
+    ClientConfigAdmin,
+    DocumentAdmin,
+    GlobalConfigAdmin,
+    SubscriptionAdmin,
+    SyncConfigAdmin,
+    authentication_backend,
+)
 from bot.api.endpoints import router as api_router
 from bot.bot.engine import process_bot_event, process_integration_event
-from bot.core.db import async_session_maker
+from bot.core.db import async_session_maker, engine
 from bot.core.logging import setup_logging
-from sqladmin import Admin
-from fastapi.staticfiles import StaticFiles
 from rag.controllers.api import router as rag_api_router
 from rag.controllers.web import router as rag_web_router
-from bot.core.db import engine
-from admin import (
-    authentication_backend,
-    ClientAdmin,
-    SyncConfigAdmin,
-    ClientConfigAdmin,
-    SubscriptionAdmin,
-    BotSessionAdmin,
-    GlobalConfigAdmin,
-    DocumentAdmin
-)
 
 setup_logging()
 logger = logging.getLogger(__name__)

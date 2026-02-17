@@ -2,7 +2,6 @@ from fastapi import APIRouter
 from fastcrud import crud_router
 
 from bot.core.db import async_session_maker
-from bot.models import BotSession, Client, ServiceConfig, Subscription
 from bot.dtos import (
     BotSessionCreate,
     BotSessionRead,
@@ -17,6 +16,7 @@ from bot.dtos import (
     SubscriptionRead,
     SubscriptionUpdate,
 )
+from bot.models import BotSession, Client, ServiceConfig, Subscription
 
 router = APIRouter()
 

@@ -1,17 +1,19 @@
-from langchain_core.tools import tool
-from langchain_core.runnables import RunnableConfig
-from rag.services.rag_service import generate_answer
-from bot.integrations.sheets import fetch_google_sheet_data
 import logging
 import uuid
+
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import tool
+
+from bot.integrations.sheets import fetch_google_sheet_data
+from rag.services.rag_service import generate_answer
 
 logger = logging.getLogger(__name__)
 
 @tool
 async def search_knowledge_base(query: str, config: RunnableConfig) -> str:
-    """
-    Search the company's knowledge base for policies, services, contact info, and general questions.
+    """Search the company's knowledge base for policies, services, contact info, and general questions.
     Use this for anything NOT related to specific product pricing if you have the product name.
+
     Args:
         query: The search question or keywords.
     """
@@ -61,8 +63,8 @@ async def search_knowledge_base(query: str, config: RunnableConfig) -> str:
 
 @tool
 async def lookup_pricing(query: str, config: RunnableConfig) -> str:
-    """
-    Fetch the product price list.
+    """Fetch the product price list.
+
     Args:
         query: What the user is looking for.
                - If looking for a specific item, pass the name (e.g. "shampoo", "haircut").
@@ -114,8 +116,7 @@ async def lookup_pricing(query: str, config: RunnableConfig) -> str:
 
 @tool
 def transfer_to_human() -> str:
-    """
-    Call this tool when the user explicitly asks to speak with a human or support agent,
+    """Call this tool when the user explicitly asks to speak with a human or support agent,
     OR when you cannot resolve the user's issue after trying.
     IMPORTANT: Before calling this, check if you have the user's Name and Contact Info (Email/Phone).
     If missing, ASK them for it first (e.g. "To ensure we can reach you...").
