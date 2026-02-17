@@ -21,3 +21,4 @@ __pycache__/
 logs/
 .vscodereplacements.txt
 .env.apis
+.ruff_cache/
