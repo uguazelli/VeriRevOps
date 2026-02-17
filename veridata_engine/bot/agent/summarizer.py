@@ -7,6 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from bot.agent.prompts import SUMMARY_PROMPT_TEMPLATE
 from bot.core.config import settings
+from bot.services.global_config_service import get_llm_config
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,12 @@ async def summarize_start_conversation(
         )
 
         # 3. Call LLM
+        # Fetch dynamic config using contextualization model for summarization
+        config = await get_llm_config()
+        model_name = config["steps"]["contextualization"]["model"]
+
         model = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model=model_name,
             temperature=0,
             google_api_key=settings.google_api_key,
         )

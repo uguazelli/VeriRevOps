@@ -7,6 +7,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from PIL import Image
 
 from bot.core.config import settings
+from bot.services.global_config_service import get_llm_config
 from rag.storage.repository import insert_document_chunk
 from rag.utils.prompts import IMAGE_DESCRIPTION_PROMPT_TEMPLATE
 
@@ -18,7 +19,7 @@ def get_genai_client():
     return genai.Client(api_key=settings.google_api_key)
 
 
-def describe_image(image_bytes: bytes, filename: str) -> str:
+def describe_image(image_bytes: bytes, filename: str, model_name: str) -> str:
     """Generates a description for an image using Gemini Vision (google-genai SDK).
     """
     client = get_genai_client()
@@ -27,12 +28,12 @@ def describe_image(image_bytes: bytes, filename: str) -> str:
         return f"Image: {filename} (Config error)"
 
     try:
-        logger.info(f"Generating caption for image: {filename}")
+        logger.info(f"Generating caption for image: {filename} using {model_name}")
         image = Image.open(io.BytesIO(image_bytes))
 
         # New SDK uses client.models.generate_content
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=model_name,
             contents=[IMAGE_DESCRIPTION_PROMPT_TEMPLATE, image]
         )
         description = response.text
@@ -61,8 +62,16 @@ async def ingest_document(
             logger.error("Image ingestion requires file_bytes")
             return
 
-        description = describe_image(file_bytes, filename)
-        content = f"[IMAGE DESCRIPTION for {filename}]\n{description}"
+        try:
+            # Fetch config for VLM - using generation model as it usually supports vision
+            config = await get_llm_config()
+            vlm_model = config["steps"]["generation"]["model"]
+
+            description = describe_image(file_bytes, filename, vlm_model)
+            content = f"[IMAGE DESCRIPTION for {filename}]\n{description}"
+        except Exception as e:
+            logger.error(f"Failed to get config or generate description: {e}")
+            return
 
     if not content:
         logger.warning(f"No content to ingest for {filename}")

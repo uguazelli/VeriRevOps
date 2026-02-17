@@ -1,10 +1,8 @@
 import logging
 import uuid
 from typing import Annotated
-
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
-
 from rag.models.schemas import QueryRequest, QueryResponse
 from rag.services.ingest_service import ingest_document
 from rag.services.rag_service import generate_answer

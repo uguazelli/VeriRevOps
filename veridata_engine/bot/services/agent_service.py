@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.agent.graph import get_agent_app
 from bot.agent.prompts import AGENT_SYSTEM_PROMPT
-from bot.core.llm_config import get_llm_config
+from bot.services.global_config_service import get_llm_config
 from bot.models.session import BotSession
 from rag.models.sql import ChatMessage, ChatSession
 
@@ -82,7 +82,7 @@ async def run_agent_pipeline(
 
         # Get Dynamic Model
         llm_settings = await get_llm_config()
-        model_name = llm_settings.get("model_name", "gemini-2.0-flash-exp")
+        model_name = llm_settings["steps"]["complex_reasoning"]["model"]
         agent_app = get_agent_app(model_name)
 
         logger.info(f"🤖 Executing Agent with model: {model_name}")

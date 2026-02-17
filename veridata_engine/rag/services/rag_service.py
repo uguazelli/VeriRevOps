@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from bot.core.config import settings
 from bot.core.db import async_session_maker
+from bot.services.global_config_service import get_llm_config
 from rag.models.sql import ChatMessage, ChatSession
 from rag.storage.repository import search_documents_hybrid
 from rag.utils.prompts import (
@@ -22,7 +23,7 @@ from rag.utils.prompts import (
 logger = logging.getLogger(__name__)
 
 
-def get_llm(model_name: str = "gemini-2.0-flash", temperature: float = 0.0):
+def get_llm(model_name: str, temperature: float = 0.0):
     if not settings.google_api_key:
         raise ValueError("GOOGLE_API_KEY is not set.")
     return ChatGoogleGenerativeAI(
@@ -65,7 +66,11 @@ async def contextualize_query(query: str, history: List[Dict[str, str]]) -> str:
 
     history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
 
-    llm = get_llm(model_name="gemini-2.0-flash") # Fast model for rewrite
+    # Fetch dynamic config
+    config = await get_llm_config()
+    model_name = config["steps"]["contextualization"]["model"]
+
+    llm = get_llm(model_name=model_name)
     prompt = PromptTemplate.from_template(CONTEXTUALIZE_PROMPT_TEMPLATE)
     chain = prompt | llm
 
@@ -80,7 +85,11 @@ async def contextualize_query(query: str, history: List[Dict[str, str]]) -> str:
 
 
 async def generate_hypothetical_answer(query: str) -> str:
-    llm = get_llm(model_name="gemini-2.0-flash")
+    # Fetch dynamic config
+    config = await get_llm_config()
+    model_name = config["steps"]["rag_search"]["model"]
+
+    llm = get_llm(model_name=model_name)
     prompt = PromptTemplate.from_template(HYDE_PROMPT_TEMPLATE)
     chain = prompt | llm
     try:
@@ -97,7 +106,11 @@ async def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: i
     if not documents:
         return []
 
-    llm = get_llm(model_name="gemini-2.0-flash", temperature=0.0)
+    # Fetch dynamic config
+    config = await get_llm_config()
+    model_name = config["steps"]["rag_search"]["model"] # Reusing search model for reranking
+
+    llm = get_llm(model_name=model_name, temperature=0.0)
     prompt = PromptTemplate.from_template(RERANK_PROMPT_TEMPLATE)
     chain = prompt | llm
 
@@ -221,10 +234,14 @@ async def generate_answer(
     answer = ""
     context_str = ""
 
-    llm_model_name = "gemini-2.0-flash"
-    # Logic for model selection based on complexity can be added here
+    # Fetch Dynamic Config for Generation
+    config = await get_llm_config()
+
+    # Logic for model selection based on complexity
     if complexity_score > 7:
-        llm_model_name = "gemini-2.0-pro-exp-02-05" # Example high reasoning model
+        llm_model_name = config["steps"]["complex_reasoning"]["model"]
+    else:
+        llm_model_name = config["steps"]["generation"]["model"]
 
     llm = get_llm(model_name=llm_model_name)
 
@@ -241,6 +258,9 @@ async def generate_answer(
         })
         answer = response.content
     else:
+        # For small talk, we might use generation model or a lighter one?
+        # Let's use generation model for consistency (or could be mapped to 'small_talk' if config had it)
+        # Using generation model as fallback
         prompt = PromptTemplate.from_template(SMALL_TALK_PROMPT_TEMPLATE)
         chain = prompt | llm
         response = await chain.ainvoke({
