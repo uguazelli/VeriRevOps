@@ -1,3 +1,4 @@
+from app.core.config import settings
 import os
 from typing import List, TypedDict, Optional
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
@@ -19,11 +20,11 @@ from app.prompts import (
     GENERATE_ANSWER_SYSTEM_PROMPT
 )
 
-# --- Configuration ---
-model_name = os.getenv("MODEL")
-embedding_model = os.getenv("EMBEDDING_MODEL")
-api_key = os.getenv("GOOGLE_API_KEY")
-temperature = os.getenv("TEMPERATURE")
+# --- Configuration (moved to settings) ---
+# model_name = settings.MODEL
+# embedding_model = settings.EMBEDDING_MODEL
+# api_key = settings.GOOGLE_API_KEY
+# temperature = settings.TEMPERATURE
 
 # FlashRank Reranker (Nano model is fast and runs locally)
 try:
@@ -97,7 +98,7 @@ async def contextualize_query(state: RAGState):
         ("human", "{question}"),
     ])
 
-    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
     chain = prompt | llm | StrOutputParser()
     new_query = await chain.ainvoke({
         "chat_history": state["chat_history"],
@@ -122,7 +123,7 @@ async def expand_query(state: RAGState):
         ("human", "{question}"),
     ])
 
-    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
     chain = prompt | llm | StrOutputParser()
     response = await chain.ainvoke({"question": query})
 
@@ -155,7 +156,7 @@ async def retrieve_documents(state: RAGState, db_session: AsyncSession):
     all_docs = []
 
     # Instantiate embeddings locally to avoid potential client state issues
-    embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model, google_api_key=api_key)
+    embeddings = GoogleGenerativeAIEmbeddings(model=settings.EMBEDDING_MODEL, google_api_key=settings.GOOGLE_API_KEY)
 
     import asyncio
 
@@ -269,7 +270,7 @@ async def generate_answer(state: RAGState):
         ("human", "Use the following pieces of retrieved context to answer the question.\n\nContext:\n{context}\n\nQuestion: {question}\n\nAssistant:"),
     ])
 
-    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
     chain = prompt | llm | StrOutputParser()
 
     response = await chain.ainvoke({

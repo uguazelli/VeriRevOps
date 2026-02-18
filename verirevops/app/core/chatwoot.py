@@ -1,4 +1,4 @@
-import os
+from app.core.config import settings
 import httpx
 from typing import Optional
 from app.core.logger import Log
@@ -33,8 +33,8 @@ class ChatwootClient:
 
 # Singleton or dependency injection setup
 def get_chatwoot_client() -> Optional[ChatwootClient]:
-    url = os.getenv("CHATWOOT_API_URL")
-    token = os.getenv("CHATWOOT_API_TOKEN")
+    url = settings.CHATWOOT_API_URL
+    token = settings.CHATWOOT_API_TOKEN
     if not url or not token:
         Log.warning("Chatwoot configuration missing (CHATWOOT_API_URL or CHATWOOT_API_TOKEN)")
         return None

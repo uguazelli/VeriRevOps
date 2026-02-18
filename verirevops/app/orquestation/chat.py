@@ -1,3 +1,4 @@
+from app.core.config import settings
 import os
 from typing import List, Literal, TypedDict, Optional
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
@@ -12,10 +13,10 @@ from app.rag.retrieve import invoke_rag_graph, get_chat_history
 from app.prompts import ROUTER_SYSTEM_PROMPT, CHITCHAT_SYSTEM_PROMPT
 from app.core.logger import Log
 
-# --- Configuration ---
-model_name = os.getenv("MODEL")
-api_key = os.getenv("GOOGLE_API_KEY")
-temperature = os.getenv("TEMPERATURE")
+# --- Configuration (moved to settings) ---
+# model_name = settings.MODEL
+# api_key = settings.GOOGLE_API_KEY
+# temperature = settings.TEMPERATURE
 
 # --- State ---
 class ChatState(TypedDict):
@@ -92,7 +93,7 @@ async def router_node(state: ChatState) -> ChatState:
     """
     system_prompt = ROUTER_SYSTEM_PROMPT
 
-    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
 
     # Include some history for better context (last 3 messages)
     history_context = state.get('chat_history', [])[-3:]
@@ -138,7 +139,7 @@ async def chitchat_node(state: ChatState) -> ChatState:
         HumanMessage(content=state['user_message'])
     ]
 
-    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
 
     response = await llm.ainvoke(prompt)
     return {"ai_response": response.content, "summary_needed": False}

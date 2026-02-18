@@ -1,12 +1,12 @@
+from app.core.config import settings
 import os
 from typing import List
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-# Initialize embeddings
-api_key = os.getenv("GOOGLE_API_KEY")
-embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", google_api_key=api_key)
+# Initialize embeddings (moved logic to settings)
+embeddings = GoogleGenerativeAIEmbeddings(model=settings.EMBEDDING_MODEL, google_api_key=settings.GOOGLE_API_KEY)
 
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=1000,
