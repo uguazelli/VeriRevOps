@@ -1,209 +1,275 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
-from pydantic import BaseModel
-from datetime import datetime
-from app.core.database import execute_read_query, execute_write_query
-from app.models import Tenants, TenantCreate, Subscriptions, SubscriptionCreate, ChatSessions, ChatSessionCreate, ChatMessages
-from app.core.queries import (
-    GET_ALL_TENANTS, CREATE_TENANT, UPDATE_TENANT, DELETE_TENANT, GET_TENANT_NAME_BY_ID,
-    GET_ALL_SUBSCRIPTIONS, CREATE_SUBSCRIPTION, UPDATE_SUBSCRIPTION, DELETE_SUBSCRIPTION,
-    GET_ALL_CHAT_SESSIONS, CREATE_CHAT_SESSION, UPDATE_CHAT_SESSION, DELETE_CHAT_SESSION,
-    GET_CHAT_MESSAGES_BASE
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, delete
+from sqlalchemy.orm import selectinload
+
+from app.core.db import get_db
+from app.models import Tenant, Subscription, ChatSession, ChatMessage
+from app.schemas import (
+    Tenants, TenantCreate,
+    Subscriptions, SubscriptionCreate,
+    ChatSessions, ChatSessionCreate,
+    ChatMessages
 )
 
-router = APIRouter(
-    prefix="/api",
-    tags=["admin"]
-)
+router = APIRouter(prefix="/api", tags=["admin"])
 
 # --- Tenants CRUD ---
+
 @router.get("/tenants", response_model=List[Tenants])
-async def get_tenants():
-    rows = execute_read_query(GET_ALL_TENANTS)
-    tenants = []
-    for row in rows:
-        tenants.append(Tenants(id=row[0], name=row[1], slug=row[2], url=row[3], is_active=row[4]))
+async def get_tenants(session: AsyncSession = Depends(get_db)):
+    result = await session.execute(select(Tenant))
+    tenants = result.scalars().all()
     return tenants
 
 @router.post("/tenants", response_model=Tenants)
-async def create_tenant(tenant: TenantCreate):
+async def create_tenant(tenant: TenantCreate, session: AsyncSession = Depends(get_db)):
+    db_tenant = Tenant(**tenant.model_dump())
+    session.add(db_tenant)
     try:
-        # execute_write_query returns a tuple (id,) for RETURNING id
-        new_id = execute_write_query(
-            CREATE_TENANT,
-            (tenant.name, tenant.slug, tenant.url, tenant.is_active)
-        )[0]
-        return Tenants(id=new_id, **tenant.model_dump())
+        await session.commit()
+        await session.refresh(db_tenant)
+        return db_tenant
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/tenants/{tenant_id}", response_model=Tenants)
-async def update_tenant(tenant_id: int, tenant: TenantCreate):
+async def update_tenant(tenant_id: int, tenant: TenantCreate, session: AsyncSession = Depends(get_db)):
+    db_tenant = await session.get(Tenant, tenant_id)
+    if not db_tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    tenant_data = tenant.model_dump(exclude_unset=True)
+    for key, value in tenant_data.items():
+        setattr(db_tenant, key, value)
+
     try:
-        rowcount = execute_write_query(
-            UPDATE_TENANT,
-            (tenant.name, tenant.slug, tenant.url, tenant.is_active, tenant_id)
-        )
-        if rowcount == 0:
-            raise HTTPException(status_code=404, detail="Tenant not found")
-        return Tenants(id=tenant_id, **tenant.model_dump())
-    except HTTPException:
-        raise
+        await session.commit()
+        await session.refresh(db_tenant)
+        return db_tenant
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.delete("/tenants/{tenant_id}")
-async def delete_tenant(tenant_id: int):
+async def delete_tenant(tenant_id: int, session: AsyncSession = Depends(get_db)):
+    db_tenant = await session.get(Tenant, tenant_id)
+    if not db_tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
     try:
-        rowcount = execute_write_query(DELETE_TENANT, (tenant_id,))
-        if rowcount == 0:
-            raise HTTPException(status_code=404, detail="Tenant not found")
+        await session.delete(db_tenant)
+        await session.commit()
         return {"message": "Tenant deleted successfully"}
-    except HTTPException:
-        raise
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+
 # --- Subscriptions CRUD ---
+
 @router.get("/subscriptions", response_model=List[Subscriptions])
-async def get_subscriptions():
-    rows = execute_read_query(GET_ALL_SUBSCRIPTIONS)
-    subscriptions = []
-    for row in rows:
-        subscriptions.append(Subscriptions(
-            id=row[0], tenant_id=row[1], quota_limit=row[2], usage_count=row[3],
-            start_date=row[4], end_date=row[5], tenant_name=row[6]
+async def get_subscriptions(session: AsyncSession = Depends(get_db)):
+    # Join with Tenant to get tenant_name
+    stmt = select(Subscription).options(selectinload(Subscription.tenant))
+    result = await session.execute(stmt)
+    subscriptions = result.scalars().all()
+
+    # Map ORM objects to Pydantic models (including computed/joined fields)
+    response = []
+    for sub in subscriptions:
+        response.append(Subscriptions(
+            id=sub.id,
+            tenant_id=sub.tenant_id,
+            quota_limit=sub.quota_limit,
+            usage_count=sub.usage_count,
+            start_date=sub.start_date,
+            end_date=sub.end_date,
+            tenant_name=sub.tenant.name if sub.tenant else None
         ))
-    return subscriptions
+    return response
 
 @router.post("/subscriptions", response_model=Subscriptions)
-async def create_subscription(sub: SubscriptionCreate):
+async def create_subscription(sub: SubscriptionCreate, session: AsyncSession = Depends(get_db)):
+    db_sub = Subscription(**sub.model_dump())
+    session.add(db_sub)
     try:
-        # execute_write_query returns (id,)
-        new_id = execute_write_query(
-            CREATE_SUBSCRIPTION,
-            (sub.tenant_id, sub.quota_limit, sub.usage_count, sub.start_date, sub.end_date)
-        )[0]
-        # Fetch tenant name for response
-        tenant_name_row = execute_read_query(GET_TENANT_NAME_BY_ID, (sub.tenant_id,))
-        tenant_name = tenant_name_row[0][0] if tenant_name_row else None
+        await session.commit()
+        await session.refresh(db_sub)
 
-        return Subscriptions(id=new_id, tenant_name=tenant_name, **sub.model_dump())
+        # Load tenant relationship for response
+        # Using a separate query or refresh with options if needed, but explicit get is safe
+        # db_sub.tenant is likely not loaded yet unless we eagerly loaded it, but we just inserted it.
+        # We can just fetch the name.
+        tenant = await session.get(Tenant, sub.tenant_id)
+
+        return Subscriptions(
+            id=db_sub.id,
+            tenant_id=db_sub.tenant_id,
+            quota_limit=db_sub.quota_limit,
+            usage_count=db_sub.usage_count,
+            start_date=db_sub.start_date,
+            end_date=db_sub.end_date,
+            tenant_name=tenant.name if tenant else None
+        )
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/subscriptions/{subscription_id}", response_model=Subscriptions)
-async def update_subscription(subscription_id: int, sub: SubscriptionCreate):
+async def update_subscription(subscription_id: int, sub: SubscriptionCreate, session: AsyncSession = Depends(get_db)):
+    db_sub = await session.get(Subscription, subscription_id)
+    if not db_sub:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    sub_data = sub.model_dump(exclude_unset=True)
+    for key, value in sub_data.items():
+        setattr(db_sub, key, value)
+
     try:
-        rowcount = execute_write_query(
-            UPDATE_SUBSCRIPTION,
-            (sub.tenant_id, sub.quota_limit, sub.usage_count, sub.start_date, sub.end_date, subscription_id)
+        await session.commit()
+        await session.refresh(db_sub)
+
+        tenant = await session.get(Tenant, db_sub.tenant_id)
+
+        return Subscriptions(
+            id=db_sub.id,
+            tenant_id=db_sub.tenant_id,
+            quota_limit=db_sub.quota_limit,
+            usage_count=db_sub.usage_count,
+            start_date=db_sub.start_date,
+            end_date=db_sub.end_date,
+            tenant_name=tenant.name if tenant else None
         )
-        if rowcount == 0:
-            raise HTTPException(status_code=404, detail="Subscription not found")
-
-        # Fetch tenant name for response
-        tenant_name_row = execute_read_query(GET_TENANT_NAME_BY_ID, (sub.tenant_id,))
-        tenant_name = tenant_name_row[0][0] if tenant_name_row else None
-
-        return Subscriptions(id=subscription_id, tenant_name=tenant_name, **sub.model_dump())
-    except HTTPException:
-        raise
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.delete("/subscriptions/{subscription_id}")
-async def delete_subscription(subscription_id: int):
+async def delete_subscription(subscription_id: int, session: AsyncSession = Depends(get_db)):
+    db_sub = await session.get(Subscription, subscription_id)
+    if not db_sub:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
     try:
-        rowcount = execute_write_query(DELETE_SUBSCRIPTION, (subscription_id,))
-        if rowcount == 0:
-            raise HTTPException(status_code=404, detail="Subscription not found")
+        await session.delete(db_sub)
+        await session.commit()
         return {"message": "Subscription deleted successfully"}
-    except HTTPException:
-        raise
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+
 # --- Chat Sessions CRUD ---
+
 @router.get("/chat_sessions", response_model=List[ChatSessions])
-async def get_chat_sessions():
-    rows = execute_read_query(GET_ALL_CHAT_SESSIONS)
-    sessions = []
-    for row in rows:
-        sessions.append(ChatSessions(
-            id=row[0], tenant_id=row[1], created_at=row[2], tenant_name=row[3]
+async def get_chat_sessions(session: AsyncSession = Depends(get_db)):
+    stmt = select(ChatSession).options(selectinload(ChatSession.tenant))
+    result = await session.execute(stmt)
+    sessions = result.scalars().all()
+
+    response = []
+    for s in sessions:
+        response.append(ChatSessions(
+            id=s.id,
+            tenant_id=s.tenant_id,
+            created_at=s.created_at,
+            tenant_name=s.tenant.name if s.tenant else None
         ))
-    return sessions
+    return response
 
 @router.post("/chat_sessions", response_model=ChatSessions)
-async def create_chat_session(session: ChatSessionCreate):
+async def create_chat_session(session_in: ChatSessionCreate, session: AsyncSession = Depends(get_db)):
+    db_session = ChatSession(tenant_id=session_in.tenant_id)
+    session.add(db_session)
     try:
-        # execute_write_query returns (id, created_at)
-        result = execute_write_query(
-            CREATE_CHAT_SESSION,
-            (session.tenant_id,)
+        await session.commit()
+        await session.refresh(db_session)
+
+        tenant = await session.get(Tenant, db_session.tenant_id)
+
+        return ChatSessions(
+            id=db_session.id,
+            tenant_id=db_session.tenant_id,
+            created_at=db_session.created_at,
+            tenant_name=tenant.name if tenant else None
         )
-        new_id, created_at = result
-
-        # Fetch tenant name
-        tenant_name_row = execute_read_query(GET_TENANT_NAME_BY_ID, (session.tenant_id,))
-        tenant_name = tenant_name_row[0][0] if tenant_name_row else None
-
-        return ChatSessions(id=new_id, tenant_id=session.tenant_id, created_at=created_at, tenant_name=tenant_name)
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/chat_sessions/{session_id}", response_model=ChatSessions)
-async def update_chat_session(session_id: int, session: ChatSessionCreate):
+async def update_chat_session(session_id: int, session_in: ChatSessionCreate, session: AsyncSession = Depends(get_db)):
+    # Note: Logic usually implies updating something, but here it might be just tenant_id?
+    # Keeping consistency with original logic which allowed updating tenant_id
+    db_session = await session.get(ChatSession, session_id)
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
+    db_session.tenant_id = session_in.tenant_id
+
     try:
-        # execute_write_query returns (created_at,)
-        result = execute_write_query(
-            UPDATE_CHAT_SESSION,
-            (session.tenant_id, session_id)
+        await session.commit()
+        await session.refresh(db_session)
+
+        tenant = await session.get(Tenant, db_session.tenant_id)
+
+        return ChatSessions(
+            id=db_session.id,
+            tenant_id=db_session.tenant_id,
+            created_at=db_session.created_at,
+            tenant_name=tenant.name if tenant else None
         )
-        if not result:
-             raise HTTPException(status_code=404, detail="Chat session not found")
-        created_at = result[0]
-
-        # Fetch tenant name
-        tenant_name_row = execute_read_query(GET_TENANT_NAME_BY_ID, (session.tenant_id,))
-        tenant_name = tenant_name_row[0][0] if tenant_name_row else None
-
-        return ChatSessions(id=session_id, tenant_id=session.tenant_id, created_at=created_at, tenant_name=tenant_name)
-    except HTTPException:
-        raise
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.delete("/chat_sessions/{session_id}")
-async def delete_chat_session(session_id: int):
+async def delete_chat_session(session_id: int, session: AsyncSession = Depends(get_db)):
+    db_session = await session.get(ChatSession, session_id)
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
     try:
-        rowcount = execute_write_query(DELETE_CHAT_SESSION, (session_id,))
-        if rowcount == 0:
-            raise HTTPException(status_code=404, detail="Chat session not found")
+        await session.delete(db_session)
+        await session.commit()
         return {"message": "Chat session deleted successfully"}
-    except HTTPException:
-        raise
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 # --- Chat Messages CRUD ---
-@router.get("/chat_messages", response_model=List[ChatMessages])
-async def get_chat_messages(session_id: Optional[int] = None):
-    try:
-        query = GET_CHAT_MESSAGES_BASE
-        params = []
-        if session_id:
-            query += " WHERE m.session_id = %s"
-            params.append(session_id)
-        query += " ORDER BY m.created_at"
 
-        rows = execute_read_query(query, tuple(params))
-        messages = []
-        for row in rows:
-            messages.append(ChatMessages(
-                id=row[0], session_id=row[1], content=row[2], role=row[3], created_at=row[4], tenant_name=row[5]
-            ))
-        return messages
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+@router.get("/chat_messages", response_model=List[ChatMessages])
+async def get_chat_messages(session_id: Optional[int] = None, session: AsyncSession = Depends(get_db)):
+    stmt = select(ChatMessage).order_by(ChatMessage.created_at)
+    if session_id:
+        stmt = stmt.where(ChatMessage.session_id == session_id)
+
+    # Optimally we might want tenant name here too but usage in UI might vary.
+    # Original SQL query did a 3-way join: Messages -> Session -> Tenant to get tenant Name.
+    # Let's support that via joins.
+
+    stmt = stmt.options(selectinload(ChatMessage.session).selectinload(ChatSession.tenant))
+
+    result = await session.execute(stmt)
+    messages = result.scalars().all()
+
+    response = []
+    for m in messages:
+         tenant_name = None
+         if m.session and m.session.tenant:
+             tenant_name = m.session.tenant.name
+
+         response.append(ChatMessages(
+            id=m.id,
+            session_id=m.session_id,
+            content=m.content,
+            role=m.role,
+            created_at=m.created_at,
+            tenant_name=tenant_name
+         ))
+    return response

@@ -1,19 +1,27 @@
-from fastapi import FastAPI, HTTPException
+
+from fastapi import FastAPI, HTTPException, Depends
 from contextlib import asynccontextmanager
-from app.core.database import check_db_connection, create_database_if_not_exists, create_tables_if_not_exist
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from app.routers import admin, chatwoot, rag
+from app.core.db import engine, get_db
+from app.models import Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
     print("Starting up VeriRevOps API...")
-    create_database_if_not_exists()
-    create_tables_if_not_exist()
+
+    async with engine.begin() as conn:
+        # Create extension if not exists (needs superuser or proper permissions)
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        # Create tables
+        await conn.run_sync(Base.metadata.create_all)
+
     yield
     # Shutdown logic
     print("Shutting down VeriRevOps API...")
-
+    await engine.dispose()
 
 
 app = FastAPI(
@@ -30,15 +38,15 @@ app.include_router(rag.router)
 app.mount("/admin", StaticFiles(directory="app/admin", html=True), name="admin")
 
 
-
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "message": "VeriRevOps API is running"}
 
 @app.get("/health/db")
 async def health_check_db():
-    success, message = check_db_connection()
-    if success:
-        return {"status": "ok", "message": message}
-    else:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {message}")
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return {"status": "ok", "message": "Database connection successful"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
