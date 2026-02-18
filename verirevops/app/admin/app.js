@@ -301,5 +301,172 @@ function populateRagTenants() {
     });
 
     // Restore selection if still valid
-    if (currentVal) $select.val(currentVal);
+    if (currentVal) {
+        $select.val(currentVal);
+        loadRagFiles(currentVal);
+    }
+}
+
+// --- RAG Functions ---
+
+$('#rag-tenant-select').change(function () {
+    const tenantId = $(this).val();
+    if (tenantId) {
+        loadRagFiles(tenantId);
+    } else {
+        $('#rag-files-table tbody').empty();
+    }
+});
+
+function loadRagFiles(tenantId) {
+    $.get(`${API_BASE}/rag/files/${tenantId}`, function (data) {
+        console.log('Received RAG files:', data); // Debugging
+        const $tbody = $('#rag-files-table tbody');
+        $tbody.empty();
+
+        if (data.length === 0) {
+            $tbody.append('<tr><td colspan="2" style="text-align:center;">No files found</td></tr>');
+            return;
+        }
+
+        data.forEach(file => {
+            // Robust date parsing
+            let displayDate = file.uploaded_at;
+            try {
+                // Try converting "YYYY-MM-DD HH:MM:SS.micros" to ISO "YYYY-MM-DDTHH:MM:SS.micros"
+                const isoStr = file.uploaded_at.replace(' ', 'T');
+                const d = new Date(isoStr);
+                if (!isNaN(d)) {
+                    displayDate = d.toLocaleString();
+                }
+            } catch (e) {
+                console.error('Date parsing error', e);
+            }
+
+            $tbody.append(`
+                <tr>
+                    <td>${file.filename} <small style="color:#888;">(${displayDate})</small></td>
+                    <td>
+                        <button class="btn-delete" onclick="deleteRagFile(${file.id})">Delete</button>
+                    </td>
+                </tr>
+            `);
+        });
+    }).fail(function (xhr) {
+        console.error('Failed to load files:', xhr);
+        alert('Failed to load files');
+    });
+}
+
+$('#rag-upload-btn').click(function () {
+    const tenantId = $('#rag-tenant-select').val();
+    const fileInput = $('#rag-file-input')[0];
+
+    if (!tenantId) return alert('Please select a tenant first');
+    if (fileInput.files.length === 0) return alert('Please select a file');
+
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('tenant_id', tenantId);
+    formData.append('file', file);
+
+    const $btn = $(this);
+    setLoading($btn, true, 'Uploading...');
+
+    $.ajax({
+        url: `${API_BASE}/rag/files`,
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function (resp) {
+            alert(resp.message);
+            fileInput.value = ''; // Clear input
+            loadRagFiles(tenantId);
+        },
+        error: function (xhr) {
+            alert('Upload failed: ' + (xhr.responseJSON?.detail || xhr.responseText));
+        },
+        complete: function () {
+            setLoading($btn, false, 'Upload');
+        }
+    });
+});
+
+$('#rag-test-btn').click(function () {
+    const tenantId = $('#rag-tenant-select').val();
+    const query = $('#rag-query-input').val().trim();
+
+    if (!tenantId) return alert('Please select a tenant');
+    if (!query) return alert('Please enter a question');
+
+    const $btn = $(this);
+    setLoading($btn, true, 'Thinking...');
+    $('#rag-response').html('<em>Thinking...</em>');
+
+    $.ajax({
+        url: `${API_BASE}/rag/search`,
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            tenant_id: parseInt(tenantId),
+            query: query,
+            limit: 3
+        }),
+        success: function (results) {
+            if (results.length === 0) {
+                $('#rag-response').html('<em>No relevant information found.</em>');
+                return;
+            }
+
+            let html = '<ul style="list-style:none; padding:0;">';
+            results.forEach(res => {
+                const sim = (res.similarity * 100).toFixed(1);
+                html += `
+                    <li style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size:0.9rem; margin-bottom:5px;">
+                            <span style="color:var(--accent-color); font-weight:bold;">Match (${sim}%)</span>
+                        </div>
+                        <div style="color:var(--text-primary); line-height:1.5;">${res.content}</div>
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            $('#rag-response').html(html);
+        },
+        error: function (xhr) {
+            $('#rag-response').html('<span style="color:red;">Error processing request</span>');
+            alert('Search failed: ' + (xhr.responseJSON?.detail || xhr.responseText));
+        },
+        complete: function () {
+            setLoading($btn, false, 'Ask Assistant');
+        }
+    });
+});
+
+window.deleteRagFile = function (id) {
+    if (!confirm('Are you sure? This will delete the file and all its embeddings.')) return;
+
+    const tenantId = $('#rag-tenant-select').val();
+
+    $.ajax({
+        url: `${API_BASE}/rag/files/${id}`,
+        type: 'DELETE',
+        success: function () {
+            loadRagFiles(tenantId);
+        },
+        error: function (xhr) {
+            alert('Delete failed: ' + xhr.responseText);
+        }
+    });
+};
+
+function setLoading($btn, isLoading, text) {
+    if (isLoading) {
+        $btn.prop('disabled', true);
+        $btn.html(`<span class="spinner"></span> ${text}`); // Add CSS for spinner if needed, or just text
+    } else {
+        $btn.prop('disabled', false);
+        $btn.text(text);
+    }
 }

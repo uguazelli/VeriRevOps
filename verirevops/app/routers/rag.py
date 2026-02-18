@@ -7,6 +7,7 @@ from app.core.queries import (
     GET_RAG_FILES_BY_TENANT, INSERT_RAG_FILE, DELETE_RAG_FILE,
     SEARCH_SIMILAR_CHUNKS, GET_RAG_FILE_BY_ID, INSERT_RAG_CHUNK, DELETE_CHUNKS_BY_FILE
 )
+from app.rag.ingestion import ingest_file_content, embed_query
 
 router = APIRouter(
     prefix="/api/rag",
@@ -34,12 +35,13 @@ async def upload_rag_file(tenant_id: int = Form(...), file: UploadFile = File(..
         # 1. Register the file
         file_id = execute_write_query(INSERT_RAG_FILE, (tenant_id, file.filename))[0]
 
-        # 2. Process file content (Placeholder logic for now)
-        # In a real implementation, we would read the file, chunk it, embed it, and insert chunks.
-        # content = await file.read()
-        # For now, we just acknowledge the upload.
+        # 2. Process file content
+        content = (await file.read()).decode("utf-8")
 
-        return {"id": file_id, "filename": file.filename, "message": "File uploaded successfully (processing pending)"}
+        # 3. Ingest (Chunk & Embed)
+        num_chunks = await ingest_file_content(file_id, content)
+
+        return {"id": file_id, "filename": file.filename, "message": f"File uploaded and processed into {num_chunks} chunks."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

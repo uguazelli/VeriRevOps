@@ -94,7 +94,7 @@ CREATE_RAG_CHUNKS_TABLE = """
         file_id INTEGER REFERENCES rag_files(id) ON DELETE CASCADE,
         chunk_index INTEGER NOT NULL,
         content TEXT NOT NULL,
-        embedding vector(1536),
+        embedding vector(3072),
         metadata JSONB DEFAULT '{}'
     );
 """
