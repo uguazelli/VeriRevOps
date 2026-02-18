@@ -12,6 +12,11 @@ from sqlalchemy.orm import selectinload
 from flashrank import Ranker, RerankRequest
 
 from app.models import ChatSession, ChatMessage, RagChunk, RagFile
+from app.prompts import (
+    CONTEXTUALIZE_QUERY_SYSTEM_PROMPT,
+    EXPAND_QUERY_SYSTEM_PROMPT,
+    GENERATE_ANSWER_SYSTEM_PROMPT
+)
 
 # --- Configuration ---
 model_name = os.getenv("MODEL")
@@ -79,13 +84,7 @@ async def contextualize_query(state: RAGState):
         # No history, so query is already standalone
         return {"contextualized_query": state["user_query"]}
 
-    system_prompt = (
-        "Given a chat history and the latest user question "
-        "which might reference context in the chat history, "
-        "formulate a standalone question which can be understood "
-        "without the chat history. Do NOT answer the question, "
-        "just reformulate it if needed and otherwise return it as is."
-    )
+    system_prompt = CONTEXTUALIZE_QUERY_SYSTEM_PROMPT
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
@@ -112,11 +111,7 @@ async def expand_query(state: RAGState):
     query = state["contextualized_query"]
     print(f"--- Node 2: Expansion for '{query}' ---")
 
-    system_prompt = (
-        "You are a helpful assistant that generates multiple search queries based on a single input query. "
-        "Generate 3 variations of the input query to overcome distance-based similarity limitations. "
-        "Provide these alternative questions separated by newlines."
-    )
+    system_prompt = EXPAND_QUERY_SYSTEM_PROMPT
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
@@ -252,13 +247,7 @@ async def generate_answer(state: RAGState):
     documents = state["reranked_docs"]
     context = "\n\n".join([doc.page_content for doc in documents])
 
-    system_prompt = (
-        "You are an assistant for question-answering tasks. "
-        "Use the following pieces of retrieved context to answer the question. "
-        "If you don't know the answer, just say that you don't know. "
-        "Use three sentences maximum and keep the answer concise."
-        "\n\nContext:\n{context}"
-    )
+    system_prompt = GENERATE_ANSWER_SYSTEM_PROMPT
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),

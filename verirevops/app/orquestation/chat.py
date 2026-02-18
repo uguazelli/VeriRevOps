@@ -9,6 +9,7 @@ from datetime import datetime
 
 from app.models import ChatSession, ChatMessage
 from app.rag.retrieve import invoke_rag_graph, get_chat_history
+from app.prompts import ROUTER_SYSTEM_PROMPT, CHITCHAT_SYSTEM_PROMPT
 
 # --- Configuration ---
 MODEL_NAME = os.getenv("MODEL", "gemini-2.0-flash")
@@ -88,14 +89,7 @@ async def router_node(state: ChatState) -> ChatState:
     """
     Classifies the user's intent.
     """
-    system_prompt = """You are a helpful assistant for VeriRevOps.
-    Classify the user's message into one of the following intents:
-    - 'rag': The user is asking a question that requires knowledge about the company, procedures, technical details, or specific data.
-    - 'chitchat': The user is greeting, saying thanks, or making small talk.
-    - 'handoff': The user explicitly asks to speak to a human or agent.
-
-    Respond ONLY with the intent string.
-    """
+    system_prompt = ROUTER_SYSTEM_PROMPT
 
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0, google_api_key=api_key)
 
@@ -123,7 +117,7 @@ async def chitchat_node(state: ChatState) -> ChatState:
     Simple LLM response for greetings/chitchat.
     """
     prompt = [
-        SystemMessage(content="You are a helpful and polite assistant for VeriRevOps. Respond to the user's chitchat/greeting naturally."),
+        SystemMessage(content=CHITCHAT_SYSTEM_PROMPT),
         *state['chat_history'], # Optional: Include history for context
         HumanMessage(content=state['user_message'])
     ]
