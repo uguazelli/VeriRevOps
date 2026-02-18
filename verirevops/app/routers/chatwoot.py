@@ -69,7 +69,7 @@ async def process_webhook_message(data: dict):
             traceback.print_exc()
 
 
-@router.post("/webhook") # Removed {alias} for simplicity unless user required it specifically. Assuming standard webhook.
+@router.post("/webhook/{alias}")
 async def handle_webhook(
     background_tasks: BackgroundTasks,
     webhook_data: dict = Body(...)
