@@ -1,6 +1,6 @@
 from app.core.config import settings
 import os
-from typing import List, TypedDict, Optional
+from typing import List, TypedDict, Optional, Annotated
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -44,18 +44,18 @@ class RAGState(TypedDict):
     Represents the state of our RAG pipeline.
     Passed between nodes in the graph.
     """
-    session_id: int
-    tenant_id: int
-    user_query: str                  # Original query from user
-    chat_history: List[BaseMessage]  # Last 6 messages from DB
+    session_id: Annotated[int, "The ID of the chat session"]
+    tenant_id: Annotated[int, "The ID of the tenant"]
+    user_query: Annotated[str, "Original query from user"]
+    chat_history: Annotated[List[BaseMessage], "Last messages from DB"]
 
-    contextualized_query: str        # Step 1: Query rewritten with history
-    expanded_queries: List[str]      # Step 2: Variations of the query
+    contextualized_query: Annotated[str, "Step 1: Query rewritten with history"]
+    expanded_queries: Annotated[List[str], "Step 2: Variations of the query"]
 
-    retrieved_docs: List[Document]   # Step 3: Raw results from Vector DB
-    reranked_docs: List[Document]    # Step 4: Top K results after reranking
+    retrieved_docs: Annotated[List[Document], "Step 3: Raw results from Vector DB"]
+    reranked_docs: Annotated[List[Document], "Step 4: Top K results after reranking"]
 
-    final_answer: str                # Step 5: The LLM response
+    final_answer: Annotated[str, "Step 5: The LLM response"]
 
 
 # --- Helper: Fetch History ---
@@ -81,7 +81,7 @@ async def get_chat_history(session_id: int, db: AsyncSession, limit: int = 6) ->
 
 
 # --- Node 1: Contextualize ---
-async def contextualize_query(state: RAGState, config: RunnableConfig):
+async def contextualize_query(state: RAGState, config: RunnableConfig) -> dict:
     """
     Step 1: Rewrite user query to be standalone based on chat history.
     """
@@ -110,7 +110,7 @@ async def contextualize_query(state: RAGState, config: RunnableConfig):
 
 
 # --- Node: Fetch History ---
-async def fetch_history_node(state: RAGState, config: RunnableConfig):
+async def fetch_history_node(state: RAGState, config: RunnableConfig) -> dict:
     """Fetches chat history within the graph."""
     db: AsyncSession = config["configurable"].get("db")
     if not db:
@@ -121,7 +121,7 @@ async def fetch_history_node(state: RAGState, config: RunnableConfig):
 
 
 # --- Node 2: Expand (Multi-Query) ---
-async def expand_query(state: RAGState, config: RunnableConfig):
+async def expand_query(state: RAGState, config: RunnableConfig) -> dict:
     """
     Step 2: Generate 3 variations of the query to broaden search coverage.
     """
@@ -148,7 +148,7 @@ async def expand_query(state: RAGState, config: RunnableConfig):
 
 
 # --- Node 3: Retrieve ---
-async def retrieve_documents(state: RAGState, config: RunnableConfig):
+async def retrieve_documents(state: RAGState, config: RunnableConfig) -> dict:
     """
     Step 3: Search Vector DB for all expanded queries.
     """
@@ -219,7 +219,7 @@ async def retrieve_documents(state: RAGState, config: RunnableConfig):
 
 
 # --- Node 4: Rerank ---
-async def rerank_documents(state: RAGState, config: RunnableConfig):
+async def rerank_documents(state: RAGState, config: RunnableConfig) -> dict:
     """
     Step 4: Rerank the retrieved documents using FlashRank.
     """
@@ -259,7 +259,7 @@ async def rerank_documents(state: RAGState, config: RunnableConfig):
 
 
 # --- Node 5: Generate ---
-async def generate_answer(state: RAGState, config: RunnableConfig):
+async def generate_answer(state: RAGState, config: RunnableConfig) -> dict:
     """
     Step 5: Generate the final answer using context and history.
     """

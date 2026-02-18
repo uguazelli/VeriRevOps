@@ -1,6 +1,6 @@
 from app.core.config import settings
 import os
-from typing import List, Literal, TypedDict, Optional
+from typing import List, Literal, TypedDict, Optional, Annotated
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
@@ -21,17 +21,17 @@ from app.core.logger import Log
 
 # --- State ---
 class ChatState(TypedDict):
-    tenant_id: int
-    session_id: int
-    user_message: str
-    chat_history: List[BaseMessage]
-    intent: str  # "rag", "chitchat", "handoff"
-    ai_response: str
-    summary_needed: bool
+    tenant_id: Annotated[int, "The ID of the tenant"]
+    session_id: Annotated[int, "The ID of the chat session"]
+    user_message: Annotated[str, "The message from the user"]
+    chat_history: Annotated[List[BaseMessage], "The history of the chat"]
+    intent: Annotated[str, "The classified intent: rag, chitchat, or handoff"]
+    ai_response: Annotated[str, "The response from the AI"]
+    summary_needed: Annotated[bool, "Whether a summary update is required"]
 
 # --- Nodes ---
 
-async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> ChatState:
+async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> dict:
     """
     Ensures session exists and loads history.
     """
@@ -91,7 +91,7 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> C
     history = await get_chat_history(state['session_id'], db)
     return {"chat_history": history}
 
-async def router_node(state: ChatState, config: RunnableConfig) -> ChatState:
+async def router_node(state: ChatState, config: RunnableConfig) -> dict:
     """
     Classifies the user's intent.
     """
@@ -123,7 +123,7 @@ async def router_node(state: ChatState, config: RunnableConfig) -> ChatState:
     Log.orchestrator(f"Decision: '{intent}' (Raw: '{raw_intent}')")
     return {"intent": intent}
 
-async def rag_node(state: ChatState, config: RunnableConfig) -> ChatState:
+async def rag_node(state: ChatState, config: RunnableConfig) -> dict:
     """
     Executes the RAG pipeline.
     """
@@ -131,7 +131,7 @@ async def rag_node(state: ChatState, config: RunnableConfig) -> ChatState:
     answer = await invoke_rag_graph(state['session_id'], state['user_message'], db, state['tenant_id'])
     return {"ai_response": answer, "summary_needed": True}
 
-async def chitchat_node(state: ChatState, config: RunnableConfig) -> ChatState:
+async def chitchat_node(state: ChatState, config: RunnableConfig) -> dict:
     """
     Simple LLM response for greetings/chitchat.
     """
@@ -146,7 +146,7 @@ async def chitchat_node(state: ChatState, config: RunnableConfig) -> ChatState:
     response = await llm.ainvoke(prompt, config=config)
     return {"ai_response": response.content, "summary_needed": False}
 
-async def persist_response_node(state: ChatState, config: RunnableConfig) -> ChatState:
+async def persist_response_node(state: ChatState, config: RunnableConfig) -> dict:
     """
     Saves the Assistant's response to the DB.
     """
@@ -161,7 +161,7 @@ async def persist_response_node(state: ChatState, config: RunnableConfig) -> Cha
     await db.commit()
     return {}
 
-async def summarize_node(state: ChatState, config: RunnableConfig) -> ChatState:
+async def summarize_node(state: ChatState, config: RunnableConfig) -> dict:
     """
     Async task to update session summary.
     In a real event-driven architecture, this might be a background task (FastAPI BackgroundTasks).
