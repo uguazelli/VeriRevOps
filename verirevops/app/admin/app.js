@@ -82,10 +82,26 @@ function fetchAllTenants() {
     });
 }
 
+
+
 function loadEntity(entity) {
     currentEntity = entity;
-    const schema = schemas[entity];
 
+    // Handle RAG View
+    if (entity === 'rag') {
+        $('#page-title').text('RAG Management');
+        $('#create-btn').hide();
+        $('.table-container').hide();
+        $('#rag-view').show();
+        populateRagTenants();
+        return; // Stop here, no need to fetch standard CRUD data
+    }
+
+    // Handle Standard CRUD Views
+    $('.table-container').show();
+    $('#rag-view').hide();
+
+    const schema = schemas[entity];
     $('#page-title').text(schema.title);
     renderHeaders(schema.headers);
 
@@ -272,3 +288,18 @@ window.deleteRecord = function (id) {
         }
     });
 };
+
+function populateRagTenants() {
+    const $select = $('#rag-tenant-select');
+    // Keep the default option
+    const currentVal = $select.val();
+    $select.empty();
+    $select.append('<option value="">Select Tenant</option>');
+
+    allTenants.forEach(t => {
+        $select.append(`<option value="${t.id}">${t.name}</option>`);
+    });
+
+    // Restore selection if still valid
+    if (currentVal) $select.val(currentVal);
+}

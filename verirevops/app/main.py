@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 from app.core.database import check_db_connection, create_database_if_not_exists, create_tables_if_not_exist
-from app.controller import handle_webhook
+from fastapi.staticfiles import StaticFiles
+from app.routers import admin, chatwoot
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -13,8 +14,7 @@ async def lifespan(app: FastAPI):
     # Shutdown logic
     print("Shutting down VeriRevOps API...")
 
-from fastapi.staticfiles import StaticFiles
-from app.routers import admin
+
 
 app = FastAPI(
     title="VeriRevOps API",
@@ -24,9 +24,11 @@ app = FastAPI(
 )
 
 app.include_router(admin.router)
+app.include_router(chatwoot.router)
 
-# Mount the admin directory as static files
 app.mount("/admin", StaticFiles(directory="app/admin", html=True), name="admin")
+
+
 
 @app.get("/health")
 async def health_check():
@@ -39,7 +41,3 @@ async def health_check_db():
         return {"status": "ok", "message": message}
     else:
         raise HTTPException(status_code=500, detail=f"Database connection failed: {message}")
-
-@app.post("/webhook/{alias}")
-async def webhook(alias: str, webhook_data: dict):
-    return handle_webhook(alias, webhook_data)

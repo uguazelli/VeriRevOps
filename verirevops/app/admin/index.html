@@ -22,6 +22,7 @@
                 <li data-target="subscriptions">Subscriptions</li>
                 <li data-target="chat_sessions">Chat Sessions</li>
                 <li data-target="chat_messages">Chat Messages</li>
+                <li data-target="rag">RAG</li>
             </ul>
         </nav>
 
@@ -42,6 +43,54 @@
                     </tbody>
                 </table>
             </div>
+
+            <div id="rag-view" style="display: none;">
+                <div class="glass-panel" style="margin-bottom: 20px; padding: 20px;">
+                    <h3>Testing Area</h3>
+                    <div class="form-group">
+                        <label>Select Tenant</label>
+                        <select id="rag-tenant-select">
+                            <option value="">Select Tenant</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="margin-bottom: 20px; padding: 20px;">
+                    <h3>1. Upload Context</h3>
+                    <div class="form-group" style="display: flex; gap: 10px; align-items: center;">
+                        <input type="file" id="rag-file-input">
+                        <button id="rag-upload-btn" class="btn-primary">Upload</button>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="margin-bottom: 20px; padding: 20px;">
+                    <h3>2. Test RAG</h3>
+                    <div class="form-group">
+                        <textarea id="rag-query-input" rows="4" placeholder="Enter your question here..."
+                            style="width: 100%; margin-bottom: 10px;"></textarea>
+                        <button id="rag-test-btn" class="btn-primary">Ask Assistant</button>
+                    </div>
+                    <div id="rag-response"
+                        style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; min-height: 50px;">
+                        <em>Response will appear here...</em>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="padding: 20px;">
+                    <h3>3. Knowledge Base</h3>
+                    <table id="rag-files-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>File Name</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Files injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -59,7 +108,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=3"></script>
 </body>
 
 </html>
