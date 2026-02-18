@@ -1,10 +1,12 @@
-from fastapi import APIRouter
-from typing import List, Optional
+from fastapi import APIRouter, Body
 
-router = APIRouter(tags=["chatwoot"])
+router = APIRouter(
+    prefix="/api",
+    tags=["chatwoot"]
+)
 
-@router.get("/webhook/{alias}")
-async def get_tenants(alias: str, webhook_data: dict):
+@router.post("/webhook/{alias}")
+async def handle_webhook(alias: str, webhook_data: dict = Body(...)):
     print(f"Received webhook for alias: {alias}")
     print(f"Webhook data: {webhook_data}")
-    return {"status": "ok", "message": "Tenant created successfully"}
+    return {"status": "ok", "message": "Webhook received successfully"}

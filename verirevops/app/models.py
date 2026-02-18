@@ -45,3 +45,19 @@ class ChatMessages(BaseModel):
     role: str
     created_at: datetime
     tenant_name: Optional[str] = None
+
+
+class RagFileResponse(BaseModel):
+    id: int
+    filename: str
+    uploaded_at: str
+
+class RagSearchRequest(BaseModel):
+    tenant_id: int
+    query: str
+    limit: int = 5
+
+class RagSearchResponse(BaseModel):
+    content: str
+    metadata: dict
+    similarity: float

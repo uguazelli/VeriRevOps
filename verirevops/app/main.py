@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 from app.core.database import check_db_connection, create_database_if_not_exists, create_tables_if_not_exist
 from fastapi.staticfiles import StaticFiles
-from app.routers import admin, chatwoot
+from app.routers import admin, chatwoot, rag
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,6 +25,7 @@ app = FastAPI(
 
 app.include_router(admin.router)
 app.include_router(chatwoot.router)
+app.include_router(rag.router)
 
 app.mount("/admin", StaticFiles(directory="app/admin", html=True), name="admin")
 

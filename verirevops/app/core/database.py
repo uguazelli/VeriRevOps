@@ -57,7 +57,9 @@ from app.core.queries import (
     CREATE_TENANTS_TABLE,
     CREATE_SUBSCRIPTIONS_TABLE,
     CREATE_CHAT_SESSIONS_TABLE,
-    CREATE_CHAT_MESSAGES_TABLE
+    CREATE_CHAT_MESSAGES_TABLE,
+    CREATE_RAG_FILES_TABLE,
+    CREATE_RAG_CHUNKS_TABLE
 )
 
 def create_tables_if_not_exist():
@@ -77,6 +79,11 @@ def create_tables_if_not_exist():
 
         # Chat Messages
         cur.execute(CREATE_CHAT_MESSAGES_TABLE)
+
+        # RAG Support
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        cur.execute(CREATE_RAG_FILES_TABLE)
+        cur.execute(CREATE_RAG_CHUNKS_TABLE)
 
         print("Tables created (if not existed) successfully.")
         cur.close()

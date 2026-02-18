@@ -76,3 +76,47 @@ GET_CHAT_MESSAGES_BASE = """
     JOIN chat_sessions s ON m.session_id = s.id
     LEFT JOIN tenants t ON s.tenant_id = t.id
 """
+
+# --- RAG Tables ---
+
+CREATE_RAG_FILES_TABLE = """
+    CREATE TABLE IF NOT EXISTS rag_files (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER REFERENCES tenants(id),
+        filename TEXT NOT NULL,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+"""
+
+CREATE_RAG_CHUNKS_TABLE = """
+    CREATE TABLE IF NOT EXISTS rag_chunks (
+        id SERIAL PRIMARY KEY,
+        file_id INTEGER REFERENCES rag_files(id) ON DELETE CASCADE,
+        chunk_index INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        embedding vector(1536),
+        metadata JSONB DEFAULT '{}'
+    );
+"""
+
+# --- RAG Queries ---
+
+# Files
+GET_RAG_FILES_BY_TENANT = "SELECT id, filename, uploaded_at FROM rag_files WHERE tenant_id = %s ORDER BY uploaded_at DESC"
+INSERT_RAG_FILE = "INSERT INTO rag_files (tenant_id, filename) VALUES (%s, %s) RETURNING id"
+DELETE_RAG_FILE = "DELETE FROM rag_files WHERE id = %s"
+GET_RAG_FILE_BY_ID = "SELECT * FROM rag_files WHERE id = %s"
+
+# Chunks
+INSERT_RAG_CHUNK = "INSERT INTO rag_chunks (file_id, chunk_index, content, embedding, metadata) VALUES (%s, %s, %s, %s, %s) RETURNING id"
+DELETE_CHUNKS_BY_FILE = "DELETE FROM rag_chunks WHERE file_id = %s"
+
+# Vector Search
+# Uses cosine distance (<=>) for similarity search
+SEARCH_SIMILAR_CHUNKS = """
+    SELECT content, metadata, 1 - (embedding <=> %s) AS similarity
+    FROM rag_chunks
+    WHERE file_id IN (SELECT id FROM rag_files WHERE tenant_id = %s)
+    ORDER BY embedding <=> %s
+    LIMIT %s
+"""
