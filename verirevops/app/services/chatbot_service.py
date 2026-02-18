@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models import Tenant, ChatwootConfig
-from app.orquestation.chat import invoke_chat_orchestrator
+from app.orchestration.chat import invoke_chat_orchestrator
 from app.core.chatwoot import get_chatwoot_client, ChatwootClient
 from app.core.logger import Log
 

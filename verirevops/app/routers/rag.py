@@ -17,16 +17,13 @@ async def upload_rag_file(
     file: UploadFile = File(...),
     service: RagService = Depends(get_rag_service)
 ):
-    try:
-        content = (await file.read()).decode("utf-8")
-        file_id, num_chunks = await service.ingest_file(tenant_id, file.filename, content)
-        return {
-            "id": file_id,
-            "filename": file.filename,
-            "message": f"File uploaded and processed into {num_chunks} chunks."
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    content = (await file.read()).decode("utf-8")
+    file_id, num_chunks = await service.ingest_file(tenant_id, file.filename, content)
+    return {
+        "id": file_id,
+        "filename": file.filename,
+        "message": f"File uploaded and processed into {num_chunks} chunks."
+    }
 
 @router.get("/files/{tenant_id}", response_model=List[RagFileResponse])
 async def list_rag_files(tenant_id: int, service: RagService = Depends(get_rag_service)):
@@ -45,12 +42,8 @@ async def search_rag(
     request: RagSearchRequest,
     service: RagService = Depends(get_rag_service)
 ):
-    try:
-        answer = await service.perform_search(request.session_id, request.tenant_id, request.query)
-        return {
-            "answer": answer,
-            "query": request.query
-        }
-    except Exception as e:
-        Log.error(f"Error in RAG router search: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+    answer = await service.perform_search(request.session_id, request.tenant_id, request.query)
+    return {
+        "answer": answer,
+        "query": request.query
+    }

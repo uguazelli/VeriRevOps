@@ -31,6 +31,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+from app.core.exceptions import global_exception_handler, http_exception_handler
+app.add_exception_handler(Exception, global_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+
 app.include_router(health.router)
 app.include_router(admin.router)
 app.include_router(chatwoot.router)

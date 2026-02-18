@@ -83,7 +83,8 @@ async def get_chat_history(session_id: int, db: AsyncSession, limit: int = 6) ->
 # --- Node 1: Contextualize ---
 async def contextualize_query(state: RAGState, config: RunnableConfig) -> dict:
     """
-    Step 1: Rewrite user query to be standalone based on chat history.
+    Rewrites the user's query into a standalone version based on chat history.
+    Transforms 'user_query' using 'chat_history' into 'contextualized_query'.
     """
     Log.rag(f"Contextualizing '{state['user_query']}'", step="Node 1")
 
@@ -111,7 +112,10 @@ async def contextualize_query(state: RAGState, config: RunnableConfig) -> dict:
 
 # --- Node: Fetch History ---
 async def fetch_history_node(state: RAGState, config: RunnableConfig) -> dict:
-    """Fetches chat history within the graph."""
+    """
+    Fetches the last N messages from the database for context.
+    Populates 'chat_history' based on the 'session_id'.
+    """
     db: AsyncSession = config["configurable"].get("db")
     if not db:
         return {"chat_history": []}
@@ -123,7 +127,8 @@ async def fetch_history_node(state: RAGState, config: RunnableConfig) -> dict:
 # --- Node 2: Expand (Multi-Query) ---
 async def expand_query(state: RAGState, config: RunnableConfig) -> dict:
     """
-    Step 2: Generate 3 variations of the query to broaden search coverage.
+    Generates multiple search query variations to optimize coverage.
+    Transforms 'contextualized_query' into a list of 'expanded_queries'.
     """
     query = state["contextualized_query"]
     Log.rag(f"Expanding queries for '{query}'", step="Node 2")
@@ -150,7 +155,8 @@ async def expand_query(state: RAGState, config: RunnableConfig) -> dict:
 # --- Node 3: Retrieve ---
 async def retrieve_documents(state: RAGState, config: RunnableConfig) -> dict:
     """
-    Step 3: Search Vector DB for all expanded queries.
+    Searches the Vector DB for chunks relevant to all expanded queries.
+    Populates 'retrieved_docs' with matches filtered by 'tenant_id'.
     """
     db_session: AsyncSession = config["configurable"].get("db")
     if not db_session:
@@ -221,7 +227,8 @@ async def retrieve_documents(state: RAGState, config: RunnableConfig) -> dict:
 # --- Node 4: Rerank ---
 async def rerank_documents(state: RAGState, config: RunnableConfig) -> dict:
     """
-    Step 4: Rerank the retrieved documents using FlashRank.
+    Reranks retrieved documents using FlashRank for higher precision.
+    Transforms 'retrieved_docs' into a prioritized 'reranked_docs' list.
     """
     docs = state["retrieved_docs"]
     query = state["contextualized_query"]
@@ -261,7 +268,8 @@ async def rerank_documents(state: RAGState, config: RunnableConfig) -> dict:
 # --- Node 5: Generate ---
 async def generate_answer(state: RAGState, config: RunnableConfig) -> dict:
     """
-    Step 5: Generate the final answer using context and history.
+    Synthesizes the final answer using the reranked documents and history.
+    Populates 'final_answer' using 'reranked_docs' and 'chat_history'.
     """
     Log.rag(f"Generating overall answer", step="Node 5")
     documents = state["reranked_docs"]

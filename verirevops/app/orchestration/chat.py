@@ -33,7 +33,8 @@ class ChatState(TypedDict):
 
 async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> dict:
     """
-    Ensures session exists and loads history.
+    Ensures the chat session exists and persists the incoming message.
+    Populates 'chat_history' and ensures 'session_id' is valid in DB.
     """
     db: AsyncSession = config["configurable"].get("db")
     if not db:
@@ -93,7 +94,8 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> d
 
 async def router_node(state: ChatState, config: RunnableConfig) -> dict:
     """
-    Classifies the user's intent.
+    Classifies the user message into 'rag', 'chitchat', or 'handoff'.
+    Updates 'intent' based on 'user_message' and 'chat_history'.
     """
     system_prompt = ROUTER_SYSTEM_PROMPT
 
@@ -125,7 +127,8 @@ async def router_node(state: ChatState, config: RunnableConfig) -> dict:
 
 async def rag_node(state: ChatState, config: RunnableConfig) -> dict:
     """
-    Executes the RAG pipeline.
+    Triggers the RAG pipeline to generate a grounded answer.
+    Populates 'ai_response' using retrieved knowledge filtered by 'tenant_id'.
     """
     db: AsyncSession = config["configurable"].get("db")
     answer = await invoke_rag_graph(state['session_id'], state['user_message'], db, state['tenant_id'])
@@ -133,7 +136,8 @@ async def rag_node(state: ChatState, config: RunnableConfig) -> dict:
 
 async def chitchat_node(state: ChatState, config: RunnableConfig) -> dict:
     """
-    Simple LLM response for greetings/chitchat.
+    Generates a conversational response for greetings or general talk.
+    Populates 'ai_response' without using the RAG search pipeline.
     """
     prompt = [
         SystemMessage(content=CHITCHAT_SYSTEM_PROMPT),
@@ -148,7 +152,8 @@ async def chitchat_node(state: ChatState, config: RunnableConfig) -> dict:
 
 async def persist_response_node(state: ChatState, config: RunnableConfig) -> dict:
     """
-    Saves the Assistant's response to the DB.
+    Saves the final AI-generated response back to the chat history database.
+    Appends an 'assistant' role message linked to 'session_id'.
     """
     db: AsyncSession = config["configurable"].get("db")
     new_msg = ChatMessage(
@@ -163,9 +168,8 @@ async def persist_response_node(state: ChatState, config: RunnableConfig) -> dic
 
 async def summarize_node(state: ChatState, config: RunnableConfig) -> dict:
     """
-    Async task to update session summary.
-    In a real event-driven architecture, this might be a background task (FastAPI BackgroundTasks).
-    For now, we execute it as part of the flow but it could be decoupled.
+    Updates the high-level conversation summary if necessary.
+    Triggered when 'summary_needed' is true to condense chat context.
     """
     if not state.get("summary_needed"):
         return {}

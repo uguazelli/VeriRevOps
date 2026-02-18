@@ -8,7 +8,7 @@ from sqlalchemy import select, delete
 sys.path.append(os.getcwd())
 
 from app.core.db import AsyncSessionLocal
-from app.orquestation.chat import invoke_chat_orchestrator
+from app.orchestration.chat import invoke_chat_orchestrator
 from app.rag.retrieve import invoke_rag_graph
 from app.models import Tenant, RagFile, RagChunk
 
