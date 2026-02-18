@@ -396,6 +396,7 @@ $('#rag-upload-btn').click(function () {
 $('#rag-test-btn').click(function () {
     const tenantId = $('#rag-tenant-select').val();
     const query = $('#rag-query-input').val().trim();
+    const sessionId = $('#rag-session-input').val() || 4; // Default to 4 if empty
 
     if (!tenantId) return alert('Please select a tenant');
     if (!query) return alert('Please enter a question');
@@ -410,29 +411,25 @@ $('#rag-test-btn').click(function () {
         contentType: 'application/json',
         data: JSON.stringify({
             tenant_id: parseInt(tenantId),
+            session_id: parseInt(sessionId),
             query: query,
             limit: 3
         }),
-        success: function (results) {
-            if (results.length === 0) {
-                $('#rag-response').html('<em>No relevant information found.</em>');
-                return;
-            }
-
-            let html = '<ul style="list-style:none; padding:0;">';
-            results.forEach(res => {
-                const sim = (res.similarity * 100).toFixed(1);
-                html += `
-                    <li style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+        success: function (response) {
+            // The new Agentic RAG returns { answer: "...", query: "..." }
+            if (response.answer) {
+                const answerHtml = `
+                    <div style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
                         <div style="font-size:0.9rem; margin-bottom:5px;">
-                            <span style="color:var(--accent-color); font-weight:bold;">Match (${sim}%)</span>
+                            <span style="color:var(--accent-color); font-weight:bold;">Assistant Response</span>
                         </div>
-                        <div style="color:var(--text-primary); line-height:1.5;">${res.content}</div>
-                    </li>
+                        <div style="color:var(--text-primary); line-height:1.5; white-space: pre-wrap;">${response.answer}</div>
+                    </div>
                 `;
-            });
-            html += '</ul>';
-            $('#rag-response').html(html);
+                $('#rag-response').html(answerHtml);
+            } else {
+                $('#rag-response').html('<em>No response generated.</em>');
+            }
         },
         error: function (xhr) {
             $('#rag-response').html('<span style="color:red;">Error processing request</span>');

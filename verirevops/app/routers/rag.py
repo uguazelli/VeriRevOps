@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Body
 from typing import List, Optional
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,7 @@ class RagFileResponse(BaseModel):
 
 class RagSearchRequest(BaseModel):
     tenant_id: int
+    session_id: Optional[int] = 4 # Default to test session if missing
     query: str
     limit: Optional[int] = 5
 
@@ -90,40 +91,27 @@ async def delete_rag_file(file_id: int, session: AsyncSession = Depends(get_db))
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/search", response_model=List[RagSearchResponse])
-async def search_rag(request: RagSearchRequest, session: AsyncSession = Depends(get_db)):
+@router.post("/search")
+async def search_rag(
+    request: RagSearchRequest,
+    db: AsyncSession = Depends(get_db)
+):
     try:
-        # 1. Generate embedding for query
-        query_vector = await embed_query(request.query)
+        # Import only inside function to avoid circular imports if any,
+        # but top-level is fine usually.
+        from app.rag.retrieve import invoke_rag_graph
 
-        # 2. Search database using pgvector l2_distance
-        # Filter chunks by files belonging to the tenant
-        # Re-query to get distance for UI percentage
-        stmt_with_dist = (
-            select(RagChunk, RagChunk.embedding.l2_distance(query_vector).label("distance"))
-            .join(RagFile)
-            .where(RagFile.tenant_id == request.tenant_id)
-            .order_by("distance")
-            .limit(request.limit)
-        )
+        # Verify session exists (optional but good practice)
+        # For now, just pass it through. If it doesn't exist, history will be empty.
 
-        result = await session.execute(stmt_with_dist)
-        rows = result.all() # [(RagChunk, distance), ...]
+        answer = await invoke_rag_graph(request.session_id, request.query, db)
 
-        results = []
-        for chunk, distance in rows:
-            # Simple conversion: L2 distance isn't 0-1 similarity directly.
-            # Using simple inversion for now or assuming small distance = high similarity.
-
-            sim_score = max(0, 1 - distance) # distinct approximation
-
-            results.append(RagSearchResponse(
-                content=chunk.content,
-                metadata=chunk.chunk_metadata,
-                similarity=float(sim_score)
-            ))
-
-        return results
+        return {
+            "answer": answer,
+            # We could return sources here too if we modified invoke_rag_graph to return state
+            "query": request.query
+        }
 
     except Exception as e:
+        print(f"Error in RAG: {e}")
         raise HTTPException(status_code=400, detail=str(e))

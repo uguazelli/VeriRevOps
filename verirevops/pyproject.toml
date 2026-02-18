@@ -17,4 +17,6 @@ dependencies = [
     "sqlalchemy>=2.0.28",
     "asyncpg>=0.29.0",
     "pgvector>=0.2.5",
+    "langgraph>=0.0.26",
+    "flashrank>=0.2.0",
 ]
