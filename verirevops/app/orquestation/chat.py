@@ -7,6 +7,7 @@ from langgraph.graph import StateGraph, END
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert
 from datetime import datetime
+from langchain_core.runnables import RunnableConfig
 
 from app.models import ChatSession, ChatMessage
 from app.rag.retrieve import invoke_rag_graph, get_chat_history
@@ -30,11 +31,14 @@ class ChatState(TypedDict):
 
 # --- Nodes ---
 
-async def load_and_ensure_session(state: ChatState, db: AsyncSession) -> ChatState:
+async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> ChatState:
     """
     Ensures session exists and loads history.
-    Example placeholder: In real app, `session_id` should effectively be `conversation_id` from Chatwoot map.
     """
+    db: AsyncSession = config["configurable"].get("db")
+    if not db:
+        Log.error("DB session missing in Chat Orchestrator config")
+        return {}
     # 1. Check/Create Session logic
     stmt = select(ChatSession).where(ChatSession.id == state['session_id'])
     result = await db.execute(stmt)
@@ -87,7 +91,7 @@ async def load_and_ensure_session(state: ChatState, db: AsyncSession) -> ChatSta
     history = await get_chat_history(state['session_id'], db)
     return {"chat_history": history}
 
-async def router_node(state: ChatState) -> ChatState:
+async def router_node(state: ChatState, config: RunnableConfig) -> ChatState:
     """
     Classifies the user's intent.
     """
@@ -104,7 +108,7 @@ async def router_node(state: ChatState) -> ChatState:
         HumanMessage(content=state['user_message'])
     ]
 
-    response = await llm.ainvoke(messages)
+    response = await llm.ainvoke(messages, config=config)
     raw_intent = response.content.strip().lower()
 
     # Robust extraction: find any valid intent in the response
@@ -119,17 +123,15 @@ async def router_node(state: ChatState) -> ChatState:
     Log.orchestrator(f"Decision: '{intent}' (Raw: '{raw_intent}')")
     return {"intent": intent}
 
-async def rag_node(state: ChatState, db: AsyncSession) -> ChatState:
+async def rag_node(state: ChatState, config: RunnableConfig) -> ChatState:
     """
     Executes the RAG pipeline.
     """
-    # invoke_rag_graph already handles history fetching, but we have it in state.
-    # We pass the user query.
-    # Note: invoke_rag_graph manages its own flow.
+    db: AsyncSession = config["configurable"].get("db")
     answer = await invoke_rag_graph(state['session_id'], state['user_message'], db, state['tenant_id'])
     return {"ai_response": answer, "summary_needed": True}
 
-async def chitchat_node(state: ChatState) -> ChatState:
+async def chitchat_node(state: ChatState, config: RunnableConfig) -> ChatState:
     """
     Simple LLM response for greetings/chitchat.
     """
@@ -141,13 +143,14 @@ async def chitchat_node(state: ChatState) -> ChatState:
 
     llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
 
-    response = await llm.ainvoke(prompt)
+    response = await llm.ainvoke(prompt, config=config)
     return {"ai_response": response.content, "summary_needed": False}
 
-async def persist_response_node(state: ChatState, db: AsyncSession) -> ChatState:
+async def persist_response_node(state: ChatState, config: RunnableConfig) -> ChatState:
     """
     Saves the Assistant's response to the DB.
     """
+    db: AsyncSession = config["configurable"].get("db")
     new_msg = ChatMessage(
         session_id=state['session_id'],
         role='assistant',
@@ -158,7 +161,7 @@ async def persist_response_node(state: ChatState, db: AsyncSession) -> ChatState
     await db.commit()
     return {}
 
-async def summarize_node(state: ChatState, db: AsyncSession) -> ChatState:
+async def summarize_node(state: ChatState, config: RunnableConfig) -> ChatState:
     """
     Async task to update session summary.
     In a real event-driven architecture, this might be a background task (FastAPI BackgroundTasks).
@@ -174,27 +177,18 @@ async def summarize_node(state: ChatState, db: AsyncSession) -> ChatState:
 
 # --- Graph Construction ---
 
-def build_chat_graph(db: AsyncSession):
+def build_chat_graph():
     """
-    Builds the graph with the provided DB session injected into nodes.
+    Builds the graph. DB is injected via RunnableConfig at runtime.
     """
     workflow = StateGraph(ChatState)
 
-    # Define Nodes with strict partials not needed if we use a wrapper,
-    # but lambda/partial is easiest for 'db' injection.
-
-    # We need to wrap async functions to be valid nodes
-    async def ingest_step(state): return await load_and_ensure_session(state, db)
-    async def rag_step(state): return await rag_node(state, db)
-    async def persist_step(state): return await persist_response_node(state, db)
-    async def summary_step(state): return await summarize_node(state, db)
-
-    workflow.add_node("ingest", ingest_step)
+    workflow.add_node("ingest", load_and_ensure_session)
     workflow.add_node("router", router_node)
-    workflow.add_node("rag", rag_step)
+    workflow.add_node("rag", rag_node)
     workflow.add_node("chitchat", chitchat_node)
-    workflow.add_node("persist", persist_step)
-    workflow.add_node("summarize", summary_step)
+    workflow.add_node("persist", persist_response_node)
+    workflow.add_node("summarize", summarize_node)
 
     # Edges
     workflow.set_entry_point("ingest")
@@ -210,7 +204,7 @@ def build_chat_graph(db: AsyncSession):
         {
             "rag": "rag",
             "chitchat": "chitchat",
-            "handoff": "chitchat" # Fallback to chitchat for now, or implement handoff
+            "handoff": "chitchat" # Fallback to chitchat for now
         }
     )
 
@@ -221,11 +215,13 @@ def build_chat_graph(db: AsyncSession):
 
     return workflow.compile()
 
+# Singleton Graph Instance
+chat_graph = build_chat_graph()
+
 async def invoke_chat_orchestrator(tenant_id: int, session_id: int, message: str, db: AsyncSession):
     """
-    Public entry point.
+    Public entry point using native LangGraph ainvoke.
     """
-    app = build_chat_graph(db)
 
     initial_state = ChatState(
         tenant_id=tenant_id,
@@ -238,6 +234,7 @@ async def invoke_chat_orchestrator(tenant_id: int, session_id: int, message: str
     )
 
     # Execute
-    final_state = await app.ainvoke(initial_state)
+    config = {"configurable": {"db": db}}
+    final_state = await chat_graph.ainvoke(initial_state, config=config)
     Log.success(f"Orchestration complete for Session {session_id}")
     return final_state['ai_response']

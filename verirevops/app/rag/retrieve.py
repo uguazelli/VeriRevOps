@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from flashrank import Ranker, RerankRequest
+from langchain_core.runnables import RunnableConfig
 from app.core.logger import Log
 
 from app.models import ChatSession, ChatMessage, RagChunk, RagFile
@@ -80,7 +81,7 @@ async def get_chat_history(session_id: int, db: AsyncSession, limit: int = 6) ->
 
 
 # --- Node 1: Contextualize ---
-async def contextualize_query(state: RAGState):
+async def contextualize_query(state: RAGState, config: RunnableConfig):
     """
     Step 1: Rewrite user query to be standalone based on chat history.
     """
@@ -103,13 +104,24 @@ async def contextualize_query(state: RAGState):
     new_query = await chain.ainvoke({
         "chat_history": state["chat_history"],
         "question": state["user_query"]
-    })
+    }, config=config)
 
     return {"contextualized_query": new_query}
 
 
+# --- Node: Fetch History ---
+async def fetch_history_node(state: RAGState, config: RunnableConfig):
+    """Fetches chat history within the graph."""
+    db: AsyncSession = config["configurable"].get("db")
+    if not db:
+        return {"chat_history": []}
+
+    history = await get_chat_history(state["session_id"], db)
+    return {"chat_history": history}
+
+
 # --- Node 2: Expand (Multi-Query) ---
-async def expand_query(state: RAGState):
+async def expand_query(state: RAGState, config: RunnableConfig):
     """
     Step 2: Generate 3 variations of the query to broaden search coverage.
     """
@@ -125,7 +137,7 @@ async def expand_query(state: RAGState):
 
     llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
     chain = prompt | llm | StrOutputParser()
-    response = await chain.ainvoke({"question": query})
+    response = await chain.ainvoke({"question": query}, config=config)
 
     # Parse result into list
     queries = [q.strip() for q in response.split("\n") if q.strip()]
@@ -136,10 +148,15 @@ async def expand_query(state: RAGState):
 
 
 # --- Node 3: Retrieve ---
-async def retrieve_documents(state: RAGState, db_session: AsyncSession):
+async def retrieve_documents(state: RAGState, config: RunnableConfig):
     """
     Step 3: Search Vector DB for all expanded queries.
     """
+    db_session: AsyncSession = config["configurable"].get("db")
+    if not db_session:
+        Log.error("Database session missing in RAG Graph config")
+        return {"retrieved_docs": []}
+
     # Sanitize queries to avoid potential 500 errors from invisible chars
     raw_queries = state["expanded_queries"]
     queries = []
@@ -157,8 +174,6 @@ async def retrieve_documents(state: RAGState, db_session: AsyncSession):
 
     # Instantiate embeddings locally to avoid potential client state issues
     embeddings = GoogleGenerativeAIEmbeddings(model=settings.EMBEDDING_MODEL, google_api_key=settings.GOOGLE_API_KEY)
-
-    import asyncio
 
     # We could do this in parallel, but keeping it simple/sequential loop for now
     for q in queries:
@@ -178,13 +193,6 @@ async def retrieve_documents(state: RAGState, db_session: AsyncSession):
 
         if not vector:
              continue
-
-        # Search DB (using l2_distance)
-        # We need to manually construct this since we are inside a node
-        # but we need the db_session which isn't in State.
-        # *Architecture Note*: usually we pass DB in config or bind it.
-        # For simplicity, we will assume it is passed in 'configurable' or we cheat slightly
-        # by passing it as an argument to the graph function wrapper.
 
         stmt = (
             select(RagChunk)
@@ -211,7 +219,7 @@ async def retrieve_documents(state: RAGState, db_session: AsyncSession):
 
 
 # --- Node 4: Rerank ---
-async def rerank_documents(state: RAGState):
+async def rerank_documents(state: RAGState, config: RunnableConfig):
     """
     Step 4: Rerank the retrieved documents using FlashRank.
     """
@@ -251,18 +259,13 @@ async def rerank_documents(state: RAGState):
 
 
 # --- Node 5: Generate ---
-async def generate_answer(state: RAGState):
+async def generate_answer(state: RAGState, config: RunnableConfig):
     """
     Step 5: Generate the final answer using context and history.
     """
     Log.rag(f"Generating overall answer", step="Node 5")
     documents = state["reranked_docs"]
     context = "\n\n".join([doc.page_content for doc in documents])
-
-    # history = state.get("chat_history", [])
-
-    # Use a more explicit prompt, potentially moving context to the human message
-    # Some Gemini versions respond better when context is immediately before the question
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are an assistant for question-answering tasks for VeriRevOps."),
@@ -277,7 +280,7 @@ async def generate_answer(state: RAGState):
         "context": context,
         "chat_history": state["chat_history"],
         "question": state["contextualized_query"] # Use the cleaned query
-    })
+    }, config=config)
 
     return {"final_answer": response}
 
@@ -288,40 +291,40 @@ def build_rag_graph():
     workflow = StateGraph(RAGState)
 
     # Add Nodes
+    workflow.add_node("fetch_history", fetch_history_node)
     workflow.add_node("contextualize", contextualize_query)
     workflow.add_node("expand", expand_query)
-    # We need a wrapper for retrieve to handle the sync/async DB session injection pattern
-    # For now, we will inject it at runtime invocation
-    # workflow.add_node("retrieve", retrieve_documents)
+    workflow.add_node("retrieve", retrieve_documents)
     workflow.add_node("rerank", rerank_documents)
     workflow.add_node("generate", generate_answer)
 
     # Define Edges (Sequential)
-    workflow.set_entry_point("contextualize")
+    workflow.set_entry_point("fetch_history")
+    workflow.add_edge("fetch_history", "contextualize")
     workflow.add_edge("contextualize", "expand")
-    # Retrieve is special because it needs DB, so we handle it manually in the invoke function below
-    # workflow.add_edge("expand", "retrieve")
-    # workflow.add_edge("retrieve", "rerank")
+    workflow.add_edge("expand", "retrieve")
+    workflow.add_edge("retrieve", "rerank")
     workflow.add_edge("rerank", "generate")
     workflow.add_edge("generate", END)
 
     return workflow.compile()
 
+# Singleton Graph Instance
+rag_graph = build_rag_graph()
+
 # --- Public Entry Point ---
 async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSession, tenant_id: int):
     """
-    Main function to run the RAG pipeline.
+    Main function to run the RAG pipeline using native LangGraph.
     """
     Log.divider(f"RAG SESSION {session_id}")
-    # 1. Fetch History
-    history = await get_chat_history(session_id, db_session)
 
-    # 2. Initialize State
+    # 1. Initialize State
     initial_state = RAGState(
         session_id=session_id,
         tenant_id=tenant_id,
         user_query=user_query,
-        chat_history=history,
+        chat_history=[],
         contextualized_query="",
         expanded_queries=[],
         retrieved_docs=[],
@@ -329,33 +332,9 @@ async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSe
         final_answer=""
     )
 
-    # 3. Manually orchestrate steps that need DB injection
-    # (LangGraph doesn't easily support passing non-serializable args like DB sessions directly into nodes yet)
-
-    # Step A: Run Graph PART 1 (Contextualize -> Expand)
-    # We use a partial graph or just call nodes directly?
-    # For user transparency ("i want to understand..."), let's run them explicitly step-by-step
-    # instead of a black-box graph.execute().
-    # This also solves the DB session injection nicely.
-
-    # Step 1: Contextualize
-    ctx_out = await contextualize_query(initial_state)
-    initial_state.update(ctx_out)
-
-    # Step 2: Expand
-    exp_out = await expand_query(initial_state)
-    initial_state.update(exp_out)
-
-    # Step 3: Retrieve (Needs DB)
-    ret_out = await retrieve_documents(initial_state, db_session)
-    initial_state.update(ret_out)
-
-    # Step 4: Rerank
-    rank_out = await rerank_documents(initial_state)
-    initial_state.update(rank_out)
-
-    # Step 5: Generate
-    gen_out = await generate_answer(initial_state)
+    # 2. Native Invocation with DB in config
+    config = {"configurable": {"db": db_session}}
+    final_state = await rag_graph.ainvoke(initial_state, config=config)
 
     Log.success(f"RAG Pipeline complete")
-    return gen_out["final_answer"]
+    return final_state["final_answer"]
