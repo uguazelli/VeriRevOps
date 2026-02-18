@@ -7,25 +7,9 @@ from sqlalchemy import select, delete
 from app.core.db import get_db
 from app.models import RagFile, RagChunk
 from app.rag.ingestion import ingest_file_content, embed_query
+from app.schemas import RagFileResponse, RagSearchRequest
 
 router = APIRouter(prefix="/api/rag", tags=["RAG"])
-
-# --- Models ---
-class RagFileResponse(BaseModel):
-    id: int
-    filename: str
-    uploaded_at: str  # ORM returns datetime, Pydantic handles str conversion often, or use datetime type
-
-class RagSearchRequest(BaseModel):
-    tenant_id: int
-    session_id: Optional[int] = 4 # Default to test session if missing
-    query: str
-    limit: Optional[int] = 5
-
-class RagSearchResponse(BaseModel):
-    content: str
-    metadata: dict
-    similarity: float
 
 # --- Routes ---
 

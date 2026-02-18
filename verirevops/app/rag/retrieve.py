@@ -14,11 +14,10 @@ from flashrank import Ranker, RerankRequest
 from app.models import ChatSession, ChatMessage, RagChunk, RagFile
 
 # --- Configuration ---
-# Using Model from Env (default to 2.0 Flash)
-model_name = os.getenv("MODEL", "gemini-2.0-flash")
+model_name = os.getenv("MODEL")
+embedding_model = os.getenv("EMBEDDING_MODEL")
 llm = ChatGoogleGenerativeAI(model=model_name, temperature=0)
-# Using Gemini Embeddings
-embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model)
 # FlashRank Reranker (Nano model is fast and runs locally)
 reranker = Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir="/app/.cache/flashrank")
 
