@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db, AsyncSessionLocal
 from app.orquestation.chat import invoke_chat_orchestrator
 from app.core.chatwoot import get_chatwoot_client, ChatwootClient
+from app.core.logger import Log
 from app.models import Tenant, ChatwootConfig
 from sqlalchemy import select
 
@@ -12,34 +13,25 @@ router = APIRouter(
 )
 
 async def process_webhook_message(data: dict, alias: str):
-    print(f"Processing webhook task for data: {data}", flush=True)
-    event = data.get("event")
-    msg_data = data.get("content", {})
-
-    if event != "message_created":
-        print(f"Ignored event: {event}", flush=True)
-        return
-
     message_type = data.get("message_type")
     private = data.get("private", False)
 
     if message_type != "incoming" or private:
-        print(f"Ignored message type: {message_type}, private: {private}", flush=True)
         return
 
     content = data.get("content")
     if not content:
-        print("No content", flush=True)
         return
 
     account_id = data.get("account", {}).get("id")
     conversation_id = data.get("conversation", {}).get("id")
 
     if not account_id or not conversation_id:
-        print("Missing account or conversation ID in webhook", flush=True)
+        Log.warning("Missing account or conversation ID in webhook")
         return
 
-    print(f"Invoking Orchestrator for Account {account_id}, Session {conversation_id}", flush=True)
+    Log.divider(f"ACCOUNT {account_id}")
+    Log.webhook(f"New message in session {conversation_id}: '{content}'")
 
     async with AsyncSessionLocal() as db:
         try:
@@ -49,13 +41,14 @@ async def process_webhook_message(data: dict, alias: str):
             tenant = result.scalars().first()
 
             if not tenant:
-                print(f"Tenant not found for alias: {alias}", flush=True)
+                Log.error(f"Tenant not found for alias: {alias}")
                 return
 
             tenant_id = tenant.id
+            Log.tenant(tenant_id, f"Resolved for alias '{alias}'")
 
             ai_response = await invoke_chat_orchestrator(tenant_id, conversation_id, content, db)
-            print(f"Orchestrator Response: {ai_response}", flush=True)
+            Log.orchestrator(f"Response: {ai_response}")
 
             if ai_response:
                 # 2. Fetch Chatwoot Config for Tenant
@@ -75,10 +68,11 @@ async def process_webhook_message(data: dict, alias: str):
 
                 if client:
                     await client.send_message(account_id, conversation_id, ai_response)
+                    Log.webhook(f"Sent response to Chatwoot", direction="OUT")
                 else:
-                    print(f"Chatwoot client not configured for Tenant {tenant_id}, skipping send.", flush=True)
+                    Log.warning(f"Chatwoot client not configured for Tenant {tenant_id}, skipping send.")
         except Exception as e:
-            print(f"Error processing webhook message: {e}", flush=True)
+            Log.error(f"Error processing webhook message: {e}")
             import traceback
             traceback.print_exc()
 

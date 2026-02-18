@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from flashrank import Ranker, RerankRequest
+from app.core.logger import Log
 
 from app.models import ChatSession, ChatMessage, RagChunk, RagFile
 from app.prompts import (
@@ -20,16 +21,15 @@ from app.prompts import (
 
 # --- Configuration ---
 model_name = os.getenv("MODEL")
-embedding_model = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
-# llm = ChatGoogleGenerativeAI(model=model_name, temperature=0)
-# embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model)
+embedding_model = os.getenv("EMBEDDING_MODEL")
 api_key = os.getenv("GOOGLE_API_KEY")
+temperature = os.getenv("TEMPERATURE")
 
 # FlashRank Reranker (Nano model is fast and runs locally)
 try:
     reranker = Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir="/tmp/flashrank")
 except Exception as e:
-    print(f"Failed to initialize Ranker: {e}")
+    Log.warning(f"Failed to initialize Ranker: {e}")
     reranker = None
 
 # ...
@@ -83,7 +83,7 @@ async def contextualize_query(state: RAGState):
     """
     Step 1: Rewrite user query to be standalone based on chat history.
     """
-    print(f"--- Node 1: Contextualize '{state['user_query']}' ---")
+    Log.rag(f"Contextualizing '{state['user_query']}'", step="Node 1")
 
     if not state.get("chat_history"):
         # No history, so query is already standalone
@@ -97,14 +97,13 @@ async def contextualize_query(state: RAGState):
         ("human", "{question}"),
     ])
 
-    llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
     chain = prompt | llm | StrOutputParser()
     new_query = await chain.ainvoke({
         "chat_history": state["chat_history"],
         "question": state["user_query"]
     })
 
-    print(f"    -> Rewritten: '{new_query}'")
     return {"contextualized_query": new_query}
 
 
@@ -114,7 +113,7 @@ async def expand_query(state: RAGState):
     Step 2: Generate 3 variations of the query to broaden search coverage.
     """
     query = state["contextualized_query"]
-    print(f"--- Node 2: Expansion for '{query}' ---")
+    Log.rag(f"Expanding queries for '{query}'", step="Node 2")
 
     system_prompt = EXPAND_QUERY_SYSTEM_PROMPT
 
@@ -123,7 +122,7 @@ async def expand_query(state: RAGState):
         ("human", "{question}"),
     ])
 
-    llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
     chain = prompt | llm | StrOutputParser()
     response = await chain.ainvoke({"question": query})
 
@@ -132,7 +131,6 @@ async def expand_query(state: RAGState):
     if query not in queries:
         queries.insert(0, query) # Ensure original is included
 
-    print(f"    -> Expanded into {len(queries)} queries: {queries}")
     return {"expanded_queries": queries}
 
 
@@ -152,7 +150,7 @@ async def retrieve_documents(state: RAGState, db_session: AsyncSession):
         if s:
             queries.append(s)
 
-    print(f"--- Node 3: Retrieving for {len(queries)} queries ---")
+    Log.rag(f"Retrieving for {len(queries)} queries", step="Node 3")
 
     all_docs = []
 
@@ -171,7 +169,7 @@ async def retrieve_documents(state: RAGState, db_session: AsyncSession):
                 vector = await embeddings.aembed_query(q)
                 break
             except Exception as e:
-                print(f"    [Warning] Embedding failed for query '{q}' (Attempt {attempt+1}): {e}")
+                Log.warning(f"Embedding failed for query '{q}' (Attempt {attempt+1}): {e}")
                 if attempt == 2:
                     raise e
                 import asyncio
@@ -207,7 +205,7 @@ async def retrieve_documents(state: RAGState, db_session: AsyncSession):
     unique_docs = {doc.metadata["id"]: doc for doc in all_docs}
     unique_list = list(unique_docs.values())
 
-    print(f"    -> Found {len(all_docs)} raw docs, {len(unique_list)} unique.")
+    Log.rag(f"Found {len(all_docs)} raw docs, {len(unique_list)} unique.")
     return {"retrieved_docs": unique_list}
 
 
@@ -218,7 +216,7 @@ async def rerank_documents(state: RAGState):
     """
     docs = state["retrieved_docs"]
     query = state["contextualized_query"]
-    print(f"--- Node 4: Reranking {len(docs)} docs ---")
+    Log.rag(f"Reranking {len(docs)} documents", step="Node 4")
 
     if not docs:
         return {"reranked_docs": []}
@@ -243,12 +241,11 @@ async def rerank_documents(state: RAGState):
                     metadata=res["meta"]
                 ))
         except Exception as e:
-            print(f"    [Error] Reranking failed: {e}")
+            Log.error(f"Reranking failed: {e}")
             reranked_docs = docs[:5] # Fallback to top 5 raw
     else:
         reranked_docs = docs[:5] # Fallback if reranker not init
 
-    print(f"    -> Top {len(reranked_docs)} selected.")
     return {"reranked_docs": reranked_docs}
 
 
@@ -257,16 +254,11 @@ async def generate_answer(state: RAGState):
     """
     Step 5: Generate the final answer using context and history.
     """
-    print(f"--- Node 5: Generating Answer ---", flush=True)
+    Log.rag(f"Generating overall answer", step="Node 5")
     documents = state["reranked_docs"]
     context = "\n\n".join([doc.page_content for doc in documents])
 
-    print(f"    DEBUG: Context length: {len(context)} characters", flush=True)
-    if context:
-        print(f"    DEBUG: First 100 chars of context: {context[:100]}...", flush=True)
-
-    history = state.get("chat_history", [])
-    print(f"    DEBUG: History length: {len(history)} messages", flush=True)
+    # history = state.get("chat_history", [])
 
     # Use a more explicit prompt, potentially moving context to the human message
     # Some Gemini versions respond better when context is immediately before the question
@@ -277,7 +269,7 @@ async def generate_answer(state: RAGState):
         ("human", "Use the following pieces of retrieved context to answer the question.\n\nContext:\n{context}\n\nQuestion: {question}\n\nAssistant:"),
     ])
 
-    llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
     chain = prompt | llm | StrOutputParser()
 
     response = await chain.ainvoke({
@@ -319,7 +311,7 @@ async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSe
     """
     Main function to run the RAG pipeline.
     """
-    print(f"\n=== Starting RAG Pipeline for Session {session_id} (Tenant {tenant_id}) ===", flush=True)
+    Log.divider(f"RAG SESSION {session_id}")
     # 1. Fetch History
     history = await get_chat_history(session_id, db_session)
 
@@ -345,8 +337,6 @@ async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSe
     # instead of a black-box graph.execute().
     # This also solves the DB session injection nicely.
 
-    print(f"\n=== Starting RAG Pipeline for Session {session_id} ===")
-
     # Step 1: Contextualize
     ctx_out = await contextualize_query(initial_state)
     initial_state.update(ctx_out)
@@ -366,5 +356,5 @@ async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSe
     # Step 5: Generate
     gen_out = await generate_answer(initial_state)
 
-    print("=== Pipeline Complete ===\n")
+    Log.success(f"RAG Pipeline complete")
     return gen_out["final_answer"]

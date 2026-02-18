@@ -10,11 +10,12 @@ from datetime import datetime
 from app.models import ChatSession, ChatMessage
 from app.rag.retrieve import invoke_rag_graph, get_chat_history
 from app.prompts import ROUTER_SYSTEM_PROMPT, CHITCHAT_SYSTEM_PROMPT
+from app.core.logger import Log
 
 # --- Configuration ---
-MODEL_NAME = os.getenv("MODEL", "gemini-2.0-flash")
-# llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0)
+model_name = os.getenv("MODEL")
 api_key = os.getenv("GOOGLE_API_KEY")
+temperature = os.getenv("TEMPERATURE")
 
 # --- State ---
 class ChatState(TypedDict):
@@ -91,7 +92,7 @@ async def router_node(state: ChatState) -> ChatState:
     """
     system_prompt = ROUTER_SYSTEM_PROMPT
 
-    llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
 
     # Include some history for better context (last 3 messages)
     history_context = state.get('chat_history', [])[-3:]
@@ -114,7 +115,7 @@ async def router_node(state: ChatState) -> ChatState:
     elif "chitchat" in raw_intent:
         intent = "chitchat"
 
-    print(f"--- Router Decision: '{intent}' ---", flush=True)
+    Log.orchestrator(f"Decision: '{intent}' (Raw: '{raw_intent}')")
     return {"intent": intent}
 
 async def rag_node(state: ChatState, db: AsyncSession) -> ChatState:
@@ -137,7 +138,7 @@ async def chitchat_node(state: ChatState) -> ChatState:
         HumanMessage(content=state['user_message'])
     ]
 
-    llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0, google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=api_key)
 
     response = await llm.ainvoke(prompt)
     return {"ai_response": response.content, "summary_needed": False}
@@ -237,4 +238,5 @@ async def invoke_chat_orchestrator(tenant_id: int, session_id: int, message: str
 
     # Execute
     final_state = await app.ainvoke(initial_state)
+    Log.success(f"Orchestration complete for Session {session_id}")
     return final_state['ai_response']

@@ -1,6 +1,7 @@
 import os
 import httpx
 from typing import Optional
+from app.core.logger import Log
 
 class ChatwootClient:
     def __init__(self, base_url: str, api_token: str):
@@ -26,7 +27,7 @@ class ChatwootClient:
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPError as e:
-                print(f"Error sending message to Chatwoot: {e}")
+                Log.error(f"Error sending message to Chatwoot: {e}")
                 # We might want to log this properly or retry
                 return None
 
@@ -35,6 +36,6 @@ def get_chatwoot_client() -> Optional[ChatwootClient]:
     url = os.getenv("CHATWOOT_API_URL")
     token = os.getenv("CHATWOOT_API_TOKEN")
     if not url or not token:
-        print("Chatwoot configuration missing (CHATWOOT_API_URL or CHATWOOT_API_TOKEN)")
+        Log.warning("Chatwoot configuration missing (CHATWOOT_API_URL or CHATWOOT_API_TOKEN)")
         return None
     return ChatwootClient(url, token)

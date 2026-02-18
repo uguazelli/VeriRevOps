@@ -8,6 +8,7 @@ from app.core.db import get_db
 from app.models import RagFile, RagChunk
 from app.rag.ingestion import ingest_file_content, embed_query
 from app.schemas import RagFileResponse, RagSearchRequest
+from app.core.logger import Log
 
 router = APIRouter(prefix="/api/rag", tags=["RAG"])
 
@@ -97,5 +98,5 @@ async def search_rag(
         }
 
     except Exception as e:
-        print(f"Error in RAG: {e}")
+        Log.error(f"Error in RAG Search: {e}")
         raise HTTPException(status_code=400, detail=str(e))

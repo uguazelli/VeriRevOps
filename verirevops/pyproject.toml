@@ -19,4 +19,5 @@ dependencies = [
     "pgvector>=0.2.5",
     "langgraph>=0.0.26",
     "flashrank>=0.2.0",
+    "rich>=13.9.4",
 ]

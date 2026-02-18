@@ -1,16 +1,16 @@
-
 from fastapi import FastAPI, HTTPException, Depends
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.routers import admin, chatwoot, rag, health
 from app.core.db import engine, get_db
+from app.core.logger import Log
 from app.models import Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
-    print("Starting up VeriRevOps API...")
+    Log.info("Starting up VeriRevOps API...")
 
     async with engine.begin() as conn:
         # Create extension if not exists (needs superuser or proper permissions)
@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 
     yield
     # Shutdown logic
-    print("Shutting down VeriRevOps API...")
+    Log.info("Shutting down VeriRevOps API...")
     await engine.dispose()
 
 
