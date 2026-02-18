@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeriRevOps Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=2">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>VeriRevOps</h2>
+            </div>
+            <ul class="nav-links">
+                <li class="active" data-target="tenants">Tenants</li>
+                <li data-target="subscriptions">Subscriptions</li>
+                <li data-target="chat_sessions">Chat Sessions</li>
+                <li data-target="chat_messages">Chat Messages</li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <h1 id="page-title">Tenants Management</h1>
+                <button id="create-btn" class="btn-primary">+ New Record</button>
+            </header>
+
+            <div class="table-container">
+                <table id="data-table">
+                    <thead>
+                        <!-- Headers will be injected via JS -->
+                    </thead>
+                    <tbody>
+                        <!-- Data will be injected via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for Create/Edit -->
+    <div id="modal" class="modal">
+        <div class="modal-content glass-panel">
+            <span class="close-btn">&times;</span>
+            <h2 id="modal-title">Create Record</h2>
+            <form id="data-form">
+                <!-- Form fields injected via JS -->
+            </form>
+            <div class="modal-actions">
+                <button type="submit" form="data-form" class="btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=2"></script>
+</body>
+
+</html>

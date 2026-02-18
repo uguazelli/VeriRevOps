@@ -5,7 +5,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from bot.integrations.sheets import fetch_google_sheet_data
-from rag.services.rag_service import generate_answer
+from rag.services.rag_service import generate_answer, get_rag_context
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,6 @@ async def search_knowledge_base(query: str, config: RunnableConfig) -> str:
         return "Error: RAG Configuration missing. Cannot search."
 
     # 2. Setup Client
-    # 2. Setup Client
     try:
         # We ignore base_url and api_key from config as we use internal service
         # For now, we hardcode client_id=1 as per migration, or we could look it up.
@@ -41,20 +40,28 @@ async def search_knowledge_base(query: str, config: RunnableConfig) -> str:
             except:
                 pass
 
-        # 3. Call RAG Internal Service
-        # We pass session_id so 'contextualize_query' can resolve pronouns (e.g. "how much is it?").
-        # We pass save_history=False because the Agent manages the persistence.
-        answer, new_session_id, _ = await generate_answer(
+        # 3. Call RAG Internal Service (Retrieval Only)
+        # We fetch the raw context (chunks) and let the Agent synthesize the answer.
+        # This prevents "telephone game" repetition issues.
+
+        logger.info(f"🛠️ Tool 'search_knowledge_base' called with query: '{query}'")
+
+        context_str = await get_rag_context(
             client_id=client_id,
             query=query,
-            session_id=rag_session_id,
-            complexity_score=5,
-            pricing_intent=False,
-            save_history=False,
-            include_history_in_prompt=False
+            session_id=rag_session_id
         )
 
-        return answer
+        # If no context found, return a clear message
+        if not context_str or "No relevant documents found" in context_str:
+            return "No relevant documents found in the knowledge base."
+
+        logger.info(f"🛠️ Tool retrieved context (len={len(context_str)} chars)")
+        return f"RETRIEVED KNOWLEDGE_BASE CONTEXT:\n{context_str}"
+
+    except Exception as e:
+        logger.error(f"RAG Tool Error: {e}")
+        return "I'm having trouble retrieving information from the knowledge base."
 
     except Exception as e:
         logger.error(f"RAG Tool Error: {e}")

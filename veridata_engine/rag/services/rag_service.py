@@ -87,7 +87,7 @@ async def generate_hypothetical_answer(query: str) -> str:
         return query
 
 
-async def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str, Any]]:
+async def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5, min_score: float = 7.0) -> List[Dict[str, Any]]:
     if not documents:
         return []
 
@@ -100,6 +100,8 @@ async def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: i
     chain = prompt | llm
 
     scored_docs = []
+    dropped_count = 0
+
     # Reranking can be parallelized
     # For simplicity, sequential await loop or gather
     # Let's do sequential for now to avoid complexity with rate limits
@@ -110,37 +112,68 @@ async def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: i
             text = response.content.replace("```json", "").replace("```", "").strip()
             score_data = json.loads(text)
             score = score_data.get("score", 0)
-            doc["rerank_score"] = score
-            scored_docs.append(doc)
+
+            if score >= min_score:
+                doc["rerank_score"] = score
+                scored_docs.append(doc)
+            else:
+                dropped_count += 1
+
         except Exception as e:
             logger.warning(f"Reranking failed for doc {doc.get('id')}: {e}")
-            doc["rerank_score"] = 0
-            scored_docs.append(doc)
+            # Decide if we keep failed reranks. Safest is to drop or give low score.
+            # Here we drop them to be safe against noise.
+            dropped_count += 1
 
     scored_docs.sort(key=lambda x: x["rerank_score"], reverse=True)
+
+    logger.info(f"⚖️ Reranker: Kept {len(scored_docs)} docs (Dropping {dropped_count} below score {min_score})")
+
     return scored_docs[:top_k]
 
+
+from rag.chains.retrieval import get_query_expansion_chain
+from rag.chains.rerank import rerank_documents_lcel
 
 async def retrieve_context(
     client_id: int, query: str, external_context: Optional[str] = None
 ) -> str:
-    # 1. HyDE
-    hyde_query = await generate_hypothetical_answer(query)
+    # 1. Query Expansion (Multi-Query)
+    expansion_chain = await get_query_expansion_chain()
+    try:
+        queries = await expansion_chain.ainvoke({"query": query})
+        queries.append(query) # Ensure original is included
+        queries = list(set(queries)) # Dedupe strings
+        logger.info(f"✨ Expanded Queries ({len(queries)}): {queries}")
+    except Exception as e:
+        logger.warning(f"Query expansion failed: {e}")
+        queries = [query]
 
-    # 2. Embed
+    # 2. Embed & Search (Batch)
     embed_model = get_embeddings()
-    # embed_query is usually sync in LangChain default wrapper but google-genai might be async?
-    # Dictionary says embed_query is synchronous.
-    # To make it async we might need run_in_executor or verify if GoogleGenerativeAIEmbeddings supports aembed_query
-    # It usually does.
-    query_vector = await embed_model.aembed_query(hyde_query)
+    all_docs_map = {} # handle duplicates by ID
 
-    # 3. Hybrid Search
-    candidate_limit = 20 # Fetch more for reranking
-    candidates = await search_documents_hybrid(client_id, query_vector, query, candidate_limit)
+    for q in queries:
+        try:
+            # We treat HyDE/Expansion as just text queries now.
+            # Ideally we embed each expanded query.
+            query_vector = await embed_model.aembed_query(q)
 
-    # 4. Rerank
-    ranked_docs = await rerank_documents(query, candidates, top_k=5)
+            # Fetch candidates for each query
+            # We lower candidate_limit per query to avoid explosion, but keep high enough for recall
+            candidates = await search_documents_hybrid(client_id, query_vector, q, limit=10)
+
+            for doc in candidates:
+                all_docs_map[doc["id"]] = doc
+        except Exception as e:
+            logger.warning(f"Search failed for query '{q}': {e}")
+
+    unique_candidates = list(all_docs_map.values())
+    logger.info(f"🔍 Found {len(unique_candidates)} unique candidates from {len(queries)} queries.")
+
+    # 3. Rerank with Filtering (LCEL)
+    # We enforce a strict threshold (7/10) to avoid polluting context with irrelevant "fluff"
+    ranked_docs = await rerank_documents_lcel(query, unique_candidates, top_k=5, min_score=7.0)
 
     doc_context = "\n\n".join(
         [f"Source: {r['filename']}\n{r['content']}" for r in ranked_docs]
@@ -284,6 +317,7 @@ async def generate_answer(
 
     # 2. Intent
     requires_rag = determine_intent(complexity_score, pricing_intent)
+    logger.info(f"🔍 RAG Decision: requires_rag={requires_rag} | complexity={complexity_score} | pricing_intent={pricing_intent}")
 
     # 3. Retrieval or Small Talk
     answer = ""
@@ -298,18 +332,23 @@ async def generate_answer(
     else:
         llm_model_name = config["steps"]["generation"]["model"]
 
+    logger.info(f"🤖 Model Selection: {llm_model_name} (Complexity: {complexity_score})")
+
     llm = get_llm(model_name=llm_model_name)
 
     if requires_rag:
         answer, context_str = await generate_rag_response(
             client_id, query, history_str, external_context, llm
         )
+        logger.info(f"📚 RAG Context Length: {len(context_str)} chars | Answer Length: {len(answer)} chars")
     else:
         answer = await generate_small_talk_response(query, history_str, llm)
+        logger.info(f"💬 Small Talk Answer Length: {len(answer)} chars")
 
     # 6. Save Interaction
     if session_id and save_history:
         await save_interaction(session_id, query, answer, client_id)
+        logger.info(f"💾 Interaction Saved to DB (Session: {session_id})")
 
     return answer, session_id, context_str
 
@@ -321,4 +360,23 @@ async def delete_chat_session(session_id: UUID, db: AsyncSession):
     session = result.scalars().first()
     if session:
         await db.delete(session)
+
+
+async def get_rag_context(
+    client_id: int,
+    query: str,
+    session_id: Optional[UUID] = None,
+) -> str:
+    """Retrieves the raw RAG context (documents) for a query, handling contextualization.
+    Does NOT generate an answer (Pure Retrieval).
+    """
+    # 1. History & Contextualization
+    # We always include history for contextualization
+    query, _ = await prepare_conversation_context(session_id, query, include_history_in_prompt=True)
+
+    # 2. Retrieve
+    context_str = await retrieve_context(client_id, query)
+
+    return context_str
+
 

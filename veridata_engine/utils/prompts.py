@@ -37,7 +37,9 @@ COMMON_RULES = {
         "   - **IF PROVIDED:** Proceed with handoff."
     ),
     "TONE": (
-        "5. **Tone:** Be professional, concise, and friendly. Do not be robotic."
+        "5. **Tone:** Be professional, concise, and friendly. Do not be robotic.\n"
+        "   - **CRITICAL:** Answer SPECIFICALLY what is asked. Do NOT repeat the full service description unless explicitly requested.\n"
+        "   - If the user asks for a simple fact (e.g., website, name), provide ONLY that fact."
     )
 }
 
@@ -54,7 +56,11 @@ AGENT_SYSTEM_PROMPT = f"""{CORE_PERSONA}
 
 **Tools:**
 - **GREETINGS:** Do NOT use tools for simple greetings. Answer directly.
-- Use `search_knowledge_base` for company info.
+- Use `search_knowledge_base` for questions about Veridata's services, policies, or contact info.
+  - **Constraint:** Do NOT use this tool for questions you can answer from conversation history.
+  - **Usage:** The tool returns "RETRIEVED KNOWLEDGE_BASE CONTEXT".
+  - **CRITICAL:** This context contains MANY details. **Extract ONLY** the specific facts requested by the user. **Ignore** everything else.
+  - **Negative Constraint:** Do NOT mention the website, service list, or other extra info unless the user specifically asked for it.
 - Use `lookup_pricing` ONLY for specific price/stock checks.
 
 {COMMON_RULES['SAFETY_PRICING']}
@@ -64,7 +70,7 @@ AGENT_SYSTEM_PROMPT = f"""{CORE_PERSONA}
 {COMMON_RULES['TONE']}
 
 **Context:**
-You have access to the conversation history. Use it to understand follow-up questions.
+You have access to the conversation history. Use it to understand follow-up questions, but **do NOT repeat** information that has already been answered in previous turns.
 """
 
 SUMMARY_PROMPT_TEMPLATE = (
@@ -136,6 +142,17 @@ HYDE_PROMPT_TEMPLATE = (
     "Passage:"
 )
 
+# QUERY EXPANSION PROMPT
+QUERY_EXPANSION_PROMPT_TEMPLATE = (
+    "You are an AI language model assistant. Your task is to generate 3 different versions of the given user question "
+    "to retrieve relevant documents from a vector database. "
+    "By generating multiple perspectives on the user question, your goal is to help the user overcome some of the limitations "
+    "of distance-based similarity search. "
+    "Provide these alternative questions separated by newlines.\n"
+    "Original Question: {query}\n"
+    "Alternative Questions:"
+)
+
 # MAIN RAG ANSWER PROMPT (THE BRAIN)
 RAG_ANSWER_PROMPT_TEMPLATE = (
     f"{CORE_PERSONA}\n"
@@ -151,6 +168,9 @@ RAG_ANSWER_PROMPT_TEMPLATE = (
     f"{COMMON_RULES['SAFETY_PRICING']}\n"
     f"{COMMON_RULES['HANDOFF']}\n"
     "**LANGUAGE:** {lang_instruction}\n"
+    "**FORMATTING:**\n"
+    "   - If the user asks a specific question (e.g., 'What is the website?'), provide ONLY the specific answer.\n"
+    "   - Do NOT summarize the company services unless asked.\n"
     "</instructions>\n\n"
     "<chat_history>\n"
     "{history_str}\n"

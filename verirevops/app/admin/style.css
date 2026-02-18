@@ -1,0 +1,233 @@
+:root {
+	--bg-dark: #0f172a;
+	--sidebar-bg: #1e293b;
+	--text-primary: #e2e8f0;
+	--text-secondary: #94a3b8;
+	--accent-color: #3b82f6;
+	--accent-glow: rgba(59, 130, 246, 0.5);
+	--glass-bg: rgba(30, 41, 59, 0.7);
+	--glass-border: rgba(255, 255, 255, 0.1);
+	--danger-color: #ef4444;
+	--success-color: #10b981;
+}
+
+body {
+	margin: 0;
+	font-family: "Inter", sans-serif;
+	background-color: var(--bg-dark);
+	color: var(--text-primary);
+	overflow: hidden;
+}
+
+.dashboard-container {
+	display: flex;
+	height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+	width: 250px;
+	background-color: var(--sidebar-bg);
+	border-right: 1px solid var(--glass-border);
+	display: flex;
+	flex-direction: column;
+	padding: 20px;
+}
+
+.logo h2 {
+	margin: 0 0 40px 0;
+	background: linear-gradient(45deg, var(--accent-color), #8b5cf6);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	font-size: 1.5rem;
+}
+
+.nav-links {
+	list-style: none;
+	padding: 0;
+}
+
+.nav-links li {
+	padding: 12px 15px;
+	margin-bottom: 10px;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	color: var(--text-secondary);
+}
+
+.nav-links li:hover,
+.nav-links li.active {
+	background: var(--glass-bg);
+	color: var(--text-primary);
+	border-left: 3px solid var(--accent-color);
+}
+
+/* Main Content */
+.main-content {
+	flex: 1;
+	padding: 40px;
+	overflow-y: auto;
+}
+
+header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 30px;
+}
+
+h1 {
+	font-size: 2rem;
+	font-weight: 600;
+}
+
+/* Glassmorphism Logic */
+.glass-panel {
+	background: var(--glass-bg);
+	backdrop-filter: blur(10px);
+	border: 1px solid var(--glass-border);
+	border-radius: 12px;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.table-container {
+	@extend .glass-panel;
+	padding: 20px;
+	border-radius: 12px;
+	background: var(--sidebar-bg); /* Fallback */
+	background: var(--glass-bg);
+	backdrop-filter: blur(10px);
+	border: 1px solid var(--glass-border);
+}
+
+/* Table */
+table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+th,
+td {
+	padding: 15px;
+	text-align: left;
+	border-bottom: 1px solid var(--glass-border);
+}
+
+th {
+	color: var(--text-secondary);
+	font-weight: 500;
+	text-transform: uppercase;
+	font-size: 0.85rem;
+}
+
+tr:hover {
+	background: rgba(255, 255, 255, 0.05);
+}
+
+/* Buttons */
+.btn-primary {
+	background: linear-gradient(135deg, var(--accent-color), #2563eb);
+	color: white;
+	border: none;
+	padding: 10px 20px;
+	border-radius: 8px;
+	cursor: pointer;
+	font-weight: 500;
+	transition:
+		transform 0.2s,
+		box-shadow 0.2s;
+	box-shadow: 0 4px 15px var(--accent-glow);
+}
+
+.btn-primary:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+#data-table button {
+	padding: 6px 12px;
+	margin-right: 5px;
+	border-radius: 4px;
+	font-size: 0.8rem;
+	border: none;
+	cursor: pointer;
+}
+
+.btn-edit {
+	background-color: #f59e0b;
+	color: white;
+}
+.btn-delete {
+	background-color: var(--danger-color);
+	color: white;
+}
+
+/* Modal */
+.modal {
+	display: none;
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-color: rgba(0, 0, 0, 0.6);
+	justify-content: center;
+	align-items: center;
+	z-index: 1000;
+}
+
+.modal-content {
+	width: 500px;
+	padding: 30px;
+	position: relative;
+	background: #1e293b;
+	border-radius: 12px;
+	border: 1px solid var(--glass-border);
+	color: white;
+}
+
+.close-btn {
+	position: absolute;
+	top: 15px;
+	right: 20px;
+	font-size: 1.5rem;
+	cursor: pointer;
+	color: var(--text-secondary);
+}
+
+/* Forms */
+.form-group {
+	margin-bottom: 15px;
+}
+
+.form-group label {
+	display: block;
+	margin-bottom: 5px;
+	color: var(--text-secondary);
+}
+
+.form-group input,
+.form-group select {
+	width: 100%;
+	padding: 10px;
+	background: rgba(0, 0, 0, 0.2);
+	border: 1px solid var(--glass-border);
+	border-radius: 6px;
+	color: var(--text-primary);
+	font-size: 1rem;
+}
+
+.form-group input:focus {
+	outline: none;
+	border-color: var(--accent-color);
+}
+
+.checkbox-group {
+	display: flex;
+	align-items: center;
+}
+.checkbox-group input {
+	width: auto;
+	margin-right: 10px;
+}
