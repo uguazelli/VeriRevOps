@@ -1,0 +1,40 @@
+import os
+import httpx
+from typing import Optional
+
+class ChatwootClient:
+    def __init__(self, base_url: str, api_token: str):
+        self.base_url = base_url.rstrip('/')
+        self.api_token = api_token
+        self.headers = {"api_access_token": self.api_token}
+
+    async def send_message(self, account_id: int, conversation_id: int, content: str, private: bool = False):
+        """
+        Send a message to a Chatwoot conversation.
+        POST /api/v1/accounts/{account_id}/conversations/{conversation_id}/messages
+        """
+        url = f"{self.base_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+        payload = {
+            "content": content,
+            "message_type": "outgoing",
+            "private": private
+        }
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, json=payload, headers=self.headers)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError as e:
+                print(f"Error sending message to Chatwoot: {e}")
+                # We might want to log this properly or retry
+                return None
+
+# Singleton or dependency injection setup
+def get_chatwoot_client() -> Optional[ChatwootClient]:
+    url = os.getenv("CHATWOOT_API_URL")
+    token = os.getenv("CHATWOOT_API_TOKEN")
+    if not url or not token:
+        print("Chatwoot configuration missing (CHATWOOT_API_URL or CHATWOOT_API_TOKEN)")
+        return None
+    return ChatwootClient(url, token)

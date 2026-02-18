@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
-from app.routers import admin, chatwoot, rag
+from app.routers import admin, chatwoot, rag, health
 from app.core.db import engine, get_db
 from app.models import Base
 
@@ -31,22 +31,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.include_router(health.router)
 app.include_router(admin.router)
 app.include_router(chatwoot.router)
 app.include_router(rag.router)
 
 app.mount("/admin", StaticFiles(directory="app/admin", html=True), name="admin")
-
-
-@app.get("/health")
-async def health_check():
-    return {"status": "ok", "message": "VeriRevOps API is running"}
-
-@app.get("/health/db")
-async def health_check_db():
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        return {"status": "ok", "message": "Database connection successful"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")

@@ -15,11 +15,17 @@ from app.models import ChatSession, ChatMessage, RagChunk, RagFile
 
 # --- Configuration ---
 model_name = os.getenv("MODEL")
-embedding_model = os.getenv("EMBEDDING_MODEL")
-llm = ChatGoogleGenerativeAI(model=model_name, temperature=0)
-embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model)
+embedding_model = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
+# llm = ChatGoogleGenerativeAI(model=model_name, temperature=0)
+# embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model)
+api_key = os.getenv("GOOGLE_API_KEY")
+
 # FlashRank Reranker (Nano model is fast and runs locally)
-reranker = Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir="/app/.cache/flashrank")
+# reranker = Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir="/app/.cache/flashrank")
+
+# ...
+
+
 
 # --- State Definition ---
 class RAGState(TypedDict):
@@ -87,6 +93,7 @@ async def contextualize_query(state: RAGState):
         ("human", "{question}"),
     ])
 
+    llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=api_key)
     chain = prompt | llm | StrOutputParser()
     new_query = await chain.ainvoke({
         "chat_history": state["chat_history"],
@@ -116,6 +123,7 @@ async def expand_query(state: RAGState):
         ("human", "{question}"),
     ])
 
+    llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=api_key)
     chain = prompt | llm | StrOutputParser()
     response = await chain.ainvoke({"question": query})
 
@@ -133,15 +141,44 @@ async def retrieve_documents(state: RAGState, db_session: AsyncSession):
     """
     Step 3: Search Vector DB for all expanded queries.
     """
-    queries = state["expanded_queries"]
+    # Sanitize queries to avoid potential 500 errors from invisible chars
+    raw_queries = state["expanded_queries"]
+    queries = []
+    for q in raw_queries:
+        # Force string, strip whitespace
+        s = str(q).strip()
+        # Remove non-printable characters just in case
+        s = "".join(c for c in s if c.isprintable())
+        if s:
+            queries.append(s)
+
     print(f"--- Node 3: Retrieving for {len(queries)} queries ---")
 
     all_docs = []
 
+    # Instantiate embeddings locally to avoid potential client state issues
+    embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model, google_api_key=api_key)
+
+    import asyncio
+
     # We could do this in parallel, but keeping it simple/sequential loop for now
     for q in queries:
-        # Generate embedding
-        vector = await embeddings.aembed_query(q)
+        # Generate embedding with retry
+        vector = None
+        for attempt in range(3):
+
+            try:
+                vector = await embeddings.aembed_query(q)
+                break
+            except Exception as e:
+                print(f"    [Warning] Embedding failed for query '{q}' (Attempt {attempt+1}): {e}")
+                if attempt == 2:
+                    raise e
+                import asyncio
+                await asyncio.sleep(1)
+
+        if not vector:
+             continue
 
         # Search DB (using l2_distance)
         # We need to manually construct this since we are inside a node
@@ -229,6 +266,7 @@ async def generate_answer(state: RAGState):
         ("human", "{question}"),
     ])
 
+    llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=api_key)
     chain = prompt | llm | StrOutputParser()
 
     response = await chain.ainvoke({
