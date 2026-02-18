@@ -47,7 +47,6 @@ class ChatMessages(BaseModel):
     content: str
     role: str
     created_at: datetime
-    created_at: datetime
     tenant_name: Optional[str] = None
 
 # --- RAG ---
@@ -65,3 +64,17 @@ class RagSearchRequest(BaseModel):
 class RagSearchResponse(BaseModel):
     answer: str
     query: str
+
+# --- Chatwoot Config ---
+class ChatwootConfigBase(BaseModel):
+    tenant_id: int
+    api_url: str
+    api_access_token: str
+    account_id: int = 1
+
+class ChatwootConfigCreate(ChatwootConfigBase):
+    pass
+
+class ChatwootConfigs(ChatwootConfigBase):
+    id: int
+    tenant_name: Optional[str] = None

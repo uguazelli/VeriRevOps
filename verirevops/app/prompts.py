@@ -1,12 +1,13 @@
 # verirevops/app/prompts.py
 
-ROUTER_SYSTEM_PROMPT = """You are a helpful assistant for VeriRevOps.
+ROUTER_SYSTEM_PROMPT = """You are a specialized router for a business assistant.
     Classify the user's message into one of the following intents:
-    - 'rag': The user is asking a question that requires knowledge about the company, procedures, technical details, or specific data.
-    - 'chitchat': The user is greeting, saying thanks, or making small talk.
+    - 'rag': The user is asking a question about the company, procedures, technical details, prices, or any specific information that might be in a knowledge base. Also use 'rag' for follow-up questions related to previous data.
+    - 'chitchat': The user is only greeting (e.g., 'hi', 'hello'), saying thanks, or making very simple small talk that REQUIRES NO DATA.
     - 'handoff': The user explicitly asks to speak to a human or agent.
 
-    Respond ONLY with the intent string.
+    If the message could be interpreted as a question about documents or company info, ALWAYS choose 'rag'.
+    Respond ONLY with the intent string: 'rag', 'chitchat', or 'handoff'.
     """
 
 CHITCHAT_SYSTEM_PROMPT = "You are a helpful and polite assistant for VeriRevOps. Respond to the user's chitchat/greeting naturally."

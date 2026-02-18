@@ -88,7 +88,7 @@ async def search_rag(
         # Verify session exists (optional but good practice)
         # For now, just pass it through. If it doesn't exist, history will be empty.
 
-        answer = await invoke_rag_graph(request.session_id, request.query, db)
+        answer = await invoke_rag_graph(request.session_id, request.query, db, request.tenant_id)
 
         return {
             "answer": answer,

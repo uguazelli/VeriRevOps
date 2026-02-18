@@ -35,6 +35,16 @@ const schemas = {
         title: 'Chat Messages',
         headers: ['ID', 'Tenant', 'Session ID', 'Role', 'Content', 'Created At'],
         fields: [] // Read-only
+    },
+    chatwoot_configs: {
+        title: 'Chatwoot Configurations',
+        headers: ['ID', 'Tenant', 'Account ID', 'API URL', 'Access Token', 'Actions'],
+        fields: [
+            { name: 'tenant_id', label: 'Tenant', type: 'select', required: true },
+            { name: 'account_id', label: 'Account ID', type: 'number', required: true },
+            { name: 'api_url', label: 'API URL', type: 'text', required: true },
+            { name: 'api_access_token', label: 'Access Token', type: 'text', required: true }
+        ]
     }
 };
 
@@ -185,6 +195,20 @@ function renderTable(data) {
             $tr.append(`<td><strong>${item.role}</strong></td>`);
             $tr.append(`<td>${item.content.substring(0, 50)}...</td>`);
             $tr.append(`<td>${new Date(item.created_at).toLocaleString()}</td>`);
+            $tr.append(`<td>${item.content.substring(0, 50)}...</td>`);
+            $tr.append(`<td>${new Date(item.created_at).toLocaleString()}</td>`);
+        } else if (currentEntity === 'chatwoot_configs') {
+            $tr.append(`<td>${item.id}</td>`);
+            $tr.append(`<td>${tenantName}</td>`);
+            $tr.append(`<td>${item.account_id}</td>`);
+            $tr.append(`<td>${item.api_url}</td>`);
+            $tr.append(`<td>${item.api_access_token.substring(0, 10)}...</td>`);
+            $tr.append(`
+                <td>
+                    <button class="btn-edit" onclick="editRecord(${item.id})">Edit</button>
+                    <button class="btn-delete" onclick="deleteRecord(${item.id})">Delete</button>
+                </td>
+            `);
         }
 
         $tbody.append($tr);

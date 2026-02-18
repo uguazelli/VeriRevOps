@@ -21,6 +21,7 @@ class Tenant(Base):
     subscriptions: Mapped[List["Subscription"]] = relationship(back_populates="tenant")
     chat_sessions: Mapped[List["ChatSession"]] = relationship(back_populates="tenant")
     rag_files: Mapped[List["RagFile"]] = relationship(back_populates="tenant")
+    chatwoot_config: Mapped[Optional["ChatwootConfig"]] = relationship(back_populates="tenant", uselist=False)
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
@@ -80,3 +81,14 @@ class RagChunk(Base):
     chunk_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default={})
 
     file: Mapped["RagFile"] = relationship(back_populates="chunks")
+
+class ChatwootConfig(Base):
+    __tablename__ = "chatwoot_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), unique=True, nullable=False)
+    api_url: Mapped[str] = mapped_column(String, nullable=False)
+    api_access_token: Mapped[str] = mapped_column(String, nullable=False)
+    account_id: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    tenant: Mapped["Tenant"] = relationship(back_populates="chatwoot_config")

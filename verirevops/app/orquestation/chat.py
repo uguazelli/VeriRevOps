@@ -93,13 +93,28 @@ async def router_node(state: ChatState) -> ChatState:
 
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0, google_api_key=api_key)
 
-    messages = [SystemMessage(content=system_prompt), HumanMessage(content=state['user_message'])]
+    # Include some history for better context (last 3 messages)
+    history_context = state.get('chat_history', [])[-3:]
+
+    messages = [
+        SystemMessage(content=system_prompt),
+        *history_context,
+        HumanMessage(content=state['user_message'])
+    ]
+
     response = await llm.ainvoke(messages)
-    intent = response.content.strip().lower()
+    raw_intent = response.content.strip().lower()
 
-    if intent not in ['rag', 'chitchat', 'handoff']:
-        intent = 'chitchat' # Default fallback
+    # Robust extraction: find any valid intent in the response
+    intent = "chitchat" # Default
+    if "rag" in raw_intent:
+        intent = "rag"
+    elif "handoff" in raw_intent:
+        intent = "handoff"
+    elif "chitchat" in raw_intent:
+        intent = "chitchat"
 
+    print(f"--- Router Decision: '{intent}' ---", flush=True)
     return {"intent": intent}
 
 async def rag_node(state: ChatState, db: AsyncSession) -> ChatState:
@@ -109,7 +124,7 @@ async def rag_node(state: ChatState, db: AsyncSession) -> ChatState:
     # invoke_rag_graph already handles history fetching, but we have it in state.
     # We pass the user query.
     # Note: invoke_rag_graph manages its own flow.
-    answer = await invoke_rag_graph(state['session_id'], state['user_message'], db)
+    answer = await invoke_rag_graph(state['session_id'], state['user_message'], db, state['tenant_id'])
     return {"ai_response": answer, "summary_needed": True}
 
 async def chitchat_node(state: ChatState) -> ChatState:

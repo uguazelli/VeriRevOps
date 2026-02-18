@@ -5,12 +5,13 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
 
 from app.core.db import get_db
-from app.models import Tenant, Subscription, ChatSession, ChatMessage
+from app.models import Tenant, Subscription, ChatSession, ChatMessage, ChatwootConfig
 from app.schemas import (
     Tenants, TenantCreate,
     Subscriptions, SubscriptionCreate,
     ChatSessions, ChatSessionCreate,
-    ChatMessages
+    ChatMessages,
+    ChatwootConfigs, ChatwootConfigCreate
 )
 
 router = APIRouter(prefix="/api", tags=["admin"])
@@ -273,3 +274,87 @@ async def get_chat_messages(session_id: Optional[int] = None, session: AsyncSess
             tenant_name=tenant_name
          ))
     return response
+
+# --- Chatwoot Config CRUD ---
+
+@router.get("/chatwoot_configs", response_model=List[ChatwootConfigs])
+async def get_chatwoot_configs(session: AsyncSession = Depends(get_db)):
+    stmt = select(ChatwootConfig).options(selectinload(ChatwootConfig.tenant))
+    result = await session.execute(stmt)
+    configs = result.scalars().all()
+
+    response = []
+    for c in configs:
+        response.append(ChatwootConfigs(
+            id=c.id,
+            tenant_id=c.tenant_id,
+            api_url=c.api_url,
+            api_access_token=c.api_access_token,
+            account_id=c.account_id,
+            tenant_name=c.tenant.name if c.tenant else None
+        ))
+    return response
+
+@router.post("/chatwoot_configs", response_model=ChatwootConfigs)
+async def create_chatwoot_config(config_in: ChatwootConfigCreate, session: AsyncSession = Depends(get_db)):
+    db_config = ChatwootConfig(**config_in.model_dump())
+    session.add(db_config)
+    try:
+        await session.commit()
+        await session.refresh(db_config)
+
+        tenant = await session.get(Tenant, db_config.tenant_id)
+
+        return ChatwootConfigs(
+            id=db_config.id,
+            tenant_id=db_config.tenant_id,
+            api_url=db_config.api_url,
+            api_access_token=db_config.api_access_token,
+            account_id=db_config.account_id,
+            tenant_name=tenant.name if tenant else None
+        )
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.put("/chatwoot_configs/{config_id}", response_model=ChatwootConfigs)
+async def update_chatwoot_config(config_id: int, config_in: ChatwootConfigCreate, session: AsyncSession = Depends(get_db)):
+    db_config = await session.get(ChatwootConfig, config_id)
+    if not db_config:
+        raise HTTPException(status_code=404, detail="Configuration not found")
+
+    config_data = config_in.model_dump(exclude_unset=True)
+    for key, value in config_data.items():
+        setattr(db_config, key, value)
+
+    try:
+        await session.commit()
+        await session.refresh(db_config)
+
+        tenant = await session.get(Tenant, db_config.tenant_id)
+
+        return ChatwootConfigs(
+            id=db_config.id,
+            tenant_id=db_config.tenant_id,
+            api_url=db_config.api_url,
+            api_access_token=db_config.api_access_token,
+            account_id=db_config.account_id,
+            tenant_name=tenant.name if tenant else None
+        )
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/chatwoot_configs/{config_id}")
+async def delete_chatwoot_config(config_id: int, session: AsyncSession = Depends(get_db)):
+    db_config = await session.get(ChatwootConfig, config_id)
+    if not db_config:
+        raise HTTPException(status_code=404, detail="Configuration not found")
+
+    try:
+        await session.delete(db_config)
+        await session.commit()
+        return {"message": "Configuration deleted successfully"}
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail=str(e))

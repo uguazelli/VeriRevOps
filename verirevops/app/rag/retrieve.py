@@ -26,7 +26,11 @@ embedding_model = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
 api_key = os.getenv("GOOGLE_API_KEY")
 
 # FlashRank Reranker (Nano model is fast and runs locally)
-# reranker = Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir="/app/.cache/flashrank")
+try:
+    reranker = Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir="/tmp/flashrank")
+except Exception as e:
+    print(f"Failed to initialize Ranker: {e}")
+    reranker = None
 
 # ...
 
@@ -39,6 +43,7 @@ class RAGState(TypedDict):
     Passed between nodes in the graph.
     """
     session_id: int
+    tenant_id: int
     user_query: str                  # Original query from user
     chat_history: List[BaseMessage]  # Last 6 messages from DB
 
@@ -184,6 +189,8 @@ async def retrieve_documents(state: RAGState, db_session: AsyncSession):
 
         stmt = (
             select(RagChunk)
+            .join(RagFile, RagChunk.file_id == RagFile.id)
+            .where(RagFile.tenant_id == state["tenant_id"])
             .order_by(RagChunk.embedding.l2_distance(vector))
             .limit(5) # Fetch top 5 for EACH query variation
         )
@@ -222,17 +229,24 @@ async def rerank_documents(state: RAGState):
         for d in docs
     ]
 
-    rerank_request = RerankRequest(query=query, passages=passages)
-    results = reranker.rerank(rerank_request)
-
-    # Validating results and taking top 5
-    top_k = 5
     reranked_docs = []
-    for res in results[:top_k]:
-        reranked_docs.append(Document(
-            page_content=res["text"],
-            metadata=res["meta"]
-        ))
+    if reranker:
+        try:
+            rerank_request = RerankRequest(query=query, passages=passages)
+            results = reranker.rerank(rerank_request)
+
+            # Validating results and taking top 5
+            top_k = 5
+            for res in results[:top_k]:
+                reranked_docs.append(Document(
+                    page_content=res["text"],
+                    metadata=res["meta"]
+                ))
+        except Exception as e:
+            print(f"    [Error] Reranking failed: {e}")
+            reranked_docs = docs[:5] # Fallback to top 5 raw
+    else:
+        reranked_docs = docs[:5] # Fallback if reranker not init
 
     print(f"    -> Top {len(reranked_docs)} selected.")
     return {"reranked_docs": reranked_docs}
@@ -243,16 +257,24 @@ async def generate_answer(state: RAGState):
     """
     Step 5: Generate the final answer using context and history.
     """
-    print("--- Node 5: Generating Answer ---")
+    print(f"--- Node 5: Generating Answer ---", flush=True)
     documents = state["reranked_docs"]
     context = "\n\n".join([doc.page_content for doc in documents])
 
-    system_prompt = GENERATE_ANSWER_SYSTEM_PROMPT
+    print(f"    DEBUG: Context length: {len(context)} characters", flush=True)
+    if context:
+        print(f"    DEBUG: First 100 chars of context: {context[:100]}...", flush=True)
+
+    history = state.get("chat_history", [])
+    print(f"    DEBUG: History length: {len(history)} messages", flush=True)
+
+    # Use a more explicit prompt, potentially moving context to the human message
+    # Some Gemini versions respond better when context is immediately before the question
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
+        ("system", "You are an assistant for question-answering tasks for VeriRevOps."),
         ("placeholder", "{chat_history}"),
-        ("human", "{question}"),
+        ("human", "Use the following pieces of retrieved context to answer the question.\n\nContext:\n{context}\n\nQuestion: {question}\n\nAssistant:"),
     ])
 
     llm = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=api_key)
@@ -293,16 +315,18 @@ def build_rag_graph():
     return workflow.compile()
 
 # --- Public Entry Point ---
-async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSession):
+async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSession, tenant_id: int):
     """
     Main function to run the RAG pipeline.
     """
+    print(f"\n=== Starting RAG Pipeline for Session {session_id} (Tenant {tenant_id}) ===", flush=True)
     # 1. Fetch History
     history = await get_chat_history(session_id, db_session)
 
     # 2. Initialize State
     initial_state = RAGState(
         session_id=session_id,
+        tenant_id=tenant_id,
         user_query=user_query,
         chat_history=history,
         contextualized_query="",
