@@ -97,3 +97,53 @@ def check_db_connection():
         return True, "Database connection successful"
     except Exception as e:
         return False, str(e)
+
+
+def execute_read_query(query: str, params: tuple = None) -> list:
+    """
+    Executes a SELECT query and returns a list of tuples.
+    """
+    conn = None
+    try:
+        conn = get_postgres_connection()
+        cur = conn.cursor()
+        cur.execute(query, params)
+        rows = cur.fetchall()
+        cur.close()
+        return rows
+    except Exception as e:
+        print(f"Error executing read query: {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+
+def execute_write_query(query: str, params: tuple = None) -> object:
+    """
+    Executes an INSERT/UPDATE/DELETE query.
+    Returns the first column of the first row if RETURNING is used,
+    otherwise returns the number of rows affected.
+    """
+    conn = None
+    try:
+        conn = get_postgres_connection()
+        cur = conn.cursor()
+        cur.execute(query, params)
+
+        if "RETURNING" in query.upper():
+             result = cur.fetchone() # Returns a tuple
+        else:
+             result = cur.rowcount
+
+        conn.commit()
+        cur.close()
+        return result
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error executing write query: {e}")
+        raise e
+    finally:
+        if conn:
+            conn.close()
