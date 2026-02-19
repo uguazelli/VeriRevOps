@@ -60,6 +60,13 @@ async def process_webhook_status_change(data: dict, alias: str):
     if not conversation_id or not isinstance(conversation_id, int):
         conversation_id = data.get("conversation", {}).get("id")
 
+    # Robust contact_id extraction
+    contact_id = data.get("contact_inbox", {}).get("contact_id")
+    if not contact_id:
+        contact_id = data.get("meta", {}).get("sender", {}).get("id")
+    if not contact_id and data.get("conversation"):
+        contact_id = data.get("conversation", {}).get("contact_id")
+
     if status not in ["open", "resolved"]:
         return
 
@@ -82,7 +89,7 @@ async def process_webhook_status_change(data: dict, alias: str):
             Log.warning(f"Could not extract account_id ({account_id}) or conversation_id ({conversation_id}) from webhook.")
             return
 
-        Log.info(f"Conversation {conversation_id} status changed to '{status}'. Triggering summarization.")
+        Log.info(f"Conversation {conversation_id} status changed to '{status}' (Contact: {contact_id}). Triggering summarization.")
 
         # Resolve Chatwoot Client
         from app.services.chatbot_service import ChatbotService
@@ -101,6 +108,7 @@ async def process_webhook_status_change(data: dict, alias: str):
             tenant_id,
             account_id,
             conversation_id,
+            contact_id=contact_id,
             send_to_crm=send_to_crm,
             cleanup_history=cleanup_history
         )

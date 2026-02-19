@@ -83,12 +83,15 @@ class HubSpotAdapter(BaseCRMAdapter):
         """
         url = "https://api.hubapi.com/crm/v3/objects/notes"
 
+        from datetime import datetime, timezone
+
         # Format content for HubSpot (accepts basic HTML)
         body = f"<h3>{title}</h3><p>{content.replace('\n', '<br>')}</p>"
 
         payload = {
             "properties": {
                 "hs_note_body": body,
+                "hs_timestamp": datetime.now(timezone.utc).isoformat()
             },
             "associations": [
                 {

@@ -1,3 +1,4 @@
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -21,7 +22,7 @@ class SummarizationService:
         self.db = db
         self.chatwoot_client = chatwoot_client
 
-    async def summarize_conversation(self, tenant_id: int, account_id: int, conversation_id: int, send_to_crm: bool = False, cleanup_history: bool = False):
+    async def summarize_conversation(self, tenant_id: int, account_id: int, conversation_id: int, contact_id: Optional[int] = None, send_to_crm: bool = False, cleanup_history: bool = False):
         """
         Main entry point for summarizing a conversation.
         """
@@ -42,9 +43,7 @@ class SummarizationService:
             Log.info(f"No new messages since ID {last_id}. Skipping summarization.")
             return
 
-        # Fetch ALL messages for full context summary (or just the new ones + previous summary)
-        # For now, let's fetch all to ensure the summary is high quality,
-        # but we only trigger because there ARE new ones.
+        # Fetch ALL messages for full context summary
         all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id)
 
         # 2. Format transcript for LLM
@@ -62,9 +61,25 @@ class SummarizationService:
 
         # 5. Optional: Push to CRM
         if send_to_crm:
-            # Fetch conversation to get the actual contact_id
-            conversation = await self.chatwoot_client.get_conversation(account_id, conversation_id)
-            contact_id = conversation.get("contact_id") if conversation else None
+            # If contact_id not provided, try to resolve it
+            if not contact_id:
+                conv_data = await self.chatwoot_client.get_conversation(account_id, conversation_id)
+                conversation = conv_data.get("payload") if conv_data and "payload" in conv_data else conv_data
+
+                if conversation:
+                    # 1. Direct field
+                    contact_id = conversation.get("contact_id")
+                    # 2. Inside contact_inbox (Common in webhook data)
+                    if not contact_id:
+                        contact_id = conversation.get("contact_inbox", {}).get("contact_id")
+                    # 3. Inside meta (Common in API responses)
+                    if not contact_id:
+                        meta = conversation.get("meta", {})
+                        # sender is standard for API v1
+                        contact_id = meta.get("sender", {}).get("id")
+                        # contact is sometimes seen in SDKs/specific events
+                        if not contact_id:
+                            contact_id = meta.get("contact", {}).get("id")
 
             if contact_id:
                 await self._push_to_crms(tenant_id, contact_id, summary)
@@ -78,7 +93,9 @@ class SummarizationService:
         # 7. Update tracking ID
         # Get the ID of the last message in current batch
         latest_msg_id = new_messages[-1].get("id")
-        if session:
+
+        # We fetch the session again or check if it was deleted
+        if not cleanup_history and session:
             session.last_summarized_message_id = latest_msg_id
             await self.db.commit()
 
@@ -151,11 +168,17 @@ class SummarizationService:
                 await adapter.add_note(external_id, "Conversation Summary", summary)
 
     async def _cleanup_local_history(self, conversation_id: int):
-        """Deletes local ChatMessage history for the conversation (session_id)."""
+        """Deletes local ChatMessage history AND the ChatSession record itself."""
         try:
-            stmt = delete(ChatMessage).where(ChatMessage.session_id == conversation_id)
-            await self.db.execute(stmt)
+            # 1. Delete messages
+            stmt_msg = delete(ChatMessage).where(ChatMessage.session_id == conversation_id)
+            await self.db.execute(stmt_msg)
+
+            # 2. Delete session (to reset tracking ID for next time)
+            stmt_sess = delete(ChatSession).where(ChatSession.id == conversation_id)
+            await self.db.execute(stmt_sess)
+
             await self.db.commit()
-            Log.info(f"Cleaned up local history for Session {conversation_id}")
+            Log.info(f"Cleaned up local history and deleted Session {conversation_id}")
         except Exception as e:
             Log.error(f"Failed to cleanup history for Session {conversation_id}: {e}")

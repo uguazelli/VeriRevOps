@@ -61,7 +61,11 @@ async def verify_summarization():
         return messages
 
     mock_client.get_messages = AsyncMock(side_effect=mock_get_messages)
-    mock_client.get_conversation = AsyncMock(return_value={"id": 101, "contact_id": 500})
+    # Simulate nested contact_inbox structure from Chatwoot
+    mock_client.get_conversation = AsyncMock(return_value={
+        "id": 101,
+        "contact_inbox": {"contact_id": 500}
+    })
 
     # Patch adapters and LLM
     with patch("app.services.crm.factory.CRMFactory.get_adapter") as mock_get_adapter, \
@@ -97,6 +101,12 @@ async def verify_summarization():
         await service.summarize_conversation(1, 1, 101, send_to_crm=True, cleanup_history=True)
 
         assert mock_hs_adapter.add_note.called, "Should sync to CRM"
+
+        # Verify deletion calls
+        delete_calls = [str(c[0][0]).lower() for c in mock_db.execute.call_args_list if "delete" in str(c[0][0]).lower()]
+        assert any("chat_messages" in c for c in delete_calls), "Should delete messages"
+        assert any("chat_sessions" in c for c in delete_calls), "Should delete session"
+
         print("✅ Scenario 3 Passed")
 
     print("\n✨ Incremental Summarization Verification complete!\n")
