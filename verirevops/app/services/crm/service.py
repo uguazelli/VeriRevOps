@@ -24,6 +24,9 @@ class CRMService:
             Log.warning(f"Skipping CRM sync for tenant {tenant_id}: No email provided for contact.")
             return
 
+        # Robustness: lowercase email for case-insensitive matching
+        contact_data["email"] = email.lower()
+
         # 1. Look for active CRM integrations for this tenant
         configs = await self._get_active_crm_configs(tenant_id)
         if not configs:

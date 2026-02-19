@@ -20,7 +20,7 @@ class HubSpotAdapter(BaseCRMAdapter):
     async def create_contact(self, contact_data: Dict[str, Any]) -> Optional[str]:
         """
         Creates a contact in HubSpot.
-        Chatwoot contact data is mapped to HubSpot properties.
+        Handle 409 Conflict to prevent duplicates if the contact already exists.
         """
         properties = self._map_chatwoot_to_hubspot(contact_data)
         payload = {"properties": properties}
@@ -33,11 +33,34 @@ class HubSpotAdapter(BaseCRMAdapter):
                     Log.success("Contact created in HubSpot")
                     return response.json().get("id")
 
+                # Handling 409 Conflict (Contact already exists)
+                if response.status_code == 409:
+                    Log.info("Conflict detected in HubSpot. Attempting to recover and update.")
+                    return await self._handle_conflict(response, contact_data)
+
                 Log.error(f"HubSpot create contact failed: {response.status_code} - {response.text}")
                 return None
             except httpx.HTTPError as e:
                 Log.error(f"HTTP Error connecting to HubSpot: {e}")
                 return None
+
+    async def _handle_conflict(self, response: httpx.Response, contact_data: Dict[str, Any]) -> Optional[str]:
+        """Extracts existing ID from conflict response and updates the contact."""
+        try:
+            error_data = response.json()
+            # HubSpot message format: "Contact already exists. Existing ID: 12345"
+            message = error_data.get("message", "")
+            if "Existing ID:" in message:
+                existing_id = message.split("Existing ID:")[1].strip()
+                Log.info(f"Recovered existing HubSpot ID: {existing_id}. Updating instead.")
+                await self.update_contact(existing_id, contact_data)
+                return existing_id
+
+            Log.warning("Could not extract existing ID from HubSpot conflict message.")
+            return None
+        except Exception as e:
+            Log.error(f"Error handling HubSpot conflict: {e}")
+            return None
 
     async def update_contact(self, external_id: str, contact_data: Dict[str, Any]) -> bool:
         """Updates a contact in HubSpot."""

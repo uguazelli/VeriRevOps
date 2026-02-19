@@ -1,4 +1,5 @@
 import asyncio
+import httpx
 from unittest.mock import MagicMock, AsyncMock, patch
 from app.services.crm.service import CRMService
 from app.services.crm.adapters.hubspot import HubSpotAdapter
@@ -51,13 +52,28 @@ async def verify_crm_sync():
         mock_find_hs.return_value = None
         mock_find_espo.return_value = None
 
-        print("\n🔹 Testing sync for NEW contact...")
+        print("\n🔹 Testing sync for NEW contact (john@EXAMPLE.com)...")
         await service.sync_contact(tenant_id=1, contact_data=contact_data)
 
         print(f"✅ HubSpot find called: {mock_find_hs.called}")
         print(f"✅ HubSpot create called: {mock_create_hs.called}")
         print(f"✅ EspoCRM find called: {mock_find_espo.called}")
         print(f"✅ EspoCRM create called: {mock_create_espo.called}")
+
+        # Scenario: 409 Conflict in HubSpot (Simulating race condition or search delay)
+        mock_find_hs.reset_mock()
+        mock_create_hs.reset_mock()
+        mock_find_hs.return_value = None # Search says it doesn't exist
+
+        # HubSpot returns 409 because it exists but isn't indexed yet
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 409
+        mock_response.json.return_value = {"message": "Contact already exists. Existing ID: 999"}
+        mock_create_hs.return_value = await HubSpotAdapter(api_key="api")._handle_conflict(mock_response, contact_data)
+
+        print("\n🔹 Testing sync for CONFLICTING HubSpot contact (409 logic)...")
+        await service.sync_contact(tenant_id=1, contact_data=contact_data)
+        print(f"✅ HubSpot recovered ID via 409 logic: {mock_create_hs.return_value == '999'}")
 
         # Scenario: Existing Contact in HubSpot
         mock_find_hs.reset_mock()
