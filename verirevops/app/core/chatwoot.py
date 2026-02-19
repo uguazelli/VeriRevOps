@@ -28,7 +28,23 @@ class ChatwootClient:
                 return response.json()
             except httpx.HTTPError as e:
                 Log.error(f"Error sending message to Chatwoot: {e}")
-                # We might want to log this properly or retry
+                return None
+
+    async def update_status(self, account_id: int, conversation_id: int, status: str):
+        """
+        Updates the status of a conversation (open, pending, resolved, snoozed).
+        POST /api/v1/accounts/{account_id}/conversations/{conversation_id}/toggle_status
+        """
+        url = f"{self.base_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/toggle_status"
+        payload = {"status": status}
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, json=payload, headers=self.headers)
+                response.raise_for_status()
+                Log.webhook(f"Updated conversation {conversation_id} status to '{status}'", direction="OUT")
+                return response.json()
+            except httpx.HTTPError as e:
+                Log.error(f"Error updating Chatwoot status: {e}")
                 return None
 
 # Singleton or dependency injection setup

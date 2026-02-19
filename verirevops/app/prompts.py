@@ -39,3 +39,5 @@ RAG_USER_PROMPT = (
     "Question: {question}\n\n"
     "Assistant:"
 )
+
+HANDOFF_SYSTEM_PROMPT = "You are a helpful assistant for VeriRevOps. The user wants to speak to a human. Acknowledge this politely, tell them you are transferring them to a team member, and that they will be with them shortly. Keep it brief."

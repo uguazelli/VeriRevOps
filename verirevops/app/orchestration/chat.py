@@ -10,7 +10,7 @@ from langchain_core.runnables import RunnableConfig
 
 from app.models import ChatSession, ChatMessage
 from app.rag.retrieve import invoke_rag_graph, get_chat_history
-from app.prompts import ROUTER_SYSTEM_PROMPT, CHITCHAT_SYSTEM_PROMPT
+from app.prompts import ROUTER_SYSTEM_PROMPT, CHITCHAT_SYSTEM_PROMPT, HANDOFF_SYSTEM_PROMPT
 from app.core.logger import Log
 
 # --- State ---
@@ -144,6 +144,20 @@ async def chitchat_node(state: ChatState, config: RunnableConfig) -> dict:
     response = await llm.ainvoke(prompt, config=config)
     return {"ai_response": response.content, "summary_needed": False}
 
+async def handoff_node(state: ChatState, config: RunnableConfig) -> dict:
+    """
+    Formulates a brief message confirming the transfer to a human agent.
+    Populates 'ai_response' using the handoff-specific instructions.
+    """
+    prompt = [
+        SystemMessage(content=HANDOFF_SYSTEM_PROMPT),
+        HumanMessage(content=state['user_message'])
+    ]
+
+    llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
+    response = await llm.ainvoke(prompt, config=config)
+    return {"ai_response": response.content, "summary_needed": False}
+
 async def persist_response_node(state: ChatState, config: RunnableConfig) -> dict:
     """
     Saves the final AI-generated response back to the chat history database.
@@ -185,6 +199,7 @@ def build_chat_graph():
     workflow.add_node("router", router_node)
     workflow.add_node("rag", rag_node)
     workflow.add_node("chitchat", chitchat_node)
+    workflow.add_node("handoff", handoff_node)
     workflow.add_node("persist", persist_response_node)
     workflow.add_node("summarize", summarize_node)
 
@@ -202,12 +217,13 @@ def build_chat_graph():
         {
             "rag": "rag",
             "chitchat": "chitchat",
-            "handoff": "chitchat" # Fallback to chitchat for now
+            "handoff": "handoff"
         }
     )
 
     workflow.add_edge("rag", "persist")
     workflow.add_edge("chitchat", "persist")
+    workflow.add_edge("handoff", "persist")
     workflow.add_edge("persist", "summarize")
     workflow.add_edge("summarize", END)
 
@@ -235,4 +251,4 @@ async def invoke_chat_orchestrator(tenant_id: int, session_id: int, message: str
     config = {"configurable": {"db": db}}
     final_state = await chat_graph.ainvoke(initial_state, config=config)
     Log.success(f"Orchestration complete for Session {session_id}")
-    return final_state['ai_response']
+    return final_state['ai_response'], final_state['intent']

@@ -18,10 +18,17 @@ class ChatbotService:
         """
         content = data.get("content")
         account_id = data.get("account", {}).get("id")
-        conversation_id = data.get("conversation", {}).get("id")
+        conversation = data.get("conversation", {})
+        conversation_id = conversation.get("id")
+        status = conversation.get("status")
 
         if not account_id or not conversation_id or not content:
             Log.warning("Incomplete webhook data")
+            return
+
+        # 0. Ignore if status is 'open' (Human is handling)
+        if status == "open":
+            Log.info(f"Conversation {conversation_id} is 'open'. Bot will ignore.")
             return
 
         try:
@@ -38,8 +45,8 @@ class ChatbotService:
             Log.tenant(tenant_id, f"Resolved for alias '{alias}'")
 
             # 2. Invoke Orchestrator
-            ai_response = await invoke_chat_orchestrator(tenant_id, conversation_id, content, self.db)
-            Log.orchestrator(f"Response: {ai_response}")
+            ai_response, intent = await invoke_chat_orchestrator(tenant_id, conversation_id, content, self.db)
+            Log.orchestrator(f"Response: {ai_response} | Intent: {intent}")
 
             if ai_response:
                 # 3. Fetch Chatwoot Config for Tenant
@@ -56,6 +63,10 @@ class ChatbotService:
                 if client:
                     await client.send_message(account_id, conversation_id, ai_response)
                     Log.webhook(f"Sent response to Chatwoot", direction="OUT")
+
+                    # 4. Status Management
+                    new_status = "open" if intent == "handoff" else "pending"
+                    await client.update_status(account_id, conversation_id, new_status)
                 else:
                     Log.warning(f"Chatwoot client not configured for Tenant {tenant_id}")
         except Exception as e:
