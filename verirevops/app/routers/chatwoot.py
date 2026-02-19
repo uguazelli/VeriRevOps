@@ -6,7 +6,6 @@ router = APIRouter(prefix="/api", tags=["chatwoot"])
 
 
 async def process_webhook_message(data: dict, alias: str):
-    """Background task to process the webhook via ChatbotService."""
     message_type = data.get("message_type")
     private = data.get("private", False)
 

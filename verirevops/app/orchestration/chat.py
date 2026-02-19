@@ -1,5 +1,5 @@
 from app.core.config import settings
-from typing import List, TypedDict, Annotated
+from typing import List, TypedDict, Annotated, Optional
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
@@ -22,8 +22,57 @@ class ChatState(TypedDict):
     intent: Annotated[str, "The classified intent: rag, chitchat, or handoff"]
     ai_response: Annotated[str, "The response from the AI"]
     summary_needed: Annotated[bool, "Whether a summary update is required"]
+    attachments: Annotated[List[dict], "Media attachments from Chatwoot"]
 
 # --- Nodes ---
+
+async def transcribe_node(state: ChatState, config: RunnableConfig) -> dict:
+    """
+    If the user message is empty but there are attachments, use Gemini to
+    transcribe/describe the media into the 'user_message' field.
+    If text exists, append the transcription/description.
+    """
+    if not state.get('attachments'):
+        return {} # Nothing to transcribe
+
+    Log.orchestrator("Processing media for transcription/description...")
+
+    llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=0, google_api_key=settings.GOOGLE_API_KEY)
+
+    # Multi-part content for Gemini
+    prompt_text = (
+        "Focus only on the provided media. "
+        "Audio: Transcribe strictly what is said. "
+        "Image: Describe what is shown in detail. "
+        "Return ONLY the transcription/description. Do not add preamble."
+    )
+    human_content = [{"type": "text", "text": prompt_text}]
+
+    has_media = False
+    for att in state['attachments']:
+        if att.get("type") in ["image", "audio"]:
+            human_content.append({
+                "type": "media",
+                "mime_type": att.get("mime_type"),
+                "data": att.get("data")
+            })
+            has_media = True
+
+    if not has_media:
+        return {}
+
+    response = await llm.ainvoke([HumanMessage(content=human_content)], config=config)
+    transcription = response.content.strip()
+
+    Log.orchestrator(f"Transcription/Description results: '{transcription}'")
+
+    current_text = state.get('user_message', "")
+    if current_text:
+        new_text = f"{current_text}\n\n[Media Content]: {transcription}"
+    else:
+        new_text = transcription
+
+    return {"user_message": new_text}
 
 async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> dict:
     """
@@ -101,7 +150,7 @@ async def router_node(state: ChatState, config: RunnableConfig) -> dict:
     messages = [
         SystemMessage(content=system_prompt),
         *history_context,
-        HumanMessage(content=state['user_message'])
+        HumanMessage(content=state['user_message'] or "Analyze the conversation context and determine the next step.")
     ]
 
     response = await llm.ainvoke(messages, config=config)
@@ -136,7 +185,7 @@ async def chitchat_node(state: ChatState, config: RunnableConfig) -> dict:
     prompt = [
         SystemMessage(content=CHITCHAT_SYSTEM_PROMPT),
         *state['chat_history'], # Optional: Include history for context
-        HumanMessage(content=state['user_message'])
+        HumanMessage(content=state['user_message'] or "Olá! Como posso ajudar hoje?")
     ]
 
     llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
@@ -151,7 +200,7 @@ async def handoff_node(state: ChatState, config: RunnableConfig) -> dict:
     """
     prompt = [
         SystemMessage(content=HANDOFF_SYSTEM_PROMPT),
-        HumanMessage(content=state['user_message'])
+        HumanMessage(content=state['user_message'] or "Por favor, transfira esta conversa para um atendente humano.")
     ]
 
     llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
@@ -191,10 +240,13 @@ async def summarize_node(state: ChatState, config: RunnableConfig) -> dict:
 
 def build_chat_graph():
     """
-    Builds the graph. DB is injected via RunnableConfig at runtime.
+    Constructs the state graph for the chat orchestrator.
+    Flow: Transcribe -> Ingest -> Router -> (RAG | Chitchat | Handoff) -> Persist -> Summarize
     """
     workflow = StateGraph(ChatState)
 
+    # Nodes
+    workflow.add_node("transcribe", transcribe_node)
     workflow.add_node("ingest", load_and_ensure_session)
     workflow.add_node("router", router_node)
     workflow.add_node("rag", rag_node)
@@ -204,16 +256,13 @@ def build_chat_graph():
     workflow.add_node("summarize", summarize_node)
 
     # Edges
-    workflow.set_entry_point("ingest")
+    workflow.set_entry_point("transcribe")
+    workflow.add_edge("transcribe", "ingest")
     workflow.add_edge("ingest", "router")
-
-    # Conditional Logic
-    def route_decision(state):
-        return state['intent']
 
     workflow.add_conditional_edges(
         "router",
-        route_decision,
+        lambda x: x["intent"],
         {
             "rag": "rag",
             "chitchat": "chitchat",
@@ -232,7 +281,7 @@ def build_chat_graph():
 # Singleton Graph Instance
 chat_graph = build_chat_graph()
 
-async def invoke_chat_orchestrator(tenant_id: int, session_id: int, message: str, db: AsyncSession):
+async def invoke_chat_orchestrator(tenant_id: int, session_id: int, message: str, db: AsyncSession, attachments: Optional[List[dict]] = None):
     """
     Public entry point using native LangGraph ainvoke.
     """
@@ -244,7 +293,8 @@ async def invoke_chat_orchestrator(tenant_id: int, session_id: int, message: str
         chat_history=[],
         intent="chitchat",
         ai_response="",
-        summary_needed=False
+        summary_needed=False,
+        attachments=attachments or []
     )
 
     # Execute

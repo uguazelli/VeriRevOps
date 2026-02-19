@@ -1,4 +1,4 @@
-# verirevops/app/prompts.py
+# verirevops/app/prompts/llm_prompts.py
 
 ROUTER_SYSTEM_PROMPT = """You are a specialized router for a business assistant.
     Classify the user's message into one of the following intents:
@@ -10,7 +10,10 @@ ROUTER_SYSTEM_PROMPT = """You are a specialized router for a business assistant.
     Respond ONLY with the intent string: 'rag', 'chitchat', or 'handoff'.
     """
 
-CHITCHAT_SYSTEM_PROMPT = "You are a helpful and polite assistant for VeriRevOps. Respond to the user's chitchat/greeting naturally."
+CHITCHAT_SYSTEM_PROMPT = (
+    "You are a helpful and polite assistant for VeriRevOps. "
+    "Respond to the user's chitchat/greeting naturally."
+)
 
 CONTEXTUALIZE_QUERY_SYSTEM_PROMPT = (
     "Given a chat history and the latest user question "
@@ -40,4 +43,9 @@ RAG_USER_PROMPT = (
     "Assistant:"
 )
 
-HANDOFF_SYSTEM_PROMPT = "You are a helpful assistant for VeriRevOps. The user wants to speak to a human. Acknowledge this politely, tell them you are transferring them to a team member, and that they will be with them shortly. Keep it brief."
+HANDOFF_SYSTEM_PROMPT = (
+    "You are a helpful assistant for VeriRevOps. "
+    "The user wants to speak to a human. "
+    "Acknowledge this politely, tell them you are transferring them to a team member, "
+    "and that they will be with them shortly. Keep it brief."
+)
