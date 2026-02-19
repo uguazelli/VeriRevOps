@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from app.models.integration import IntegrationConfig
+from sqlalchemy import select, and_
+from app.models.integration import IntegrationConfig, ContactMapping
 from app.services.crm.factory import CRMFactory
 from app.core.logger import Log
 from typing import Dict, Any, Optional
@@ -20,8 +20,10 @@ class CRMService:
         """
         # Guard clause: No email, no sync usually
         email = contact_data.get("email")
-        if not email:
-            Log.warning(f"Skipping CRM sync for tenant {tenant_id}: No email provided for contact.")
+        cw_contact_id = contact_data.get("id")
+
+        if not email or not cw_contact_id:
+            Log.warning(f"Skipping CRM sync for tenant {tenant_id}: Missing email or contact ID.")
             return
 
         # Robustness: lowercase email for case-insensitive matching
@@ -35,7 +37,7 @@ class CRMService:
 
         # 2. Sync with each configured CRM
         for config in configs:
-            await self._sync_with_adapter(config, contact_data)
+            await self._sync_with_adapter(config, contact_data, cw_contact_id)
 
     async def _get_active_crm_configs(self, tenant_id: int):
         """Fetches active CRM integration configurations for a tenant."""
@@ -47,27 +49,84 @@ class CRMService:
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
-    async def _sync_with_adapter(self, config: IntegrationConfig, contact_data: Dict[str, Any]):
-        """Internal helper to sync with a specific adapter."""
+    async def _sync_with_adapter(self, config: IntegrationConfig, contact_data: Dict[str, Any], cw_contact_id: int):
+        """Internal helper to sync with a specific adapter using persistent mapping."""
         adapter = CRMFactory.get_adapter(config)
         if not adapter:
             Log.error(f"Failed to initialize adapter for {config.service_name}")
             return
 
         try:
+            tenant_id = config.tenant_id
+            service_name = config.service_name.lower()
+
+            # 1. Check Persistent Mapping first (The most reliable identity link)
+            external_id = await self._get_mapped_external_id(tenant_id, cw_contact_id, service_name)
+
+            if external_id:
+                Log.info(f"Mapping found for Chatwoot ID {cw_contact_id} -> {service_name} ID {external_id}. Updating.")
+                success = await adapter.update_contact(external_id, contact_data)
+                if success:
+                    return
+                # If update fails (e.g. record deleted in CRM), we fall back to search
+                Log.warning(f"Update failed for {service_name} ID {external_id}. Record might be deleted. Falling back to search.")
+
+            # 2. Fallback: Search by Email
             email = contact_data.get("email")
-            # 1. Try to find existing contact
             existing = await adapter.find_contact_by_email(email)
 
             if existing:
                 external_id = existing.get("id")
-                Log.info(f"Updating existing {config.service_name} contact: {external_id}")
+                Log.info(f"Existing {service_name} contact found via email search: {external_id}. Linking.")
                 await adapter.update_contact(external_id, contact_data)
+                await self._save_contact_mapping(tenant_id, cw_contact_id, service_name, external_id)
                 return
 
-            # 2. Create new contact if not found
-            Log.info(f"Creating new {config.service_name} contact for {email}")
-            await adapter.create_contact(contact_data)
+            # 3. Create new contact
+            Log.info(f"Creating new {service_name} contact for {email}")
+            new_external_id = await adapter.create_contact(contact_data)
+
+            if new_external_id:
+                await self._save_contact_mapping(tenant_id, cw_contact_id, service_name, new_external_id)
 
         except Exception as e:
             Log.error(f"Error during {config.service_name} sync: {e}")
+
+    async def _get_mapped_external_id(self, tenant_id: int, cw_contact_id: int, service_name: str) -> Optional[str]:
+        """Looks up an external ID in the persistent mapping table."""
+        stmt = select(ContactMapping.external_id).where(
+            and_(
+                ContactMapping.tenant_id == tenant_id,
+                ContactMapping.chatwoot_contact_id == cw_contact_id,
+                ContactMapping.service_name == service_name
+            )
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().first()
+
+    async def _save_contact_mapping(self, tenant_id: int, cw_contact_id: int, service_name: str, external_id: str):
+        """Saves or updates a contact mapping in the database."""
+        # Use a sub-transactional approach or upsert if available
+        # For simplicity in this demo, we'll check and insert
+        stmt = select(ContactMapping).where(
+            and_(
+                ContactMapping.tenant_id == tenant_id,
+                ContactMapping.chatwoot_contact_id == cw_contact_id,
+                ContactMapping.service_name == service_name
+            )
+        )
+        result = await self.db.execute(stmt)
+        mapping = result.scalars().first()
+
+        if mapping:
+            mapping.external_id = external_id
+        else:
+            new_mapping = ContactMapping(
+                tenant_id=tenant_id,
+                chatwoot_contact_id=cw_contact_id,
+                service_name=service_name,
+                external_id=external_id
+            )
+            self.db.add(new_mapping)
+
+        await self.db.commit()

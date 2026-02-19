@@ -2,7 +2,7 @@ from app.models.base import Base
 from app.models.tenant import Tenant, Subscription
 from app.models.chat import ChatSession, ChatMessage
 from app.models.rag import RagFile, RagChunk
-from app.models.integration import IntegrationConfig
+from app.models.integration import IntegrationConfig, ContactMapping
 
 __all__ = [
     "Base",
@@ -13,4 +13,5 @@ __all__ = [
     "RagFile",
     "RagChunk",
     "IntegrationConfig",
+    "ContactMapping",
 ]
