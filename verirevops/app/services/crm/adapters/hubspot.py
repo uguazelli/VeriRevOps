@@ -76,6 +76,46 @@ class HubSpotAdapter(BaseCRMAdapter):
                 Log.error(f"HTTP Error updating HubSpot contact: {e}")
                 return False
 
+    async def add_note(self, external_id: str, title: str, content: str) -> bool:
+        """
+        Adds a note to a contact in HubSpot.
+        Uses the Notes object correlated with the Contact.
+        """
+        url = "https://api.hubapi.com/crm/v3/objects/notes"
+
+        # Format content for HubSpot (accepts basic HTML)
+        body = f"<h3>{title}</h3><p>{content.replace('\n', '<br>')}</p>"
+
+        payload = {
+            "properties": {
+                "hs_note_body": body,
+            },
+            "associations": [
+                {
+                    "to": {"id": external_id},
+                    "types": [
+                        {
+                            "associationCategory": "HUBSPOT_DEFINED",
+                            "associationTypeId": 202  # contact to note
+                        }
+                    ]
+                }
+            ]
+        }
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, json=payload, headers=self.headers)
+                if response.status_code in [200, 201]:
+                    Log.success(f"Summary note added to HubSpot contact {external_id}")
+                    return True
+
+                Log.error(f"Failed to add note to HubSpot: {response.status_code} - {response.text}")
+                return False
+            except httpx.HTTPError as e:
+                Log.error(f"HTTP Error adding HubSpot note: {e}")
+                return False
+
     async def find_contact_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Searches for a contact by email in HubSpot."""
         search_url = f"{self.base_url}/search"

@@ -30,3 +30,11 @@ class BaseCRMAdapter(ABC):
         Returns the contact data if found, None otherwise.
         """
         pass
+
+    @abstractmethod
+    async def add_note(self, external_id: str, title: str, content: str) -> bool:
+        """
+        Adds a note or log entry to an existing contact.
+        Returns True if successful, False otherwise.
+        """
+        pass

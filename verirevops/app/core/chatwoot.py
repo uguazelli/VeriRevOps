@@ -49,6 +49,43 @@ class ChatwootClient:
                 Log.error(f"HTTP Error updating Chatwoot status: {e}")
                 return None
 
+    async def get_conversation(self, account_id: int, conversation_id: int):
+        """
+        Fetches conversation details.
+        """
+        url = f"{self.base_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}"
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(url, headers=self.headers)
+                if response.status_code == 200:
+                    return response.json()
+                self._log_response_error("get_conversation", response)
+                return None
+            except httpx.HTTPError as e:
+                Log.error(f"HTTP Error fetching Chatwoot conversation: {e}")
+                return None
+
+    async def get_messages(self, account_id: int, conversation_id: int, after: Optional[int] = None):
+        """
+        Fetches messages for a conversation, optionally after a specific message ID.
+        """
+        url = f"{self.base_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+        params = {}
+        if after:
+            params["after"] = after
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(url, headers=self.headers, params=params)
+                if response.status_code == 200:
+                    return response.json().get("payload", [])
+
+                self._log_response_error("get_messages", response)
+                return []
+            except httpx.HTTPError as e:
+                Log.error(f"HTTP Error fetching Chatwoot messages: {e}")
+                return []
+
     async def get_file(self, url: str) -> Optional[bytes]:
         """
         Downloads a file from Chatwoot, attempting with auth first then without (for signed URLs).

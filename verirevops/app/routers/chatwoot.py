@@ -37,6 +37,74 @@ async def process_webhook_contact(data: dict, alias: str):
         service = CRMService(db)
         await service.sync_contact(tenant_id, data)
 
+async def process_webhook_status_change(data: dict, alias: str):
+    """Processes conversation status changes for summarization."""
+    # Chatwoot status changed hook
+    status = data.get("status")
+
+    # Hyper-robust extraction for status change event
+    account_id = data.get("account_id")
+    if not account_id:
+        account_id = data.get("account", {}).get("id")
+    if not account_id:
+        # Fallback to conversation object
+        conv = data.get("conversation", {})
+        account_id = conv.get("account_id") or conv.get("account", {}).get("id")
+
+    if not account_id and data.get("messages"):
+        msgs = data.get("messages", [])
+        if msgs and isinstance(msgs, list):
+            account_id = msgs[0].get("account_id")
+
+    conversation_id = data.get("id") # Top level ID for status changed event
+    if not conversation_id or not isinstance(conversation_id, int):
+        conversation_id = data.get("conversation", {}).get("id")
+
+    if status not in ["open", "resolved"]:
+        return
+
+    async with AsyncSessionLocal() as db:
+        tenant_id = await _resolve_tenant_id(db, alias)
+        if not tenant_id:
+            return
+
+        # Bulletproof account_id resolution: check DB if missing from webhook
+        if not account_id:
+            from app.models.integration import IntegrationConfig
+            stmt_config = select(IntegrationConfig.account_id).where(
+                IntegrationConfig.tenant_id == tenant_id,
+                IntegrationConfig.service_name == "chatwoot"
+            )
+            res = await db.execute(stmt_config)
+            account_id = res.scalars().first()
+
+        if not account_id or not conversation_id:
+            Log.warning(f"Could not extract account_id ({account_id}) or conversation_id ({conversation_id}) from webhook.")
+            return
+
+        Log.info(f"Conversation {conversation_id} status changed to '{status}'. Triggering summarization.")
+
+        # Resolve Chatwoot Client
+        from app.services.chatbot_service import ChatbotService
+        chatbot_service = ChatbotService(db)
+        client = await chatbot_service._resolve_client(tenant_id)
+
+        # Summarize Logic (Status-based)
+        # open -> Summary, Private Note, NO Cleanup, NO CRM
+        # resolved -> Summary, Private Note, Cleanup, CRM
+        send_to_crm = (status == "resolved")
+        cleanup_history = (status == "resolved")
+
+        from app.services.summarization.service import SummarizationService
+        sum_service = SummarizationService(db, client)
+        await sum_service.summarize_conversation(
+            tenant_id,
+            account_id,
+            conversation_id,
+            send_to_crm=send_to_crm,
+            cleanup_history=cleanup_history
+        )
+
 @router.post("/webhook/{alias}")
 async def handle_webhook(
     alias: str,
@@ -52,5 +120,9 @@ async def handle_webhook(
     # 2. Handle Contact Events (CRM Sync)
     elif event in ["contact_created", "contact_updated"]:
         background_tasks.add_task(process_webhook_contact, webhook_data, alias)
+
+    # 3. Handle Status Change (Summarization)
+    elif event == "conversation_status_changed":
+        background_tasks.add_task(process_webhook_status_change, webhook_data, alias)
 
     return {"status": "ok"}

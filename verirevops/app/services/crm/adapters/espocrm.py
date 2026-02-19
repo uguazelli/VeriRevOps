@@ -51,6 +51,35 @@ class EspoCRMAdapter(BaseCRMAdapter):
                 Log.error(f"HTTP Error updating EspoCRM lead: {e}")
                 return False
 
+    async def add_note(self, external_id: str, title: str, content: str) -> bool:
+        """
+        Adds a post to the entity stream in EspoCRM.
+        """
+        url = f"{self.url}/api/v1/Note"
+
+        # Format: Espo posts are usually Markdown or plain text
+        full_text = f"### {title}\n\n{content}"
+
+        payload = {
+            "post": full_text,
+            "parentType": "Lead", # Defaulting to Lead as per our creation flow
+            "parentId": external_id,
+            "type": "Post"
+        }
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, json=payload, headers=self.headers)
+                if response.status_code in [200, 201]:
+                    Log.success(f"Summary post added to EspoCRM stream for {external_id}")
+                    return True
+
+                Log.error(f"Failed to add note to EspoCRM: {response.status_code} - {response.text}")
+                return False
+            except httpx.HTTPError as e:
+                Log.error(f"HTTP Error adding EspoCRM note: {e}")
+                return False
+
     async def find_contact_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Searches for a Lead by email in EspoCRM."""
         # EspoCRM search usually uses filter parameters

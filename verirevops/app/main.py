@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -12,9 +13,24 @@ from app.core.exceptions import global_exception_handler, http_exception_handler
 async def lifespan(app: FastAPI):
     Log.info("Starting up VeriRevOps API...")
 
-    async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        await conn.run_sync(Base.metadata.create_all)
+    Log.info("Starting up VeriRevOps API...")
+
+    # Run Alembic migrations automatically
+    try:
+        import alembic.config
+        import alembic.command
+        from concurrent.futures import ThreadPoolExecutor
+
+        alembic_cfg = alembic.config.Config("alembic.ini")
+
+        # Run sync alembic command in a separate thread to avoid event loop conflict
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor() as executor:
+            await loop.run_in_executor(executor, alembic.command.upgrade, alembic_cfg, "head")
+
+        Log.success("Database migrations applied successfully via Alembic.")
+    except Exception as e:
+        Log.error(f"Automatic migration failed: {e}")
 
     yield
     Log.info("Shutting down VeriRevOps API...")
