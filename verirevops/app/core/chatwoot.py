@@ -12,14 +12,9 @@ class ChatwootClient:
     async def send_message(self, account_id: int, conversation_id: int, content: str, private: bool = False):
         """
         Send a message to a Chatwoot conversation.
-        POST /api/v1/accounts/{account_id}/conversations/{conversation_id}/messages
         """
         url = f"{self.base_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
-        payload = {
-            "content": content,
-            "message_type": "outgoing",
-            "private": private
-        }
+        payload = {"content": content, "message_type": "outgoing", "private": private}
 
         async with httpx.AsyncClient() as client:
             try:
@@ -27,10 +22,7 @@ class ChatwootClient:
                 response = await client.post(url, json=payload, headers=self.headers)
 
                 if response.status_code not in [200, 201]:
-                    Log.error(f"Failed to send message. Status: {response.status_code}")
-                    Log.error(f"Response headers: {dict(response.headers)}")
-                    Log.error(f"Response body: {response.text[:1000]}")
-                    Log.error(f"Payload sent: {payload}")
+                    self._log_response_error("send_message", response, payload)
 
                 response.raise_for_status()
                 return response.json()
@@ -41,18 +33,14 @@ class ChatwootClient:
     async def update_status(self, account_id: int, conversation_id: int, status: str):
         """
         Updates the status of a conversation (open, pending, resolved, snoozed).
-        POST /api/v1/accounts/{account_id}/conversations/{conversation_id}/toggle_status
         """
         url = f"{self.base_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/toggle_status"
         payload = {"status": status}
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(url, json=payload, headers=self.headers)
-
                 if response.status_code not in [200, 201]:
-                    Log.error(f"Failed to update status. Status: {response.status_code}")
-                    Log.error(f"Response headers: {dict(response.headers)}")
-                    Log.error(f"Response body: {response.text[:1000]}")
+                    self._log_response_error("update_status", response, payload)
 
                 response.raise_for_status()
                 Log.webhook(f"Updated conversation {conversation_id} status to '{status}'", direction="OUT")
@@ -63,39 +51,46 @@ class ChatwootClient:
 
     async def get_file(self, url: str) -> Optional[bytes]:
         """
-        Downloads a file from Chatwoot.
-        Initial attempt includes 'api_access_token'.
-        If it fails (common with Active Storage signed URLs), retries without headers.
+        Downloads a file from Chatwoot, attempting with auth first then without (for signed URLs).
         """
         async with httpx.AsyncClient(follow_redirects=True) as client:
-            # 1. Try with authentication headers
-            try:
-                Log.info(f"Attempting download (with auth): {url}")
-                response = await client.get(url, headers=self.headers)
-                if response.status_code == 200:
-                    return response.content
+            # 1. Attempt with authentication
+            data = await self._attempt_download(client, url, headers=self.headers)
+            if data:
+                return data
 
-                Log.warning(f"Download with auth failed (Status: {response.status_code}). Retrying without auth...")
-            except httpx.HTTPError as e:
-                Log.warning(f"HTTP Error with auth: {e}. Retrying without auth...")
+            # 2. Attempt without authentication (Fallback for signed URLs)
+            Log.warning("Download with auth failed or skipped. Retrying without auth...")
+            return await self._attempt_download(client, url, headers=None)
 
-            # 2. Try without authentication headers (Fallback for signed URLs)
-            try:
-                Log.info(f"Attempting download (no auth): {url}")
-                response = await client.get(url)
-                if response.status_code == 200:
+    async def _attempt_download(self, client: httpx.AsyncClient, url: str, headers: Optional[dict]) -> Optional[bytes]:
+        """Helper to try downloading a file and handle basic status checks."""
+        try:
+            desc = "with auth" if headers else "no auth"
+            Log.info(f"Attempting download ({desc}): {url}")
+            response = await client.get(url, headers=headers)
+
+            if response.status_code == 200:
+                if not headers:
                     Log.success("Download successful without authentication headers.")
-                    return response.content
+                return response.content
 
-                Log.error(f"Download failed again (Status: {response.status_code})")
-                Log.error(f"Response headers: {dict(response.headers)}")
-                if "text" in response.headers.get("Content-Type", ""):
-                    Log.error(f"Error body snippet: {response.text[:500]}")
+            Log.error(f"Download failed ({desc}). Status: {response.status_code}")
+            if "text" in response.headers.get("Content-Type", ""):
+                 Log.error(f"Error body snippet: {response.text[:500]}")
 
-                return None
-            except httpx.HTTPError as e:
-                Log.error(f"HTTP Error without auth: {e}")
-                return None
+        except httpx.HTTPError as e:
+            Log.warning(f"HTTP Error ({desc}): {e}")
+
+        return None
+
+    def _log_response_error(self, method: str, response: httpx.Response, payload: dict = None):
+        """Standardized error logging for Chatwoot API responses."""
+        Log.error(f"Failed {method}. Status: {response.status_code}")
+        Log.error(f"Response headers: {dict(response.headers)}")
+        Log.error(f"Response body: {response.text[:1000]}")
+        if payload:
+            Log.error(f"Payload sent: {payload}")
 
 # Singleton or dependency injection setup
 def get_chatwoot_client() -> Optional[ChatwootClient]:

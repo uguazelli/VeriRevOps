@@ -1,5 +1,5 @@
 from app.core.config import settings
-from typing import List, TypedDict, Annotated
+from typing import List, TypedDict, Annotated, Optional
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -62,14 +62,13 @@ async def get_chat_history(session_id: int, db: AsyncSession, limit: int = 6) ->
     result = await db.execute(stmt)
     rows = result.scalars().all()
 
-    # Reverse to get chronological order (Oldest -> Newest)
-    history = []
-    for msg in reversed(rows):
-        if msg.role == "user":
-            history.append(HumanMessage(content=msg.content))
-        else:
-            history.append(AIMessage(content=msg.content))
-    return history
+    # Map roles to LangChain message types
+    role_map = {"user": HumanMessage, "assistant": AIMessage}
+
+    return [
+        role_map.get(msg.role, HumanMessage)(content=msg.content)
+        for msg in reversed(rows)
+    ]
 
 
 # --- Node 1: Contextualize ---
@@ -168,40 +167,20 @@ async def retrieve_documents(state: RAGState, config: RunnableConfig) -> dict:
 
     Log.rag(f"Retrieving for {len(queries)} queries", step="Node 3")
 
-    all_docs = []
-
-    # Instantiate embeddings locally to avoid potential client state issues
+    # Instantiate embeddings locally
     embeddings = GoogleGenerativeAIEmbeddings(model=settings.EMBEDDING_MODEL, google_api_key=settings.GOOGLE_API_KEY)
 
-    # We could do this in parallel, but keeping it simple/sequential loop for now
+    all_docs = []
     for q in queries:
-        # Generate embedding with retry
-        vector = None
-        for attempt in range(3):
-
-            try:
-                vector = await embeddings.aembed_query(q)
-                break
-            except Exception as e:
-                Log.warning(f"Embedding failed for query '{q}' (Attempt {attempt+1}): {e}")
-                if attempt == 2:
-                    raise e
-                import asyncio
-                await asyncio.sleep(1)
-
+        # 1. Get embedding with retry
+        vector = await _get_embedding_with_retry(embeddings, q)
         if not vector:
-             continue
+            continue
 
-        stmt = (
-            select(RagChunk)
-            .join(RagFile, RagChunk.file_id == RagFile.id)
-            .where(RagFile.tenant_id == state["tenant_id"])
-            .order_by(RagChunk.embedding.l2_distance(vector))
-            .limit(5) # Fetch top 5 for EACH query variation
-        )
-        result = await db_session.execute(stmt)
-        chunks = result.scalars().all()
+        # 2. Fetch chunks from DB
+        chunks = await _fetch_top_chunks(db_session, vector, state["tenant_id"])
 
+        # 3. Convert to Document objects
         for chunk in chunks:
             all_docs.append(Document(
                 page_content=chunk.content,
@@ -214,6 +193,30 @@ async def retrieve_documents(state: RAGState, config: RunnableConfig) -> dict:
 
     Log.rag(f"Found {len(all_docs)} raw docs, {len(unique_list)} unique.")
     return {"retrieved_docs": unique_list}
+
+async def _get_embedding_with_retry(embeddings: GoogleGenerativeAIEmbeddings, query: str, max_retries: int = 3) -> Optional[List[float]]:
+    """Helper to fetch embeddings with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return await embeddings.aembed_query(query)
+        except Exception as e:
+            Log.warning(f"Embedding failed for query '{query}' (Attempt {attempt+1}): {e}")
+            if attempt < max_retries - 1:
+                import asyncio
+                await asyncio.sleep(1)
+    return None
+
+async def _fetch_top_chunks(db: AsyncSession, vector: List[float], tenant_id: int, limit: int = 5) -> List[RagChunk]:
+    """Helper to fetch top relevant chunks for a tenant."""
+    stmt = (
+        select(RagChunk)
+        .join(RagFile, RagChunk.file_id == RagFile.id)
+        .where(RagFile.tenant_id == tenant_id)
+        .order_by(RagChunk.embedding.l2_distance(vector))
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
 # --- Node 4: Rerank ---

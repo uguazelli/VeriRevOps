@@ -6,7 +6,8 @@ import os
 sys.path.append(os.getcwd())
 
 from app.core.db import AsyncSessionLocal
-from app.orchestration.chat import build_chat_graph, ChatState, invoke_chat_orchestrator
+from app.orchestration.chat import build_chat_graph, invoke_chat_orchestrator
+from app.orchestration.state import ChatState
 
 async def main():
     tenant_id = 2  # Assuming tenant 2 exists
