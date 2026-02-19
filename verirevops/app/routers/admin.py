@@ -5,13 +5,13 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
 
 from app.core.db import get_db
-from app.models import Tenant, Subscription, ChatSession, ChatMessage, ChatwootConfig
+from app.models import Tenant, Subscription, ChatSession, ChatMessage, IntegrationConfig
 from app.schemas import (
     Tenants, TenantCreate,
     Subscriptions, SubscriptionCreate,
     ChatSessions, ChatSessionCreate,
     ChatMessages,
-    ChatwootConfigs, ChatwootConfigCreate
+    IntegrationConfigs, IntegrationConfigCreate
 )
 
 router = APIRouter(prefix="/api", tags=["admin"])
@@ -267,12 +267,16 @@ async def get_chat_messages(session_id: Optional[int] = None, session: AsyncSess
     response = []
     for m in messages:
          tenant_name = None
-         if m.session and m.session.tenant:
-             tenant_name = m.session.tenant.name
+         tenant_id = None
+         if m.session:
+             tenant_id = m.session.tenant_id
+             if m.session.tenant:
+                 tenant_name = m.session.tenant.name
 
          response.append(ChatMessages(
             id=m.id,
             session_id=m.session_id,
+            tenant_id=tenant_id,
             content=m.content,
             role=m.role,
             created_at=m.created_at,
@@ -280,51 +284,30 @@ async def get_chat_messages(session_id: Optional[int] = None, session: AsyncSess
          ))
     return response
 
-# --- Chatwoot Config CRUD ---
+# --- Integration Config CRUD ---
 
-@router.get("/chatwoot_configs", response_model=List[ChatwootConfigs])
-async def get_chatwoot_configs(session: AsyncSession = Depends(get_db)):
-    stmt = select(ChatwootConfig).options(selectinload(ChatwootConfig.tenant))
+@router.get("/integrations", response_model=List[IntegrationConfigs])
+async def get_integrations(session: AsyncSession = Depends(get_db)):
+    stmt = select(IntegrationConfig).options(selectinload(IntegrationConfig.tenant))
     result = await session.execute(stmt)
     configs = result.scalars().all()
+    return configs
 
-    response = []
-    for c in configs:
-        response.append(ChatwootConfigs(
-            id=c.id,
-            tenant_id=c.tenant_id,
-            api_url=c.api_url,
-            api_access_token=c.api_access_token,
-            account_id=c.account_id,
-            tenant_name=c.tenant.name if c.tenant else None
-        ))
-    return response
-
-@router.post("/chatwoot_configs", response_model=ChatwootConfigs)
-async def create_chatwoot_config(config_in: ChatwootConfigCreate, session: AsyncSession = Depends(get_db)):
-    db_config = ChatwootConfig(**config_in.model_dump())
+@router.post("/integrations", response_model=IntegrationConfigs)
+async def create_integration(config_in: IntegrationConfigCreate, session: AsyncSession = Depends(get_db)):
+    db_config = IntegrationConfig(**config_in.model_dump())
     session.add(db_config)
     try:
         await session.commit()
         await session.refresh(db_config)
-
-        tenant = await session.get(Tenant, db_config.tenant_id)
-
-        return ChatwootConfigs(
-            id=db_config.id,
-            tenant_id=db_config.tenant_id,
-            api_url=db_config.api_url,
-            api_access_token=db_config.api_access_token,
-            account_id=db_config.account_id,
-            tenant_name=tenant.name if tenant else None
-        )
+        return db_config
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.put("/chatwoot_configs/{config_id}", response_model=ChatwootConfigs)
-async def update_chatwoot_config(config_id: int, config_in: ChatwootConfigCreate, session: AsyncSession = Depends(get_db)):
-    db_config = await session.get(ChatwootConfig, config_id)
+@router.put("/integrations/{config_id}", response_model=IntegrationConfigs)
+async def update_integration(config_id: int, config_in: IntegrationConfigCreate, session: AsyncSession = Depends(get_db)):
+    db_config = await session.get(IntegrationConfig, config_id)
     if not db_config:
         raise HTTPException(status_code=404, detail="Configuration not found")
 
@@ -335,24 +318,14 @@ async def update_chatwoot_config(config_id: int, config_in: ChatwootConfigCreate
     try:
         await session.commit()
         await session.refresh(db_config)
-
-        tenant = await session.get(Tenant, db_config.tenant_id)
-
-        return ChatwootConfigs(
-            id=db_config.id,
-            tenant_id=db_config.tenant_id,
-            api_url=db_config.api_url,
-            api_access_token=db_config.api_access_token,
-            account_id=db_config.account_id,
-            tenant_name=tenant.name if tenant else None
-        )
+        return db_config
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.delete("/chatwoot_configs/{config_id}")
-async def delete_chatwoot_config(config_id: int, session: AsyncSession = Depends(get_db)):
-    db_config = await session.get(ChatwootConfig, config_id)
+@router.delete("/integrations/{config_id}")
+async def delete_integration(config_id: int, session: AsyncSession = Depends(get_db)):
+    db_config = await session.get(IntegrationConfig, config_id)
     if not db_config:
         raise HTTPException(status_code=404, detail="Configuration not found")
 

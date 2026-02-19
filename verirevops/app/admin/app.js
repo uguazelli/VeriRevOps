@@ -36,14 +36,17 @@ const schemas = {
         headers: ['ID', 'Tenant', 'Session ID', 'Role', 'Content', 'Created At'],
         fields: [] // Read-only
     },
-    chatwoot_configs: {
-        title: 'Chatwoot Configurations',
-        headers: ['ID', 'Tenant', 'Account ID', 'API URL', 'Access Token', 'Actions'],
+    integrations: {
+        title: 'Integrations Management',
+        headers: ['ID', 'Tenant', 'Service', 'URL', 'API Key', 'Account ID', 'Actions'],
         fields: [
+            { name: 'service_name', label: 'Service (chatwoot, hubspot, etc)', type: 'text', required: true },
             { name: 'tenant_id', label: 'Tenant', type: 'select', required: true },
-            { name: 'account_id', label: 'Account ID', type: 'number', required: true },
-            { name: 'api_url', label: 'API URL', type: 'text', required: true },
-            { name: 'api_access_token', label: 'Access Token', type: 'text', required: true }
+            { name: 'url', label: 'URL', type: 'text', required: false },
+            { name: 'api_key', label: 'API Key', type: 'text', required: false },
+            { name: 'account_id', label: 'Account ID', type: 'text', required: false },
+            { name: 'additional_config', label: 'Additional Config (JSON)', type: 'textarea', required: false },
+            { name: 'is_active', label: 'Active', type: 'checkbox' }
         ]
     }
 };
@@ -51,6 +54,9 @@ const schemas = {
 let currentEntity = 'tenants';
 let currentData = [];
 let allTenants = [];
+let filteredData = [];
+let currentPage = 1;
+const pageSize = 10;
 
 $(document).ready(function () {
     fetchAllTenants();
@@ -62,6 +68,17 @@ $(document).ready(function () {
         $(this).addClass('active');
         const target = $(this).data('target');
         loadEntity(target);
+
+        // Close sidebar on mobile after clicking
+        if (window.innerWidth <= 1024) {
+            $('.sidebar, .mobile-menu-toggle').removeClass('active');
+        }
+    });
+
+    // Mobile Menu Toggle
+    $('.mobile-menu-toggle').click(function () {
+        $(this).toggleClass('active');
+        $('.sidebar').toggleClass('active');
     });
 
     // Create Button
@@ -84,11 +101,40 @@ $(document).ready(function () {
         e.preventDefault();
         saveData();
     });
+
+    // Filter & Pagination Event Listeners
+    $('#tenant-filter').change(function () {
+        applyFilter();
+    });
+
+    $('#prev-btn').click(function () {
+        if (currentPage > 1) {
+            currentPage--;
+            renderTable();
+        }
+    });
+
+    $('#next-btn').click(function () {
+        if (currentPage < Math.ceil(filteredData.length / pageSize)) {
+            currentPage++;
+            renderTable();
+        }
+    });
 });
 
 function fetchAllTenants() {
     $.get(`${API_BASE}/tenants`, function (data) {
         allTenants = data;
+        populateTenantFilter(data);
+    });
+}
+
+function populateTenantFilter(tenants) {
+    const $filter = $('#tenant-filter');
+    // Keep 'All Tenants'
+    $filter.empty().append('<option value="all">All Tenants</option>');
+    tenants.forEach(t => {
+        $filter.append(`<option value="${t.id}">${t.name}</option>`);
     });
 }
 
@@ -112,6 +158,10 @@ function loadEntity(entity) {
     $('#rag-view').hide();
 
     const schema = schemas[entity];
+    if (!schema) {
+        console.error(`Schema not found for entity: ${entity}`);
+        return;
+    }
     $('#page-title').text(schema.title);
     renderHeaders(schema.headers);
 
@@ -124,10 +174,33 @@ function loadEntity(entity) {
 
     $.get(`${API_BASE}/${entity}`, function (data) {
         currentData = data;
-        renderTable(data);
+        currentPage = 1;
+        $('#tenant-filter').val('all');
+
+        // Hide filter toolbar for 'tenants' page as it's redundant
+        if (entity === 'tenants') {
+            $('.table-toolbar').hide();
+        } else {
+            $('.table-toolbar').show();
+        }
+
+        applyFilter();
     }).fail(function () {
         alert('Failed to load data');
     });
+}
+
+function applyFilter() {
+    const tenantId = $('#tenant-filter').val();
+    if (tenantId === 'all') {
+        filteredData = currentData;
+    } else {
+        // Tenants list filters by 'id', others by 'tenant_id'
+        const filterKey = (currentEntity === 'tenants') ? 'id' : 'tenant_id';
+        filteredData = currentData.filter(item => item[filterKey] == tenantId);
+    }
+    currentPage = 1;
+    renderTable();
 }
 
 function renderHeaders(headers) {
@@ -138,16 +211,22 @@ function renderHeaders(headers) {
     $thead.append($tr);
 }
 
-function renderTable(data) {
+function renderTable() {
     const $tbody = $('#data-table tbody');
     $tbody.empty();
 
-    if (data.length === 0) {
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    const paginatedData = filteredData.slice(start, end);
+
+    updatePaginationControls();
+
+    if (paginatedData.length === 0) {
         $tbody.append('<tr><td colspan="10" style="text-align:center;">No records found</td></tr>');
         return;
     }
 
-    data.forEach(item => {
+    paginatedData.forEach(item => {
         const $tr = $('<tr>');
 
         const tenantName = item.tenant_name || (item.tenant_id ? (allTenants.find(t => t.id === item.tenant_id)?.name || item.tenant_id) : '-');
@@ -195,14 +274,13 @@ function renderTable(data) {
             $tr.append(`<td><strong>${item.role}</strong></td>`);
             $tr.append(`<td>${item.content.substring(0, 50)}...</td>`);
             $tr.append(`<td>${new Date(item.created_at).toLocaleString()}</td>`);
-            $tr.append(`<td>${item.content.substring(0, 50)}...</td>`);
-            $tr.append(`<td>${new Date(item.created_at).toLocaleString()}</td>`);
-        } else if (currentEntity === 'chatwoot_configs') {
+        } else if (currentEntity === 'integrations') {
             $tr.append(`<td>${item.id}</td>`);
             $tr.append(`<td>${tenantName}</td>`);
-            $tr.append(`<td>${item.account_id}</td>`);
-            $tr.append(`<td>${item.api_url}</td>`);
-            $tr.append(`<td>${item.api_access_token.substring(0, 10)}...</td>`);
+            $tr.append(`<td><span class="badge">${item.service_name}</span></td>`);
+            $tr.append(`<td>${item.url || '-'}</td>`);
+            $tr.append(`<td>${item.api_key ? (item.api_key.substring(0, 10) + '...') : '-'}</td>`);
+            $tr.append(`<td>${item.account_id || '-'}</td>`);
             $tr.append(`
                 <td>
                     <button class="btn-edit" onclick="editRecord(${item.id})">Edit</button>
@@ -215,8 +293,19 @@ function renderTable(data) {
     });
 }
 
+function updatePaginationControls() {
+    const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
+    $('#page-info').text(`Page ${currentPage} of ${totalPages}`);
+    $('#prev-btn').prop('disabled', currentPage === 1);
+    $('#next-btn').prop('disabled', currentPage >= totalPages);
+}
+
 function openModal(data = null) {
     const schema = schemas[currentEntity];
+    if (!schema) {
+        console.error(`Schema not found for currentEntity: ${currentEntity}`);
+        return;
+    }
     const $form = $('#data-form');
     $form.empty();
     $form.data('id', data ? data.id : null);
@@ -229,6 +318,9 @@ function openModal(data = null) {
 
         if (field.type === 'text' || field.type === 'number') {
             inputHtml = `<input type="${field.type}" name="${field.name}" value="${value !== undefined ? value : ''}" ${field.required ? 'required' : ''}>`;
+        } else if (field.type === 'textarea') {
+            let stringified = (field.name === 'additional_config' && typeof value === 'object') ? JSON.stringify(value, null, 2) : (value || '');
+            inputHtml = `<textarea name="${field.name}" rows="4" ${field.required ? 'required' : ''}>${stringified}</textarea>`;
         } else if (field.type === 'datetime-local') {
             // Basic handling for datetime-local value format (YYYY-MM-DDTHH:MM)
             let dateVal = value ? new Date(value).toISOString().slice(0, 16) : '';
@@ -275,6 +367,16 @@ function saveData() {
     $('#data-form input[type="checkbox"]').each(function () {
         formData[this.name] = this.checked;
     });
+
+    // Special handling for JSON fields
+    if (formData.additional_config) {
+        try {
+            formData.additional_config = JSON.parse(formData.additional_config);
+        } catch (e) {
+            alert('Invalid JSON in Additional Config');
+            return;
+        }
+    }
 
     const method = id ? 'PUT' : 'POST';
     const url = id ? `${API_BASE}/${currentEntity}/${id}` : `${API_BASE}/${currentEntity}`;

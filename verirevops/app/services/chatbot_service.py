@@ -1,7 +1,7 @@
 import base64
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models import Tenant, ChatwootConfig
+from app.models import Tenant, IntegrationConfig
 from app.orchestration.chat import invoke_chat_orchestrator
 from app.core.chatwoot import get_chatwoot_client, ChatwootClient
 from app.core.logger import Log
@@ -75,12 +75,15 @@ class ChatbotService:
 
     async def _resolve_client(self, tenant_id: int) -> ChatwootClient:
         """Resolves the appropriate Chatwoot client for the tenant."""
-        stmt_config = select(ChatwootConfig).where(ChatwootConfig.tenant_id == tenant_id)
+        stmt_config = select(IntegrationConfig).where(
+            IntegrationConfig.tenant_id == tenant_id,
+            IntegrationConfig.service_name == "chatwoot"
+        )
         result_config = await self.db.execute(stmt_config)
         config = result_config.scalars().first()
 
         if config:
-            return ChatwootClient(base_url=config.api_url, api_token=config.api_access_token)
+            return ChatwootClient(base_url=config.url, api_token=config.api_key)
 
         return get_chatwoot_client()
 

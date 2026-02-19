@@ -2,7 +2,7 @@ from app.models.base import Base
 from app.models.tenant import Tenant, Subscription
 from app.models.chat import ChatSession, ChatMessage
 from app.models.rag import RagFile, RagChunk
-from app.models.chatwoot import ChatwootConfig
+from app.models.integration import IntegrationConfig
 
 __all__ = [
     "Base",
@@ -12,5 +12,5 @@ __all__ = [
     "ChatMessage",
     "RagFile",
     "RagChunk",
-    "ChatwootConfig",
+    "IntegrationConfig",
 ]

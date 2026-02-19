@@ -17,7 +17,7 @@ class Tenant(Base):
     subscriptions: Mapped[List["Subscription"]] = relationship(back_populates="tenant")
     chat_sessions: Mapped[List["ChatSession"]] = relationship(back_populates="tenant")
     rag_files: Mapped[List["RagFile"]] = relationship(back_populates="tenant")
-    chatwoot_config: Mapped[Optional["ChatwootConfig"]] = relationship(back_populates="tenant", uselist=False)
+    integrations: Mapped[List["IntegrationConfig"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
