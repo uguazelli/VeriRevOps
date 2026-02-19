@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api/rag", tags=["RAG"])
 def get_rag_service(db: AsyncSession = Depends(get_db)) -> RagService:
     return RagService(db)
 
+
 @router.post("/files")
 async def upload_rag_file(
     tenant_id: int = Form(...),
@@ -25,10 +26,12 @@ async def upload_rag_file(
         "message": f"File uploaded and processed into {num_chunks} chunks."
     }
 
+
 @router.get("/files/{tenant_id}", response_model=List[RagFileResponse])
 async def list_rag_files(tenant_id: int, service: RagService = Depends(get_rag_service)):
     files = await service.list_tenant_files(tenant_id)
     return [{"id": f.id, "filename": f.filename, "uploaded_at": str(f.uploaded_at)} for f in files]
+
 
 @router.delete("/files/{file_id}")
 async def delete_rag_file(file_id: int, service: RagService = Depends(get_rag_service)):
@@ -36,6 +39,7 @@ async def delete_rag_file(file_id: int, service: RagService = Depends(get_rag_se
     if not success:
         raise HTTPException(status_code=404, detail="File not found")
     return {"message": "File deleted"}
+
 
 @router.post("/search")
 async def search_rag(

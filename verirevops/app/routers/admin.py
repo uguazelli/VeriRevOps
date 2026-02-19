@@ -24,6 +24,7 @@ async def get_tenants(session: AsyncSession = Depends(get_db)):
     tenants = result.scalars().all()
     return tenants
 
+
 @router.post("/tenants", response_model=Tenants)
 async def create_tenant(tenant: TenantCreate, session: AsyncSession = Depends(get_db)):
     db_tenant = Tenant(**tenant.model_dump())
@@ -35,6 +36,7 @@ async def create_tenant(tenant: TenantCreate, session: AsyncSession = Depends(ge
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.put("/tenants/{tenant_id}", response_model=Tenants)
 async def update_tenant(tenant_id: int, tenant: TenantCreate, session: AsyncSession = Depends(get_db)):
@@ -53,6 +55,7 @@ async def update_tenant(tenant_id: int, tenant: TenantCreate, session: AsyncSess
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.delete("/tenants/{tenant_id}")
 async def delete_tenant(tenant_id: int, session: AsyncSession = Depends(get_db)):
@@ -92,6 +95,7 @@ async def get_subscriptions(session: AsyncSession = Depends(get_db)):
         ))
     return response
 
+
 @router.post("/subscriptions", response_model=Subscriptions)
 async def create_subscription(sub: SubscriptionCreate, session: AsyncSession = Depends(get_db)):
     db_sub = Subscription(**sub.model_dump())
@@ -118,6 +122,7 @@ async def create_subscription(sub: SubscriptionCreate, session: AsyncSession = D
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.put("/subscriptions/{subscription_id}", response_model=Subscriptions)
 async def update_subscription(subscription_id: int, sub: SubscriptionCreate, session: AsyncSession = Depends(get_db)):
@@ -147,6 +152,7 @@ async def update_subscription(subscription_id: int, sub: SubscriptionCreate, ses
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.delete("/subscriptions/{subscription_id}")
 async def delete_subscription(subscription_id: int, session: AsyncSession = Depends(get_db)):
@@ -181,6 +187,7 @@ async def get_chat_sessions(session: AsyncSession = Depends(get_db)):
         ))
     return response
 
+
 @router.post("/chat_sessions", response_model=ChatSessions)
 async def create_chat_session(session_in: ChatSessionCreate, session: AsyncSession = Depends(get_db)):
     db_session = ChatSession(tenant_id=session_in.tenant_id)
@@ -200,6 +207,7 @@ async def create_chat_session(session_in: ChatSessionCreate, session: AsyncSessi
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.put("/chat_sessions/{session_id}", response_model=ChatSessions)
 async def update_chat_session(session_id: int, session_in: ChatSessionCreate, session: AsyncSession = Depends(get_db)):
@@ -227,6 +235,7 @@ async def update_chat_session(session_id: int, session_in: ChatSessionCreate, se
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.delete("/chat_sessions/{session_id}")
 async def delete_chat_session(session_id: int, session: AsyncSession = Depends(get_db)):
     db_session = await session.get(ChatSession, session_id)
@@ -249,10 +258,6 @@ async def get_chat_messages(session_id: Optional[int] = None, session: AsyncSess
     stmt = select(ChatMessage).order_by(ChatMessage.created_at)
     if session_id:
         stmt = stmt.where(ChatMessage.session_id == session_id)
-
-    # Optimally we might want tenant name here too but usage in UI might vary.
-    # Original SQL query did a 3-way join: Messages -> Session -> Tenant to get tenant Name.
-    # Let's support that via joins.
 
     stmt = stmt.options(selectinload(ChatMessage.session).selectinload(ChatSession.tenant))
 

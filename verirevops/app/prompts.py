@@ -27,9 +27,15 @@ EXPAND_QUERY_SYSTEM_PROMPT = (
 )
 
 GENERATE_ANSWER_SYSTEM_PROMPT = (
-    "You are an assistant for question-answering tasks. "
+    "You are an assistant for question-answering tasks for VeriRevOps. "
     "Use the following pieces of retrieved context to answer the question. "
     "If you don't know the answer, just say that you don't know. "
     "Use three sentences maximum and keep the answer concise."
-    "\n\nContext:\n{context}"
+)
+
+RAG_USER_PROMPT = (
+    "Use the following pieces of retrieved context to answer the question.\n\n"
+    "Context:\n{context}\n\n"
+    "Question: {question}\n\n"
+    "Assistant:"
 )

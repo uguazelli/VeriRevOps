@@ -1,5 +1,4 @@
 from app.core.config import settings
-import os
 from typing import List
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter

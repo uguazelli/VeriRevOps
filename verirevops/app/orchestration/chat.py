@@ -1,7 +1,6 @@
 from app.core.config import settings
-import os
-from typing import List, Literal, TypedDict, Optional, Annotated
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from typing import List, TypedDict, Annotated
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,11 +12,6 @@ from app.models import ChatSession, ChatMessage
 from app.rag.retrieve import invoke_rag_graph, get_chat_history
 from app.prompts import ROUTER_SYSTEM_PROMPT, CHITCHAT_SYSTEM_PROMPT
 from app.core.logger import Log
-
-# --- Configuration (moved to settings) ---
-# model_name = settings.MODEL
-# api_key = settings.GOOGLE_API_KEY
-# temperature = settings.TEMPERATURE
 
 # --- State ---
 class ChatState(TypedDict):

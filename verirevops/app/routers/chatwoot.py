@@ -1,12 +1,9 @@
-from fastapi import APIRouter, Body, Depends, BackgroundTasks
+from fastapi import APIRouter, Body, BackgroundTasks
 from app.core.db import AsyncSessionLocal
 from app.services.chatbot_service import ChatbotService
-from app.core.logger import Log
 
-router = APIRouter(
-    prefix="/api",
-    tags=["chatwoot"]
-)
+router = APIRouter(prefix="/api", tags=["chatwoot"])
+
 
 async def process_webhook_message(data: dict, alias: str):
     """Background task to process the webhook via ChatbotService."""
@@ -19,6 +16,7 @@ async def process_webhook_message(data: dict, alias: str):
     async with AsyncSessionLocal() as db:
         service = ChatbotService(db)
         await service.process_webhook_message(data, alias)
+
 
 @router.post("/webhook/{alias}")
 async def handle_webhook(

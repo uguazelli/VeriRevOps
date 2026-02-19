@@ -1,7 +1,6 @@
 from app.core.config import settings
-import os
-from typing import List, TypedDict, Optional, Annotated
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
+from typing import List, TypedDict, Annotated
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
@@ -14,27 +13,20 @@ from flashrank import Ranker, RerankRequest
 from langchain_core.runnables import RunnableConfig
 from app.core.logger import Log
 
-from app.models import ChatSession, ChatMessage, RagChunk, RagFile
+from app.models import ChatMessage, RagChunk, RagFile
 from app.prompts import (
     CONTEXTUALIZE_QUERY_SYSTEM_PROMPT,
     EXPAND_QUERY_SYSTEM_PROMPT,
-    GENERATE_ANSWER_SYSTEM_PROMPT
+    GENERATE_ANSWER_SYSTEM_PROMPT,
+    RAG_USER_PROMPT
 )
 
-# --- Configuration (moved to settings) ---
-# model_name = settings.MODEL
-# embedding_model = settings.EMBEDDING_MODEL
-# api_key = settings.GOOGLE_API_KEY
-# temperature = settings.TEMPERATURE
 
-# FlashRank Reranker (Nano model is fast and runs locally)
 try:
     reranker = Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir="/tmp/flashrank")
 except Exception as e:
     Log.warning(f"Failed to initialize Ranker: {e}")
     reranker = None
-
-# ...
 
 
 
@@ -276,9 +268,9 @@ async def generate_answer(state: RAGState, config: RunnableConfig) -> dict:
     context = "\n\n".join([doc.page_content for doc in documents])
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an assistant for question-answering tasks for VeriRevOps."),
+        ("system", GENERATE_ANSWER_SYSTEM_PROMPT),
         ("placeholder", "{chat_history}"),
-        ("human", "Use the following pieces of retrieved context to answer the question.\n\nContext:\n{context}\n\nQuestion: {question}\n\nAssistant:"),
+        ("human", RAG_USER_PROMPT),
     ])
 
     llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
