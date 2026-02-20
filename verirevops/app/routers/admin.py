@@ -5,12 +5,11 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
 
 from app.core.db import get_db
-from app.models import Tenant, Subscription, ChatSession, ChatMessage, IntegrationConfig
+from app.models import Tenant, Subscription, ChatSession, IntegrationConfig
 from app.schemas import (
     Tenants, TenantCreate,
     Subscriptions, SubscriptionCreate,
     ChatSessions, ChatSessionCreate,
-    ChatMessages,
     IntegrationConfigs, IntegrationConfigCreate
 )
 
@@ -250,39 +249,6 @@ async def delete_chat_session(session_id: int, session: AsyncSession = Depends(g
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-
-# --- Chat Messages CRUD ---
-
-@router.get("/chat_messages", response_model=List[ChatMessages])
-async def get_chat_messages(session_id: Optional[int] = None, session: AsyncSession = Depends(get_db)):
-    stmt = select(ChatMessage).order_by(ChatMessage.created_at)
-    if session_id:
-        stmt = stmt.where(ChatMessage.session_id == session_id)
-
-    stmt = stmt.options(selectinload(ChatMessage.session).selectinload(ChatSession.tenant))
-
-    result = await session.execute(stmt)
-    messages = result.scalars().all()
-
-    response = []
-    for m in messages:
-         tenant_name = None
-         tenant_id = None
-         if m.session:
-             tenant_id = m.session.tenant_id
-             if m.session.tenant:
-                 tenant_name = m.session.tenant.name
-
-         response.append(ChatMessages(
-            id=m.id,
-            session_id=m.session_id,
-            tenant_id=tenant_id,
-            content=m.content,
-            role=m.role,
-            created_at=m.created_at,
-            tenant_name=tenant_name
-         ))
-    return response
 
 # --- Integration Config CRUD ---
 

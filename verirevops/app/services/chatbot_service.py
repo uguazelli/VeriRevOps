@@ -48,7 +48,7 @@ class ChatbotService:
 
             # 4. Invoke Orchestrator
             ai_response, intent = await invoke_chat_orchestrator(
-                tenant_id, conversation_id, content, self.db, attachments=attachments
+                tenant_id, account_id, conversation_id, content, self.db, client, attachments=attachments
             )
             Log.orchestrator(f"Response: {ai_response} | Intent: {intent}")
 

@@ -97,20 +97,15 @@ async def process_webhook_status_change(data: dict, alias: str):
         client = await chatbot_service._resolve_client(tenant_id)
 
         # Summarize Logic (Status-based)
-        # open -> Summary, Private Note, NO Cleanup, NO CRM
-        # resolved -> Summary, Private Note, Cleanup, CRM
-        send_to_crm = (status == "resolved")
-        cleanup_history = (status == "resolved")
-
+        # We pass the status directly to the summarization service to handle the divergent logic
         from app.services.summarization.service import SummarizationService
         sum_service = SummarizationService(db, client)
         await sum_service.summarize_conversation(
             tenant_id,
             account_id,
             conversation_id,
-            contact_id=contact_id,
-            send_to_crm=send_to_crm,
-            cleanup_history=cleanup_history
+            status=status,
+            contact_id=contact_id
         )
 
 @router.post("/webhook/{alias}")

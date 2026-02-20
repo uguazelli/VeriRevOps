@@ -13,7 +13,8 @@ from flashrank import Ranker, RerankRequest
 from langchain_core.runnables import RunnableConfig
 from app.core.logger import Log
 
-from app.models import ChatMessage, RagChunk, RagFile
+from app.models import RagChunk, RagFile
+from app.core.chatwoot import ChatwootClient
 from app.prompts import (
     CONTEXTUALIZE_QUERY_SYSTEM_PROMPT,
     EXPAND_QUERY_SYSTEM_PROMPT,
@@ -39,6 +40,7 @@ class RAGState(TypedDict):
     session_id: Annotated[int, "The ID of the chat session"]
     tenant_id: Annotated[int, "The ID of the tenant"]
     user_query: Annotated[str, "Original query from user"]
+    account_id: Annotated[int, "The Chatwoot account ID"]
     chat_history: Annotated[List[BaseMessage], "Last messages from DB"]
 
     contextualized_query: Annotated[str, "Step 1: Query rewritten with history"]
@@ -51,24 +53,26 @@ class RAGState(TypedDict):
 
 
 # --- Helper: Fetch History ---
-async def get_chat_history(session_id: int, db: AsyncSession, limit: int = 6) -> List[BaseMessage]:
-    """Fetch the last N messages for context."""
-    stmt = (
-        select(ChatMessage)
-        .where(ChatMessage.session_id == session_id)
-        .order_by(ChatMessage.created_at.desc())
-        .limit(limit)
-    )
-    result = await db.execute(stmt)
-    rows = result.scalars().all()
+async def get_chat_history(client: ChatwootClient, session_id: int, account_id: int, limit: int = 6) -> List[BaseMessage]:
+    """Fetch the last N messages for context from Chatwoot using an injected client."""
+    messages = await client.get_messages(account_id, session_id, limit=limit)
 
-    # Map roles to LangChain message types
-    role_map = {"user": HumanMessage, "assistant": AIMessage}
+    # Map roles to LangChain message types. By default Chatwoot uses "incoming" for user and "outgoing" for agent
+    langchain_messages = []
+    for msg in messages:
+        content = msg.get("content")
+        mtype = msg.get("message_type")
+        if not content:
+            continue
 
-    return [
-        role_map.get(msg.role, HumanMessage)(content=msg.content)
-        for msg in reversed(rows)
-    ]
+        mtype_str = "user" if mtype == 0 or str(mtype).lower() == "incoming" else "assistant"
+        role_map = {"user": HumanMessage, "assistant": AIMessage}
+
+        langchain_messages.append(
+            role_map.get(mtype_str, HumanMessage)(content=content)
+        )
+
+    return langchain_messages
 
 
 # --- Node 1: Contextualize ---
@@ -99,20 +103,6 @@ async def contextualize_query(state: RAGState, config: RunnableConfig) -> dict:
     }, config=config)
 
     return {"contextualized_query": new_query}
-
-
-# --- Node: Fetch History ---
-async def fetch_history_node(state: RAGState, config: RunnableConfig) -> dict:
-    """
-    Fetches the last N messages from the database for context.
-    Populates 'chat_history' based on the 'session_id'.
-    """
-    db: AsyncSession = config["configurable"].get("db")
-    if not db:
-        return {"chat_history": []}
-
-    history = await get_chat_history(state["session_id"], db)
-    return {"chat_history": history}
 
 
 # --- Node 2: Expand (Multi-Query) ---
@@ -294,7 +284,6 @@ def build_rag_graph():
     workflow = StateGraph(RAGState)
 
     # Add Nodes
-    workflow.add_node("fetch_history", fetch_history_node)
     workflow.add_node("contextualize", contextualize_query)
     workflow.add_node("expand", expand_query)
     workflow.add_node("retrieve", retrieve_documents)
@@ -302,8 +291,7 @@ def build_rag_graph():
     workflow.add_node("generate", generate_answer)
 
     # Define Edges (Sequential)
-    workflow.set_entry_point("fetch_history")
-    workflow.add_edge("fetch_history", "contextualize")
+    workflow.set_entry_point("contextualize")
     workflow.add_edge("contextualize", "expand")
     workflow.add_edge("expand", "retrieve")
     workflow.add_edge("retrieve", "rerank")
@@ -316,7 +304,7 @@ def build_rag_graph():
 rag_graph = build_rag_graph()
 
 # --- Public Entry Point ---
-async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSession, tenant_id: int):
+async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSession, tenant_id: int, account_id: int, chat_history: List[BaseMessage] = None):
     """
     Main function to run the RAG pipeline using native LangGraph.
     """
@@ -326,8 +314,9 @@ async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSe
     initial_state = RAGState(
         session_id=session_id,
         tenant_id=tenant_id,
+        account_id=account_id,
         user_query=user_query,
-        chat_history=[],
+        chat_history=chat_history or [],
         contextualized_query="",
         expanded_queries=[],
         retrieved_docs=[],

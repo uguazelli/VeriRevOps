@@ -9,20 +9,10 @@ class ChatSession(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"))
+    chatwoot_conversation_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)
+    chatwoot_account_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     last_summarized_message_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     tenant: Mapped["Tenant"] = relationship(back_populates="chat_sessions")
-    messages: Mapped[List["ChatMessage"]] = relationship(back_populates="session")
-
-class ChatMessage(Base):
-    __tablename__ = "chat_messages"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("chat_sessions.id"))
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    role: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
-
-    session: Mapped["ChatSession"] = relationship(back_populates="messages")

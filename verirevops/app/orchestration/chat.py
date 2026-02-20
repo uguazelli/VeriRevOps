@@ -61,13 +61,16 @@ def build_chat_graph():
 # Singleton Graph Instance
 chat_graph = build_chat_graph()
 
-async def invoke_chat_orchestrator(tenant_id: int, session_id: int, message: str, db: AsyncSession, attachments: Optional[List[dict]] = None):
+from app.core.chatwoot import ChatwootClient
+
+async def invoke_chat_orchestrator(tenant_id: int, account_id: int, session_id: int, message: str, db: AsyncSession, chatwoot_client: ChatwootClient, attachments: Optional[List[dict]] = None):
     """
     Public entry point using native LangGraph ainvoke.
     """
 
     initial_state = ChatState(
         tenant_id=tenant_id,
+        account_id=account_id,
         session_id=session_id,
         user_message=message,
         chat_history=[],
@@ -78,7 +81,7 @@ async def invoke_chat_orchestrator(tenant_id: int, session_id: int, message: str
     )
 
     # Execute
-    config = {"configurable": {"db": db}}
+    config = {"configurable": {"db": db, "chatwoot_client": chatwoot_client}}
     final_state = await chat_graph.ainvoke(initial_state, config=config)
     Log.success(f"Orchestration complete for Session {session_id}")
     return final_state['ai_response'], final_state['intent']

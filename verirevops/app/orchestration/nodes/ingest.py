@@ -2,9 +2,10 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_core.runnables import RunnableConfig
-from app.models import ChatSession, ChatMessage, Tenant
-from app.rag.retrieve import get_chat_history
+from app.models import ChatSession, Tenant
 from app.core.logger import Log
+from app.rag.retrieve import get_chat_history
+from langchain_core.messages import HumanMessage
 from app.orchestration.state import ChatState
 
 async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> dict:
@@ -51,16 +52,13 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> d
             db.add(session)
             await db.commit()
 
-    # 2. Persist User Message
-    msg = ChatMessage(
-        session_id=state['session_id'],
-        role='user',
-        content=state['user_message'],
-        created_at=datetime.utcnow()
-    )
-    db.add(msg)
-    await db.commit() # Commit to save user message and session/tenant if new
+    # 2. Fetch History dynamically from Chatwoot APIs to populate RAG and Chitchat context
+    client = config["configurable"].get("chatwoot_client")
+    history = []
+    if state.get("account_id") and client:
+        history = await get_chat_history(client, state['session_id'], state['account_id'], limit=6)
+        # Remove the latest message if it's the exact same as the user query (prevent duplication)
+        if history and isinstance(history[-1], HumanMessage) and history[-1].content == state["user_message"]:
+            history = history[:-1]
 
-    # 3. Load History
-    history = await get_chat_history(state['session_id'], db)
     return {"chat_history": history}

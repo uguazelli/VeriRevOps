@@ -12,6 +12,7 @@ services:
       - "${APP_PORT:-4019}:8000"
     volumes:
       - ./app:/app/app # Hot reload
+      - ./migrations:/app/migrations # Sync Alembic revisions
     networks:
       veridata.network:
         aliases:

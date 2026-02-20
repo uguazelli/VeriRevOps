@@ -9,5 +9,12 @@ async def rag_node(state: ChatState, config: RunnableConfig) -> dict:
     Populates 'ai_response' using retrieved knowledge filtered by 'tenant_id'.
     """
     db: AsyncSession = config["configurable"].get("db")
-    answer = await invoke_rag_graph(state['session_id'], state['user_message'], db, state['tenant_id'])
+    answer = await invoke_rag_graph(
+        state['session_id'],
+        state['user_message'],
+        db,
+        state['tenant_id'],
+        state['account_id'],
+        state.get('chat_history', [])
+    )
     return {"ai_response": answer, "summary_needed": True}

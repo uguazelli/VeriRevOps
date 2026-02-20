@@ -8,7 +8,7 @@ from langchain_core.output_parsers import StrOutputParser
 from app.core.config import settings
 from app.core.chatwoot import ChatwootClient
 from app.core.logger import Log
-from app.models import IntegrationConfig, ContactMapping, ChatMessage, ChatSession
+from app.models import IntegrationConfig, ContactMapping, ChatSession
 from app.services.crm.factory import CRMFactory
 from app.prompts.llm_prompts import VERI_SUMMARY_SYSTEM_PROMPT
 
@@ -22,11 +22,11 @@ class SummarizationService:
         self.db = db
         self.chatwoot_client = chatwoot_client
 
-    async def summarize_conversation(self, tenant_id: int, account_id: int, conversation_id: int, contact_id: Optional[int] = None, send_to_crm: bool = False, cleanup_history: bool = False):
+    async def summarize_conversation(self, tenant_id: int, account_id: int, conversation_id: int, status: str, contact_id: Optional[int] = None):
         """
-        Main entry point for summarizing a conversation.
+        Main entry point for summarizing a conversation based on its status logic.
         """
-        Log.info(f"🚀 Starting summarization for Conversation {conversation_id} (Tenant {tenant_id})")
+        Log.info(f"🚀 Starting summarization for Conversation {conversation_id} (Tenant {tenant_id}, Status: {status})")
 
         # 0. Get Session to find last_summarized_message_id
         stmt = select(ChatSession).where(ChatSession.id == conversation_id, ChatSession.tenant_id == tenant_id)
@@ -36,15 +36,17 @@ class SummarizationService:
         last_id = session.last_summarized_message_id if session else None
 
         # 1. Fetch messages from Chatwoot (Source of Truth)
-        # Using 'after' to detect new messages
-        new_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, after=last_id)
-
-        if not new_messages:
-            Log.info(f"No new messages since ID {last_id}. Skipping summarization.")
-            return
-
-        # Fetch ALL messages for full context summary
-        all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id)
+        # Using 'after' to detect new messages only if status is 'resolved'
+        if status == "resolved":
+            new_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, after=last_id, limit=100)
+            if not new_messages:
+                Log.info(f"No new messages since ID {last_id} for resolved conversation. Skipping summarization.")
+                return
+            all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, limit=100)
+            latest_msg_id = new_messages[-1].get("id")
+        else: # status == "open"
+            all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, limit=100)
+            latest_msg_id = None # We don't update tracking ID on 'open'
 
         # 2. Format transcript for LLM
         transcript = self._format_messages(all_messages)
@@ -59,8 +61,8 @@ class SummarizationService:
         # 4. Push Private Note to Chatwoot
         await self.chatwoot_client.send_message(account_id, conversation_id, summary, private=True)
 
-        # 5. Optional: Push to CRM
-        if send_to_crm:
+        # 5. Optional: Push to CRM (Only on Resolve)
+        if status == "resolved":
             # If contact_id not provided, try to resolve it
             if not contact_id:
                 conv_data = await self.chatwoot_client.get_conversation(account_id, conversation_id)
@@ -86,20 +88,22 @@ class SummarizationService:
             else:
                 Log.warning(f"Could not resolve contact_id for conversation {conversation_id}. Skipping CRM sync.")
 
-        # 6. Optional: Cleanup local ChatMessage history
-        if cleanup_history:
-            await self._cleanup_local_history(conversation_id)
-
-        # 7. Update tracking ID
-        # Get the ID of the last message in current batch
-        latest_msg_id = new_messages[-1].get("id")
-
-        # We fetch the session again or check if it was deleted
-        if not cleanup_history and session:
-            session.last_summarized_message_id = latest_msg_id
+        # 7. Update tracking ID on 'resolved'
+        if status == "resolved" and latest_msg_id:
+            if session:
+                session.last_summarized_message_id = latest_msg_id
+            else:
+                # Need to create session if it doesn't exist
+                new_session = ChatSession(
+                    tenant_id=tenant_id,
+                    chatwoot_account_id=account_id,
+                    chatwoot_conversation_id=conversation_id,
+                    last_summarized_message_id=latest_msg_id
+                )
+                self.db.add(new_session)
             await self.db.commit()
 
-        Log.success(f"✨ Summarization complete for Conversation {conversation_id} (CRM: {send_to_crm}, Cleanup: {cleanup_history})")
+        Log.success(f"✨ Summarization complete for Conversation {conversation_id} (Status: {status})")
 
     def _format_messages(self, messages: list) -> str:
         """Formats Chatwoot messages into a clean transcript for the LLM."""
@@ -167,18 +171,3 @@ class SummarizationService:
             if adapter:
                 await adapter.add_note(external_id, "Conversation Summary", summary)
 
-    async def _cleanup_local_history(self, conversation_id: int):
-        """Deletes local ChatMessage history AND the ChatSession record itself."""
-        try:
-            # 1. Delete messages
-            stmt_msg = delete(ChatMessage).where(ChatMessage.session_id == conversation_id)
-            await self.db.execute(stmt_msg)
-
-            # 2. Delete session (to reset tracking ID for next time)
-            stmt_sess = delete(ChatSession).where(ChatSession.id == conversation_id)
-            await self.db.execute(stmt_sess)
-
-            await self.db.commit()
-            Log.info(f"Cleaned up local history and deleted Session {conversation_id}")
-        except Exception as e:
-            Log.error(f"Failed to cleanup history for Session {conversation_id}: {e}")

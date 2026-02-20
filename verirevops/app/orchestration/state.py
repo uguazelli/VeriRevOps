@@ -3,6 +3,7 @@ from langchain_core.messages import BaseMessage
 
 class ChatState(TypedDict):
     tenant_id: Annotated[int, "The ID of the tenant"]
+    account_id: Annotated[int, "The Chatwoot account ID"]
     session_id: Annotated[int, "The ID of the chat session"]
     user_message: Annotated[str, "The message from the user"]
     chat_history: Annotated[List[BaseMessage], "The history of the chat"]

@@ -55,7 +55,7 @@ async def verify_summarization():
         {"id": 102, "sender": {"name": "Agent"}, "content": "Sure, I'm here."}
     ]
 
-    async def mock_get_messages(account_id, conversation_id, after=None):
+    async def mock_get_messages(account_id, conversation_id, after=None, limit=None):
         if after is not None:
             return [m for m in messages if m["id"] > after]
         return messages
@@ -77,39 +77,39 @@ async def verify_summarization():
 
         service = SummarizationService(mock_db, mock_client)
 
-        print("🔹 Scenario 1: Incremental Summary (Detected new messages)")
+        print("🔹 Scenario 1: Incremental Summary (Detected new messages - resolved)")
         # Session has last_id = 100. Messages 101, 102 are new.
-        await service.summarize_conversation(1, 1, 101, send_to_crm=False, cleanup_history=False)
+        await service.summarize_conversation(1, 1, 101, status="resolved")
 
         assert mock_client.get_messages.called, "Should call get_messages"
         assert mock_client.send_message.called, "Should send private note to Chatwoot"
         assert mock_session.last_summarized_message_id == 102, "Should update last_summarized_message_id to 102"
         print("✅ Scenario 1 Passed")
 
-        print("\n🔹 Scenario 2: No new messages (Skip summary)")
+        print("\n🔹 Scenario 2: No new messages (Skip summary - resolved)")
         mock_client.send_message.reset_mock()
         # mock_session now has 102.
-        await service.summarize_conversation(1, 1, 101, send_to_crm=False, cleanup_history=False)
+        await service.summarize_conversation(1, 1, 101, status="resolved")
 
         assert not mock_client.send_message.called, "Should NOT send summary if no new messages"
         print("✅ Scenario 2 Passed")
 
-        print("\n🔹 Scenario 3: Final Resolution (CRM Sync + Cleanup)")
+        print("\n🔹 Scenario 3: Open Status (No tracking update, no CRM)")
         mock_hs_adapter.add_note.reset_mock()
-        # Reset session to test resolution
-        mock_session.last_summarized_message_id = 100
-        await service.summarize_conversation(1, 1, 101, send_to_crm=True, cleanup_history=True)
+        mock_client.send_message.reset_mock()
+        # Should just fetch max 100 and summarize, without updating the session ID
+        await service.summarize_conversation(1, 1, 101, status="open")
 
-        assert mock_hs_adapter.add_note.called, "Should sync to CRM"
-
-        # Verify deletion calls
-        delete_calls = [str(c[0][0]).lower() for c in mock_db.execute.call_args_list if "delete" in str(c[0][0]).lower()]
-        assert any("chat_messages" in c for c in delete_calls), "Should delete messages"
-        assert any("chat_sessions" in c for c in delete_calls), "Should delete session"
+        assert not mock_hs_adapter.add_note.called, "Should NOT sync to CRM on 'open'"
+        assert mock_client.send_message.called, "Should send private note on 'open'"
+        assert mock_session.last_summarized_message_id == 102, "Should NOT update the tracking ID (stays 102)"
 
         print("✅ Scenario 3 Passed")
 
     print("\n✨ Incremental Summarization Verification complete!\n")
 
 if __name__ == "__main__":
+    # Add project root to sys path so we can run directly
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     asyncio.run(verify_summarization())

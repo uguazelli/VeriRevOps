@@ -65,7 +65,7 @@ class ChatwootClient:
                 Log.error(f"HTTP Error fetching Chatwoot conversation: {e}")
                 return None
 
-    async def get_messages(self, account_id: int, conversation_id: int, after: Optional[int] = None):
+    async def get_messages(self, account_id: int, conversation_id: int, after: Optional[int] = None, limit: int = 100):
         """
         Fetches messages for a conversation, optionally after a specific message ID.
         """
@@ -78,7 +78,11 @@ class ChatwootClient:
             try:
                 response = await client.get(url, headers=self.headers, params=params)
                 if response.status_code == 200:
-                    return response.json().get("payload", [])
+                    messages = response.json().get("payload", [])
+                    # Chatwoot doesn't consistently respect limit params, so we slice.
+                    # Sort by created_at ascending (oldest first) so we cap at max 100 most recent
+                    messages = sorted(messages, key=lambda x: x.get("created_at", 0))
+                    return messages[-limit:] if limit else messages
 
                 self._log_response_error("get_messages", response)
                 return []
