@@ -1,7 +1,7 @@
-import base64
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from app.models import Tenant, IntegrationConfig
+from sqlalchemy import select, update
+from app.models import Tenant, IntegrationConfig, Subscription
 from app.orchestration.chat import invoke_chat_orchestrator
 from app.core.chatwoot import get_chatwoot_client, ChatwootClient
 from app.core.logger import Log
@@ -35,7 +35,26 @@ class ChatbotService:
                 return
             tenant_id = tenant.id
 
-            # 2. Resolve Client
+            # 2. Resolve Subscription
+            stmt_sub = select(Subscription).where(Subscription.tenant_id == tenant_id)
+            result_sub = await self.db.execute(stmt_sub)
+            subscription = result_sub.scalars().first()
+
+            if not subscription:
+                Log.warning(f"Tenant {tenant_id} '{alias}' has no active subscription.")
+                return
+
+            # Check limits
+            now = datetime.now()
+            if subscription.end_date and now > subscription.end_date:
+                Log.warning(f"Tenant {tenant_id} subscription expired on {subscription.end_date}.")
+                return
+
+            if subscription.usage_count >= subscription.quota_limit:
+                Log.warning(f"Tenant {tenant_id} quota reached: {subscription.usage_count}/{subscription.quota_limit}")
+                return
+
+            # 3. Resolve Client
             client = await self._resolve_client(tenant_id)
 
             # 3. Process Attachments
@@ -52,8 +71,18 @@ class ChatbotService:
             )
             Log.orchestrator(f"Response: {ai_response} | Intent: {intent}")
 
-            # 5. Send Response and Manage Status
+            # 6. Send Response and Manage Status
             await self._send_ai_response(client, account_id, conversation_id, ai_response, intent)
+
+            # 7. Increment Usage
+            stmt_inc = (
+                update(Subscription)
+                .where(Subscription.id == subscription.id)
+                .values(usage_count=Subscription.usage_count + 1)
+            )
+            await self.db.execute(stmt_inc)
+            await self.db.commit()
+            Log.info(f"Incremented usage for tenant {tenant_id}. New count: {subscription.usage_count + 1}")
 
         except Exception as e:
             Log.error(f"Error in ChatbotService: {e}")
