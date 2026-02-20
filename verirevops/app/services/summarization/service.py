@@ -22,6 +22,76 @@ class SummarizationService:
         self.db = db
         self.chatwoot_client = chatwoot_client
 
+    async def process_webhook_status_change(self, data: dict, tenant_id: int):
+        """
+        Handles the robust extraction of data from a Chatwoot status_change webhook
+        and triggers the summarization process.
+        """
+        status = data.get("status")
+        if status != "resolved":
+            return
+
+        # 1. Hyper-robust extraction for account_id
+        account_id = data.get("account_id")
+        if not account_id:
+            account_id = data.get("account", {}).get("id")
+        if not account_id:
+            conv = data.get("conversation", {})
+            account_id = conv.get("account_id") or conv.get("account", {}).get("id")
+
+        if not account_id and data.get("messages"):
+            msgs = data.get("messages", [])
+            if msgs and isinstance(msgs, list):
+                account_id = msgs[0].get("account_id")
+
+        # Bulletproof account_id resolution: check DB if missing from webhook
+        if not account_id:
+            stmt_config = select(IntegrationConfig.account_id).where(
+                IntegrationConfig.tenant_id == tenant_id,
+                IntegrationConfig.service_name == "chatwoot"
+            )
+            res = await self.db.execute(stmt_config)
+            account_id = res.scalars().first()
+
+        # 2. Extract conversation_id
+        conversation_id = data.get("id")
+        if not conversation_id or not isinstance(conversation_id, int):
+            conversation_id = data.get("conversation", {}).get("id")
+
+        if not account_id or not conversation_id:
+            Log.warning(f"Could not extract account_id ({account_id}) or conversation_id ({conversation_id}) from webhook.")
+            return
+
+        # 3. Robust contact_id extraction
+        contact_id = data.get("contact_inbox", {}).get("contact_id")
+        if not contact_id:
+            contact_id = data.get("meta", {}).get("sender", {}).get("id")
+        if not contact_id and data.get("conversation"):
+            contact_id = data.get("conversation", {}).get("contact_id")
+
+        # 4. Extract latest_message_id for incremental capping
+        latest_message_id = None
+        conv = data.get("conversation", {})
+        if conv:
+            latest_message_id = conv.get("last_message_id") or conv.get("last_message", {}).get("id")
+
+        if not latest_message_id and data.get("messages"):
+            msgs = data.get("messages", [])
+            if msgs:
+                latest_message_id = msgs[-1].get("id")
+
+        Log.info(f"Conversation {conversation_id} status changed to '{status}' (Contact: {contact_id}). Triggering summarization.")
+
+        # 5. Invoke Summarization
+        await self.summarize_conversation(
+            tenant_id,
+            int(account_id),
+            conversation_id,
+            status=status,
+            contact_id=contact_id,
+            latest_message_id=latest_message_id
+        )
+
     async def summarize_conversation(self, tenant_id: int, account_id: int, conversation_id: int, status: str, contact_id: Optional[int] = None, latest_message_id: Optional[int] = None):
         """
         Main entry point for summarizing a conversation based on its status logic.

@@ -29,4 +29,5 @@ class Subscription(Base):
     start_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     end_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
+    # Relationships
     tenant: Mapped["Tenant"] = relationship(back_populates="subscriptions")

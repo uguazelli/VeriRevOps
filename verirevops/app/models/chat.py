@@ -15,4 +15,5 @@ class ChatSession(Base):
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     last_summarized_message_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # Relationships
     tenant: Mapped["Tenant"] = relationship(back_populates="chat_sessions")

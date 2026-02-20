@@ -8,7 +8,9 @@ from app.core.db import engine
 from app.core.logger import Log
 from app.models import Base
 from app.core.exceptions import global_exception_handler, http_exception_handler
-
+import alembic.config
+import alembic.command
+from concurrent.futures import ThreadPoolExecutor
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Log.info("Starting up VeriRevOps API...")
@@ -17,10 +19,6 @@ async def lifespan(app: FastAPI):
 
     # Run Alembic migrations automatically
     try:
-        import alembic.config
-        import alembic.command
-        from concurrent.futures import ThreadPoolExecutor
-
         alembic_cfg = alembic.config.Config("alembic.ini")
 
         # Run sync alembic command in a separate thread to avoid event loop conflict
