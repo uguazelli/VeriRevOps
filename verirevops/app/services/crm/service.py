@@ -59,20 +59,18 @@ class CRMService:
         try:
             tenant_id = config.tenant_id
             service_name = config.service_name.lower()
+            email = contact_data.get("email")
 
-            # 1. Check Persistent Mapping first (The most reliable identity link)
+            # 1. Check Persistent Mapping first
             external_id = await self._get_mapped_external_id(tenant_id, cw_contact_id, service_name)
 
             if external_id:
-                Log.info(f"Mapping found for Chatwoot ID {cw_contact_id} -> {service_name} ID {external_id}. Updating.")
                 success = await adapter.update_contact(external_id, contact_data)
                 if success:
                     return
-                # If update fails (e.g. record deleted in CRM), we fall back to search
                 Log.warning(f"Update failed for {service_name} ID {external_id}. Record might be deleted. Falling back to search.")
 
             # 2. Fallback: Search by Email
-            email = contact_data.get("email")
             existing = await adapter.find_contact_by_email(email)
 
             if existing:

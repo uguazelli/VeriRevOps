@@ -82,16 +82,34 @@ class EspoCRMAdapter(BaseCRMAdapter):
 
     async def find_contact_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Searches for a Lead by email in EspoCRM."""
-        # EspoCRM search usually uses filter parameters
+        import json
+
         url = f"{self.url}/api/v1/Lead"
-        params = {"filter": f"emailAddress={email}"}
+        # Using the searchParams structure which is more robust in some Espo versions
+        where = [
+            {"type": "equals", "attribute": "emailAddress", "value": email}
+        ]
+        params = {"where": json.dumps(where)}
 
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(url, params=params, headers=self.headers)
                 if response.status_code == 200:
-                    collection = response.json().get("list", [])
-                    return collection[0] if collection else None
+                    data = response.json()
+                    collection = data.get("list", [])
+
+                    if collection:
+                        first_result = collection[0]
+                        res_email = first_result.get('emailAddress', '').lower()
+
+                        # Validation: Ensure it's not just returning the first record in the DB
+                        if res_email == email.lower():
+                            return first_result
+                        else:
+                            Log.warning(f"EspoCRM search returned non-matching result (Search: {email}, Got: {res_email}). Ignoring.")
+                            return None
+                    return None
+
                 return None
             except httpx.HTTPError as e:
                 Log.error(f"HTTP Error searching EspoCRM lead: {e}")
