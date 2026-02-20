@@ -53,7 +53,7 @@ class RAGState(TypedDict):
 
 
 # --- Helper: Fetch History ---
-async def get_chat_history(client: ChatwootClient, session_id: int, account_id: int, limit: int = 6) -> List[BaseMessage]:
+async def get_chat_history(client: ChatwootClient, session_id: int, account_id: int, limit: int = 10) -> List[BaseMessage]:
     """Fetch the last N messages for context from Chatwoot using an injected client."""
     messages = await client.get_messages(account_id, session_id, limit=limit)
 

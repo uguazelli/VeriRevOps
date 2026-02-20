@@ -65,7 +65,7 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> d
     client = config["configurable"].get("chatwoot_client")
     history = []
     if state.get("account_id") and client:
-        history = await get_chat_history(client, state['session_id'], state['account_id'], limit=6)
+        history = await get_chat_history(client, state['session_id'], state['account_id'], limit=10)
         # Remove the latest message if it's the exact same as the user query (prevent duplication)
         if history and isinstance(history[-1], HumanMessage) and history[-1].content == state["user_message"]:
             history = history[:-1]
