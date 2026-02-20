@@ -22,7 +22,7 @@ class SummarizationService:
         self.db = db
         self.chatwoot_client = chatwoot_client
 
-    async def summarize_conversation(self, tenant_id: int, account_id: int, conversation_id: int, status: str, contact_id: Optional[int] = None):
+    async def summarize_conversation(self, tenant_id: int, account_id: int, conversation_id: int, status: str, contact_id: Optional[int] = None, latest_message_id: Optional[int] = None):
         """
         Main entry point for summarizing a conversation based on its status logic.
         """
@@ -40,42 +40,50 @@ class SummarizationService:
 
             last_id = session.last_summarized_message_id if session else None
 
-            # 1. Fetch messages from Chatwoot (Source of Truth)
-            # Using 'after' to detect new messages only if status is 'resolved'
-            if status == "resolved":
-                new_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, after=last_id, limit=100)
-                if not new_messages:
-                    Log.info(f"No new messages since ID {last_id} for resolved conversation. Skipping summarization.")
-                    return
-                all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, limit=100)
-                if not all_messages:
-                    Log.warning(f"Failed to fetch all messages for resolved Conversation {conversation_id}. Aborting.")
-                    return
-                latest_msg_id = new_messages[-1].get("id")
-            else: # status == "open"
-                all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, limit=100)
-                if not all_messages:
-                    Log.warning(f"Failed to fetch messages for Conversation {conversation_id}. Skipping summarization.")
-                    return
-                latest_msg_id = None # We don't update tracking ID on 'open'
+            # 1. Fetch incremental messages from Chatwoot (Source of Truth)
+            # We fetch messages AFTER last_id and UP TO (before) latest_message_id if provided
+            fetch_before = latest_message_id + 1 if latest_message_id else None
+            Log.info(f"🔍 Summarization window: after={last_id}, before={fetch_before}")
+
+            incremental_messages = await self.chatwoot_client.get_messages(
+                account_id,
+                conversation_id,
+                after=last_id,
+                before=fetch_before,
+                limit=100
+            )
+
+            if not incremental_messages:
+                Log.info(f"No new messages for Conversation {conversation_id} (last_id: {last_id}, up_to: {latest_message_id}). Skipping.")
+                return
+
+            msg_ids = [m.get("id") for m in incremental_messages]
+            Log.info(f"📦 Found {len(incremental_messages)} incremental messages: {msg_ids}")
+
+            # Determine tracking ID for updates
+            tracking_id = latest_message_id or incremental_messages[-1].get("id")
 
             # 2. Format transcript for LLM
-            transcript = self._format_messages(all_messages)
+            transcript = self._format_messages(incremental_messages)
+            Log.info(f"📝 Transcript length: {len(transcript)} chars")
             if not transcript.strip():
                 Log.info(f"No valid transcript content for Conversation {conversation_id}. Skipping.")
                 return
 
-            # 3. Generate Summary
-            summary = await self._generate_summary(transcript)
+            # 3. Calculate Date/Time Range
+            date_range = self._calculate_date_range(incremental_messages)
+
+            # 4. Generate Summary
+            summary = await self._generate_summary(transcript, date_range)
 
             if not summary:
                 Log.error("Failed to generate summary.")
                 return
 
-            # 4. Push Private Note to Chatwoot
+            # 5. Push Private Note to Chatwoot
             await self.chatwoot_client.send_message(account_id, conversation_id, summary, private=True)
 
-            # 5. Optional: Push to CRM (Only on Resolve)
+            # 6. Optional: Push to CRM (Only on Resolve)
             if status == "resolved":
                 # If contact_id not provided, try to resolve it
                 if not contact_id:
@@ -102,10 +110,11 @@ class SummarizationService:
                 else:
                     Log.warning(f"Could not resolve contact_id for conversation {conversation_id}. Skipping CRM sync.")
 
-            # 7. Update tracking ID on 'resolved'
-            if status == "resolved" and latest_msg_id:
+            # 7. Update tracking ID (Lock the progress for next summary)
+            if tracking_id:
                 if session:
-                    session.last_summarized_message_id = latest_msg_id
+                    session.last_summarized_message_id = tracking_id
+                    Log.info(f"📍 Updated session {conversation_id} tracking to message {tracking_id}")
                 else:
                     # Need to create session if it doesn't exist
                     new_session = ChatSession(
@@ -113,15 +122,47 @@ class SummarizationService:
                         tenant_id=tenant_id,
                         chatwoot_account_id=account_id,
                         chatwoot_conversation_id=conversation_id,
-                        last_summarized_message_id=latest_msg_id
+                        last_summarized_message_id=tracking_id
                     )
                     self.db.add(new_session)
+                    Log.info(f"📍 Created new session {conversation_id} with tracking message {tracking_id}")
                 await self.db.commit()
 
-            Log.success(f"✨ Summarization complete for Conversation {conversation_id} (Status: {status})")
+            Log.success(f"✨ Summarization complete for Conversation {conversation_id}")
         except Exception as e:
             Log.error(f"Error in summarize_conversation for {conversation_id}: {e}")
             await self.db.rollback()
+
+    def _calculate_date_range(self, messages: list) -> str:
+        """Calculates the date/time range from a list of Chatwoot messages."""
+        if not messages:
+            return "Unknown Period"
+
+        from datetime import datetime
+
+        # Chatwoot created_at is usually Unix timestamp (integer)
+        timestamps = []
+        for msg in messages:
+            ts = msg.get("created_at")
+            if ts:
+                try:
+                    timestamps.append(int(ts))
+                except (ValueError, TypeError):
+                    continue
+
+        if not timestamps:
+            return "Unknown Period"
+
+        start_dt = datetime.fromtimestamp(min(timestamps))
+        end_dt = datetime.fromtimestamp(max(timestamps))
+
+        # Format: "Feb 20, 2026 06:00 - 06:45"
+        # If the dates are the same day, we can simplify
+        if start_dt.date() == end_dt.date():
+            return f"{start_dt.strftime('%b %d, %Y %H:%M')} - {end_dt.strftime('%H:%M')}"
+        else:
+            return f"{start_dt.strftime('%b %d, %Y %H:%M')} - {end_dt.strftime('%b %d, %Y %H:%M')}"
+
     def _format_messages(self, messages: list) -> str:
         """Formats Chatwoot messages into a clean transcript for the LLM."""
         lines = []
@@ -133,7 +174,7 @@ class SummarizationService:
             lines.append(f"{sender}: {content}")
         return "\n".join(lines)
 
-    async def _generate_summary(self, transcript: str) -> str:
+    async def _generate_summary(self, transcript: str, date_range: str) -> str:
         """Invokes the LLM to generate the Veri-Summary."""
         try:
             llm = ChatGoogleGenerativeAI(
@@ -144,11 +185,11 @@ class SummarizationService:
 
             prompt = ChatPromptTemplate.from_messages([
                 ("system", VERI_SUMMARY_SYSTEM_PROMPT),
-                ("human", "Please summarize the following conversation:\n\n{transcript}")
+                ("human", "Summary Period: {date_range}\n\nPlease summarize the following conversation:\n\n{transcript}")
             ])
 
             chain = prompt | llm | StrOutputParser()
-            summary = await chain.ainvoke({"transcript": transcript})
+            summary = await chain.ainvoke({"transcript": transcript, "date_range": date_range})
             return summary
         except Exception as e:
             Log.error(f"LLM Summarization failed: {e}")

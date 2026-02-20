@@ -14,20 +14,31 @@ async def transcribe_node(state: ChatState, config: RunnableConfig) -> dict:
     if not state.get('attachments'):
         return {} # Nothing to transcribe
 
-    Log.orchestrator("Processing media for transcription/description...")
+    # Detect media types to build a dynamic prompt
+    audio_count = sum(1 for att in state['attachments'] if att.get("type") == "audio")
+    image_count = sum(1 for att in state['attachments'] if att.get("type") == "image")
+
+    if audio_count == 0 and image_count == 0:
+        return {}
+
+    Log.orchestrator(f"Processing media: {audio_count} audio, {image_count} images.")
 
     llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=0, google_api_key=settings.GOOGLE_API_KEY)
 
-    # Multi-part content for Gemini
+    # Multi-part content for Gemini - Build prompt dynamically
+    instructions = []
+    if audio_count > 0:
+        instructions.append("Audio: Transcribe strictly what is said.")
+    if image_count > 0:
+        instructions.append("Image: Describe what is shown in detail.")
+
     prompt_text = (
         "Focus only on the provided media. "
-        "Audio: Transcribe strictly what is said. "
-        "Image: Describe what is shown in detail. "
-        "Return ONLY the transcription/description. Do not add preamble."
+        + " ".join(instructions)
+        + " Return ONLY the transcription/description. Do not add preamble."
     )
     human_content = [{"type": "text", "text": prompt_text}]
 
-    has_media = False
     for att in state['attachments']:
         if att.get("type") in ["image", "audio"]:
             human_content.append({
@@ -35,15 +46,11 @@ async def transcribe_node(state: ChatState, config: RunnableConfig) -> dict:
                 "mime_type": att.get("mime_type"),
                 "data": att.get("data")
             })
-            has_media = True
-
-    if not has_media:
-        return {}
 
     response = await llm.ainvoke([HumanMessage(content=human_content)], config=config)
     transcription = response.content.strip()
 
-    Log.orchestrator(f"Transcription/Description results: '{transcription}'")
+    Log.orchestrator(f"Transcription/Description result: '{transcription}'")
 
     current_text = state.get('user_message', "")
     if current_text:

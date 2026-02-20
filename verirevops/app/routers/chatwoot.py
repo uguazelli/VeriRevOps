@@ -67,7 +67,19 @@ async def process_webhook_status_change(data: dict, alias: str):
     if not contact_id and data.get("conversation"):
         contact_id = data.get("conversation", {}).get("contact_id")
 
-    if status not in ["open", "resolved"]:
+    # Extract latest_message_id for incremental capping (bracket the summary)
+    latest_message_id = None
+    conv = data.get("conversation", {})
+    if conv:
+        # Check direct field or nested last_message object
+        latest_message_id = conv.get("last_message_id") or conv.get("last_message", {}).get("id")
+
+    if not latest_message_id and data.get("messages"):
+        msgs = data.get("messages", [])
+        if msgs:
+            latest_message_id = msgs[-1].get("id")
+
+    if status != "resolved":
         return
 
     async with AsyncSessionLocal() as db:
@@ -105,7 +117,8 @@ async def process_webhook_status_change(data: dict, alias: str):
             account_id,
             conversation_id,
             status=status,
-            contact_id=contact_id
+            contact_id=contact_id,
+            latest_message_id=latest_message_id
         )
 
 @router.post("/webhook/{alias}")

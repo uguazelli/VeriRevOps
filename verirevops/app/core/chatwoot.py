@@ -17,18 +17,29 @@ class ChatwootClient:
         payload = {"content": content, "message_type": "outgoing", "private": private}
 
         async with httpx.AsyncClient() as client:
-            try:
-                Log.info(f"Sending message to Chatwoot (Account: {account_id}, Conv: {conversation_id})")
-                response = await client.post(url, json=payload, headers=self.headers)
+            for attempt in range(3):
+                try:
+                    Log.info(f"Sending message to Chatwoot (Acc: {account_id}, Conv: {conversation_id}) [Attempt {attempt+1}]")
+                    response = await client.post(url, json=payload, headers=self.headers, timeout=10.0)
 
-                if response.status_code not in [200, 201]:
+                    if response.status_code in [200, 201]:
+                        return response.json()
+
+                    if 500 <= response.status_code < 600 and attempt < 2:
+                        Log.warning(f"Chatwoot 5xx error ({response.status_code}) on attempt {attempt+1}. Retrying...")
+                        import asyncio
+                        await asyncio.sleep(1 * (attempt + 1))
+                        continue
+
                     self._log_response_error("send_message", response, payload)
-
-                response.raise_for_status()
-                return response.json()
-            except httpx.HTTPError as e:
-                Log.error(f"HTTP Error sending message to Chatwoot: {e}")
-                return None
+                    return None
+                except Exception as e:
+                    Log.error(f"HTTP/Communication Error on attempt {attempt+1}: {e}")
+                    if attempt < 2:
+                        import asyncio
+                        await asyncio.sleep(1 * (attempt+1))
+                        continue
+                    return None
 
     async def update_status(self, account_id: int, conversation_id: int, status: str):
         """
@@ -37,17 +48,30 @@ class ChatwootClient:
         url = f"{self.base_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/toggle_status"
         payload = {"status": status}
         async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(url, json=payload, headers=self.headers)
-                if response.status_code not in [200, 201]:
-                    self._log_response_error("update_status", response, payload)
+            for attempt in range(3):
+                try:
+                    Log.info(f"Updating Chatwoot status (Acc: {account_id}, Conv: {conversation_id}) to '{status}' [Attempt {attempt+1}]")
+                    response = await client.post(url, json=payload, headers=self.headers, timeout=10.0)
 
-                response.raise_for_status()
-                Log.webhook(f"Updated conversation {conversation_id} status to '{status}'", direction="OUT")
-                return response.json()
-            except httpx.HTTPError as e:
-                Log.error(f"HTTP Error updating Chatwoot status: {e}")
-                return None
+                    if response.status_code in [200, 201]:
+                        Log.webhook(f"Updated conversation {conversation_id} status to '{status}'", direction="OUT")
+                        return response.json()
+
+                    if 500 <= response.status_code < 600 and attempt < 2:
+                        Log.warning(f"Chatwoot 5xx error ({response.status_code}) on attempt {attempt+1}. Retrying...")
+                        import asyncio
+                        await asyncio.sleep(1 * (attempt + 1))
+                        continue
+
+                    self._log_response_error("update_status", response, payload)
+                    return None
+                except Exception as e:
+                    Log.error(f"HTTP/Communication Error on attempt {attempt+1}: {e}")
+                    if attempt < 2:
+                        import asyncio
+                        await asyncio.sleep(1 * (attempt+1))
+                        continue
+                    return None
 
     async def get_conversation(self, account_id: int, conversation_id: int):
         """
@@ -65,7 +89,7 @@ class ChatwootClient:
                 Log.error(f"HTTP Error fetching Chatwoot conversation: {e}")
                 return None
 
-    async def get_messages(self, account_id: int, conversation_id: int, after: Optional[int] = None, limit: int = 100):
+    async def get_messages(self, account_id: int, conversation_id: int, after: Optional[int] = None, before: Optional[int] = None, limit: int = 100):
         """
         Fetches messages for a conversation, optionally after a specific message ID.
         """
@@ -73,22 +97,49 @@ class ChatwootClient:
         params = {}
         if after:
             params["after"] = after
+        if before:
+            params["before"] = before
+        if limit:
+            params["limit"] = limit
+
 
         async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(url, headers=self.headers, params=params)
-                if response.status_code == 200:
-                    messages = response.json().get("payload", [])
-                    # Chatwoot doesn't consistently respect limit params, so we slice.
-                    # Sort by created_at ascending (oldest first) so we cap at max 100 most recent
-                    messages = sorted(messages, key=lambda x: x.get("created_at", 0))
-                    return messages[-limit:] if limit else messages
+            for attempt in range(3):
+                try:
+                    Log.info(f"GET Chatwoot Messages (Acc: {account_id}, Conv: {conversation_id}) Params: {params} [Attempt {attempt+1}]")
+                    response = await client.get(url, headers=self.headers, params=params, timeout=10.0)
 
-                self._log_response_error("get_messages", response)
-                return []
-            except httpx.HTTPError as e:
-                Log.error(f"HTTP Error fetching Chatwoot messages: {e}")
-                return []
+                    if response.status_code == 200:
+                        messages = response.json().get("payload", [])
+
+                        # Safety: Filter locally if API didn't strictly respect after/before
+                        if after is not None:
+                            messages = [m for m in messages if m.get("id", 0) > after]
+                        if before is not None:
+                            messages = [m for m in messages if m.get("id", 0) < before]
+
+                        # Chatwoot doesn't consistently respect limit params, so we slice.
+                        # Sort by created_at ascending (oldest first)
+                        messages = sorted(messages, key=lambda x: x.get("created_at", 0))
+                        return messages[-limit:] if limit else messages
+
+                    # If we get a 5xx, we retry
+                    if 500 <= response.status_code < 600 and attempt < 2:
+                        Log.warning(f"Chatwoot 5xx error ({response.status_code}) on attempt {attempt+1}. Retrying...")
+                        import asyncio
+                        await asyncio.sleep(1 * (attempt + 1))
+                        continue
+
+                    self._log_response_error("get_messages", response, params)
+                    return []
+                except Exception as e:
+                    Log.error(f"HTTP/Communication Error on attempt {attempt+1}: {e}")
+                    if attempt < 2:
+                        import asyncio
+                        await asyncio.sleep(1 * (attempt+1))
+                        continue
+                    return []
+            return []
 
     async def get_file(self, url: str) -> Optional[bytes]:
         """

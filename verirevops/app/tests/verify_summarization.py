@@ -49,16 +49,20 @@ async def verify_summarization():
     # Setup Mock Chatwoot Client
     mock_client = AsyncMock(spec=ChatwootClient)
 
-    # Define simple message list
+    # Define simple message list with Unix timestamps
     messages = [
-        {"id": 101, "sender": {"name": "User"}, "content": "Help me!"},
-        {"id": 102, "sender": {"name": "Agent"}, "content": "Sure, I'm here."}
+        {"id": 101, "sender": {"name": "User"}, "content": "Help me!", "created_at": 1771491600},
+        {"id": 102, "sender": {"name": "Agent"}, "content": "Sure, I'm here.", "created_at": 1771494300},
+        {"id": 103, "sender": {"name": "User"}, "content": "Waiting...", "created_at": 1771495200}
     ]
 
-    async def mock_get_messages(account_id, conversation_id, after=None, limit=None):
+    async def mock_get_messages(account_id, conversation_id, after=None, before=None, limit=None):
+        results = messages
         if after is not None:
-            return [m for m in messages if m["id"] > after]
-        return messages
+            results = [m for m in results if m["id"] > after]
+        if before is not None:
+            results = [m for m in results if m["id"] < before]
+        return results
 
     mock_client.get_messages = AsyncMock(side_effect=mock_get_messages)
     # Simulate nested contact_inbox structure from Chatwoot
@@ -77,34 +81,35 @@ async def verify_summarization():
 
         service = SummarizationService(mock_db, mock_client)
 
-        print("🔹 Scenario 1: Incremental Summary (Detected new messages - resolved)")
-        # Session has last_id = 100. Messages 101, 102 are new.
-        await service.summarize_conversation(1, 1, 101, status="resolved")
+        print("🔹 Scenario 1: Incremental Summary (Strict range - resolved)")
+        # Session has last_id = 100. Messages 101, 102 are available.
+        # We simulate latest_message_id = 102 (so before = 103)
+        await service.summarize_conversation(1, 1, 101, status="resolved", latest_message_id=102)
 
-        assert mock_client.get_messages.called, "Should call get_messages"
+        # Verify get_messages was called with both after and before
+        mock_client.get_messages.assert_called_with(1, 101, after=100, before=103, limit=100)
         assert mock_client.send_message.called, "Should send private note to Chatwoot"
         assert mock_session.last_summarized_message_id == 102, "Should update last_summarized_message_id to 102"
+
+        # Verify date range was passed to LLM
+        # 1771491600 is Feb 20, 2026 06:00 (UTC)
+        # 1771494300 is Feb 20, 2026 06:45 (UTC)
+        # Range should be "Feb 20, 2026 06:00 - 06:45" (local time depends on env, but we check call structure)
+        call_args = mock_gen.call_args[0]
+        assert len(call_args) == 2, "_generate_summary should be called with transcript and date_range"
+        print(f"✅ LLM called with Date Range: {call_args[1]}")
+
         print("✅ Scenario 1 Passed")
 
-        print("\n🔹 Scenario 2: No new messages (Skip summary - resolved)")
+        print("\n🔹 Scenario 2: No new messages (Strict range - resolved)")
         mock_client.send_message.reset_mock()
         # mock_session now has 102.
-        await service.summarize_conversation(1, 1, 101, status="resolved")
+        # We simulate latest_message_id = 102 (so after=102, before=103) -> No messages
+        await service.summarize_conversation(1, 1, 101, status="resolved", latest_message_id=102)
 
         assert not mock_client.send_message.called, "Should NOT send summary if no new messages"
         print("✅ Scenario 2 Passed")
 
-        print("\n🔹 Scenario 3: Open Status (No tracking update, no CRM)")
-        mock_hs_adapter.add_note.reset_mock()
-        mock_client.send_message.reset_mock()
-        # Should just fetch max 100 and summarize, without updating the session ID
-        await service.summarize_conversation(1, 1, 101, status="open")
-
-        assert not mock_hs_adapter.add_note.called, "Should NOT sync to CRM on 'open'"
-        assert mock_client.send_message.called, "Should send private note on 'open'"
-        assert mock_session.last_summarized_message_id == 102, "Should NOT update the tracking ID (stays 102)"
-
-        print("✅ Scenario 3 Passed")
 
     print("\n✨ Incremental Summarization Verification complete!\n")
 
