@@ -249,7 +249,7 @@ class SummarizationService:
         try:
             llm = ChatGoogleGenerativeAI(
                 model=settings.MODEL,
-                temperature=0,
+                temperature=settings.TEMPERATURE,
                 google_api_key=settings.GOOGLE_API_KEY
             )
 

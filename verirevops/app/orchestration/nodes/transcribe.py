@@ -23,7 +23,7 @@ async def transcribe_node(state: ChatState, config: RunnableConfig) -> dict:
 
     Log.orchestrator(f"Processing media: {audio_count} audio, {image_count} images.")
 
-    llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=0, google_api_key=settings.GOOGLE_API_KEY)
+    llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
 
     # Multi-part content for Gemini - Build prompt dynamically
     instructions = []
