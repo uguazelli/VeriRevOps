@@ -19,7 +19,11 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> d
         return {}
 
     # 1. Check/Create Session logic
-    stmt = select(ChatSession).where(ChatSession.id == state['session_id'])
+    stmt = select(ChatSession).where(
+        ChatSession.tenant_id == state['tenant_id'],
+        ChatSession.chatwoot_account_id == state['account_id'],
+        ChatSession.chatwoot_conversation_id == state['session_id']
+    )
     result = await db.execute(stmt)
     session = result.scalars().first()
 
@@ -48,7 +52,12 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> d
                 tenant = result_tenant.scalars().first()
 
         if tenant:
-            session = ChatSession(id=state['session_id'], tenant_id=state['tenant_id'])
+            session = ChatSession(
+                id=state['session_id'],
+                tenant_id=state['tenant_id'],
+                chatwoot_conversation_id=state['session_id'],
+                chatwoot_account_id=state['account_id']
+            )
             db.add(session)
             await db.commit()
 

@@ -28,83 +28,100 @@ class SummarizationService:
         """
         Log.info(f"🚀 Starting summarization for Conversation {conversation_id} (Tenant {tenant_id}, Status: {status})")
 
-        # 0. Get Session to find last_summarized_message_id
-        stmt = select(ChatSession).where(ChatSession.id == conversation_id, ChatSession.tenant_id == tenant_id)
-        res = await self.db.execute(stmt)
-        session = res.scalars().first()
+        try:
+            # 0. Get Session to find last_summarized_message_id
+            stmt = select(ChatSession).where(
+                ChatSession.tenant_id == tenant_id,
+                ChatSession.chatwoot_account_id == account_id,
+                ChatSession.chatwoot_conversation_id == conversation_id
+            )
+            res = await self.db.execute(stmt)
+            session = res.scalars().first()
 
-        last_id = session.last_summarized_message_id if session else None
+            last_id = session.last_summarized_message_id if session else None
 
-        # 1. Fetch messages from Chatwoot (Source of Truth)
-        # Using 'after' to detect new messages only if status is 'resolved'
-        if status == "resolved":
-            new_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, after=last_id, limit=100)
-            if not new_messages:
-                Log.info(f"No new messages since ID {last_id} for resolved conversation. Skipping summarization.")
+            # 1. Fetch messages from Chatwoot (Source of Truth)
+            # Using 'after' to detect new messages only if status is 'resolved'
+            if status == "resolved":
+                new_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, after=last_id, limit=100)
+                if not new_messages:
+                    Log.info(f"No new messages since ID {last_id} for resolved conversation. Skipping summarization.")
+                    return
+                all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, limit=100)
+                if not all_messages:
+                    Log.warning(f"Failed to fetch all messages for resolved Conversation {conversation_id}. Aborting.")
+                    return
+                latest_msg_id = new_messages[-1].get("id")
+            else: # status == "open"
+                all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, limit=100)
+                if not all_messages:
+                    Log.warning(f"Failed to fetch messages for Conversation {conversation_id}. Skipping summarization.")
+                    return
+                latest_msg_id = None # We don't update tracking ID on 'open'
+
+            # 2. Format transcript for LLM
+            transcript = self._format_messages(all_messages)
+            if not transcript.strip():
+                Log.info(f"No valid transcript content for Conversation {conversation_id}. Skipping.")
                 return
-            all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, limit=100)
-            latest_msg_id = new_messages[-1].get("id")
-        else: # status == "open"
-            all_messages = await self.chatwoot_client.get_messages(account_id, conversation_id, limit=100)
-            latest_msg_id = None # We don't update tracking ID on 'open'
 
-        # 2. Format transcript for LLM
-        transcript = self._format_messages(all_messages)
+            # 3. Generate Summary
+            summary = await self._generate_summary(transcript)
 
-        # 3. Generate Summary
-        summary = await self._generate_summary(transcript)
+            if not summary:
+                Log.error("Failed to generate summary.")
+                return
 
-        if not summary:
-            Log.error("Failed to generate summary.")
-            return
+            # 4. Push Private Note to Chatwoot
+            await self.chatwoot_client.send_message(account_id, conversation_id, summary, private=True)
 
-        # 4. Push Private Note to Chatwoot
-        await self.chatwoot_client.send_message(account_id, conversation_id, summary, private=True)
+            # 5. Optional: Push to CRM (Only on Resolve)
+            if status == "resolved":
+                # If contact_id not provided, try to resolve it
+                if not contact_id:
+                    conv_data = await self.chatwoot_client.get_conversation(account_id, conversation_id)
+                    conversation = conv_data.get("payload") if conv_data and "payload" in conv_data else conv_data
 
-        # 5. Optional: Push to CRM (Only on Resolve)
-        if status == "resolved":
-            # If contact_id not provided, try to resolve it
-            if not contact_id:
-                conv_data = await self.chatwoot_client.get_conversation(account_id, conversation_id)
-                conversation = conv_data.get("payload") if conv_data and "payload" in conv_data else conv_data
-
-                if conversation:
-                    # 1. Direct field
-                    contact_id = conversation.get("contact_id")
-                    # 2. Inside contact_inbox (Common in webhook data)
-                    if not contact_id:
-                        contact_id = conversation.get("contact_inbox", {}).get("contact_id")
-                    # 3. Inside meta (Common in API responses)
-                    if not contact_id:
-                        meta = conversation.get("meta", {})
-                        # sender is standard for API v1
-                        contact_id = meta.get("sender", {}).get("id")
-                        # contact is sometimes seen in SDKs/specific events
+                    if conversation:
+                        # 1. Direct field
+                        contact_id = conversation.get("contact_id")
+                        # 2. Inside contact_inbox (Common in webhook data)
                         if not contact_id:
-                            contact_id = meta.get("contact", {}).get("id")
+                            contact_id = conversation.get("contact_inbox", {}).get("contact_id")
+                        # 3. Inside meta (Common in API responses)
+                        if not contact_id:
+                            meta = conversation.get("meta", {})
+                            # sender is standard for API v1
+                            contact_id = meta.get("sender", {}).get("id")
+                            # contact is sometimes seen in SDKs/specific events
+                            if not contact_id:
+                                contact_id = meta.get("contact", {}).get("id")
 
-            if contact_id:
-                await self._push_to_crms(tenant_id, contact_id, summary)
-            else:
-                Log.warning(f"Could not resolve contact_id for conversation {conversation_id}. Skipping CRM sync.")
+                if contact_id:
+                    await self._push_to_crms(tenant_id, contact_id, summary)
+                else:
+                    Log.warning(f"Could not resolve contact_id for conversation {conversation_id}. Skipping CRM sync.")
 
-        # 7. Update tracking ID on 'resolved'
-        if status == "resolved" and latest_msg_id:
-            if session:
-                session.last_summarized_message_id = latest_msg_id
-            else:
-                # Need to create session if it doesn't exist
-                new_session = ChatSession(
-                    tenant_id=tenant_id,
-                    chatwoot_account_id=account_id,
-                    chatwoot_conversation_id=conversation_id,
-                    last_summarized_message_id=latest_msg_id
-                )
-                self.db.add(new_session)
-            await self.db.commit()
+            # 7. Update tracking ID on 'resolved'
+            if status == "resolved" and latest_msg_id:
+                if session:
+                    session.last_summarized_message_id = latest_msg_id
+                else:
+                    # Need to create session if it doesn't exist
+                    new_session = ChatSession(
+                        id=conversation_id,
+                        tenant_id=tenant_id,
+                        chatwoot_account_id=account_id,
+                        chatwoot_conversation_id=conversation_id,
+                        last_summarized_message_id=latest_msg_id
+                    )
+                    self.db.add(new_session)
+                await self.db.commit()
 
-        Log.success(f"✨ Summarization complete for Conversation {conversation_id} (Status: {status})")
-
+            Log.success(f"✨ Summarization complete for Conversation {conversation_id} (Status: {status})")
+        except Exception as e:
+            Log.error(f"Error in summarize_conversation for {conversation_id}: {e}")
+            await self.db.rollback()
     def _format_messages(self, messages: list) -> str:
         """Formats Chatwoot messages into a clean transcript for the LLM."""
         lines = []
