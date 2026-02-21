@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.chatwoot import ChatwootClient
 from app.core.logger import Log
 from app.core.decorators import log_and_ignore
-from app.schemas.chat import ChatwootStatusChangePayload
+from app.schemas.chat import ChatwootStatusChangePayload, SessionKey
 from app.models import IntegrationConfig, ContactMapping, ChatSession
 from app.services.chat_session_service import ChatSessionService
 from app.services.crm.factory import CRMFactory
@@ -40,8 +40,14 @@ class SummarizationService:
             Log.warning(f"Incomplete status change payload: account_id={account_id}, conv_id={conversation_id}, status={status}")
             return
 
+        session_key = SessionKey(
+            tenant_id=tenant_id,
+            account_id=int(account_id),
+            conversation_id=int(conversation_id)
+        )
+
         chat_session_service = ChatSessionService(self.db)
-        await chat_session_service.update_session_activity(tenant_id, int(account_id), int(conversation_id), status)
+        await chat_session_service.update_session_activity(session_key, status)
 
         if status != "resolved":
             return
@@ -81,8 +87,9 @@ class SummarizationService:
         Log.info(f"🚀 Starting summarization for Conversation {conversation_id} (Tenant {tenant_id}, Status: {status})")
 
         # 0. Get Session to find last_summarized_message_id
+        session_key = SessionKey(tenant_id=tenant_id, account_id=account_id, conversation_id=conversation_id)
         chat_session_service = ChatSessionService(self.db)
-        session = await chat_session_service.get_session(tenant_id, account_id, conversation_id)
+        session = await chat_session_service.get_session(session_key)
 
         last_id = session.last_summarized_message_id if session else None
 
@@ -160,7 +167,7 @@ class SummarizationService:
         if tracking_id:
             chat_session_service = ChatSessionService(self.db)
             await chat_session_service.update_tracking_id(
-                tenant_id, account_id, conversation_id, tracking_id, status
+                session_key, tracking_id, status
             )
             Log.success(f"✨ Summarization complete for Conversation {conversation_id}")
 

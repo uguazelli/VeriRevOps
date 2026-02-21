@@ -12,6 +12,7 @@ from app.schemas import (
     ChatSessions, ChatSessionCreate,
     IntegrationConfigs, IntegrationConfigCreate
 )
+from app.schemas.chat import SessionKey
 from app.services.chatbot_service import ChatbotService
 from app.services.integration_service import IntegrationService
 
@@ -299,4 +300,15 @@ async def execute_manual_resolve(session_id: int, session: AsyncSession = Depend
         db_session.chatwoot_conversation_id,
         "resolved"
     )
+
+    # 3. Update local session status
+    from app.services.chat_session_service import ChatSessionService
+    chat_session_service = ChatSessionService(session)
+    key = SessionKey(
+        tenant_id=db_session.tenant_id,
+        account_id=db_session.chatwoot_account_id,
+        conversation_id=db_session.chatwoot_conversation_id
+    )
+    await chat_session_service.update_session_activity(key, "resolved")
+
     return {"message": "Resolution triggered successfully", "session_id": session_id}

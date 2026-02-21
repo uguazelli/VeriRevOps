@@ -1,7 +1,17 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from typing import Optional, List
 
+class SessionKey(BaseModel):
+    tenant_id: int
+    account_id: int
+    conversation_id: int
+
+class OrchestrationInput(BaseModel):
+    session_key: SessionKey
+    user_message: str
+    attachments: Optional[List[dict]] = []
 class ChatSessionCreate(BaseModel):
     tenant_id: int
 

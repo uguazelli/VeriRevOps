@@ -15,6 +15,8 @@ from app.orchestration.nodes import (
     summarize_node,
 )
 from app.core.logger import Log
+from app.core.chatwoot import ChatwootClient
+from app.schemas.chat import OrchestrationInput
 
 # --- Graph Construction ---
 
@@ -61,27 +63,25 @@ def build_chat_graph():
 # Singleton Graph Instance
 chat_graph = build_chat_graph()
 
-from app.core.chatwoot import ChatwootClient
-
-async def invoke_chat_orchestrator(tenant_id: int, account_id: int, session_id: int, message: str, db: AsyncSession, chatwoot_client: ChatwootClient, attachments: Optional[List[dict]] = None):
+async def invoke_chat_orchestrator(input_data: OrchestrationInput, db: AsyncSession, chatwoot_client: ChatwootClient):
     """
     Public entry point using native LangGraph ainvoke.
     """
 
     initial_state = ChatState(
-        tenant_id=tenant_id,
-        account_id=account_id,
-        session_id=session_id,
-        user_message=message,
+        tenant_id=input_data.session_key.tenant_id,
+        account_id=input_data.session_key.account_id,
+        session_id=input_data.session_key.conversation_id,
+        user_message=input_data.user_message,
         chat_history=[],
         intent="chitchat",
         ai_response="",
         summary_needed=False,
-        attachments=attachments or []
+        attachments=input_data.attachments or []
     )
 
     # Execute
     config = {"configurable": {"db": db, "chatwoot_client": chatwoot_client}}
     final_state = await chat_graph.ainvoke(initial_state, config=config)
-    Log.success(f"Orchestration complete for Session {session_id}")
+    Log.success(f"Orchestration complete for Session {input_data.session_key.conversation_id}")
     return final_state['ai_response'], final_state['intent']
