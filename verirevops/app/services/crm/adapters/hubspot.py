@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import httpx
 from typing import Dict, Any, Optional
 from app.services.crm.adapters.base import BaseCRMAdapter
@@ -82,8 +83,6 @@ class HubSpotAdapter(BaseCRMAdapter):
         Uses the Notes object correlated with the Contact.
         """
         url = "https://api.hubapi.com/crm/v3/objects/notes"
-
-        from datetime import datetime, timezone
 
         # Format content for HubSpot (accepts basic HTML)
         body = f"<h3>{title}</h3><p>{content.replace('\n', '<br>')}</p>"

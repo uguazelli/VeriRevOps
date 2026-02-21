@@ -1,3 +1,4 @@
+import asyncio
 from app.core.config import settings
 from typing import List, TypedDict, Annotated, Optional
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
@@ -192,7 +193,6 @@ async def _get_embedding_with_retry(embeddings: GoogleGenerativeAIEmbeddings, qu
         except Exception as e:
             Log.warning(f"Embedding failed for query '{query}' (Attempt {attempt+1}): {e}")
             if attempt < max_retries - 1:
-                import asyncio
                 await asyncio.sleep(1)
     return None
 

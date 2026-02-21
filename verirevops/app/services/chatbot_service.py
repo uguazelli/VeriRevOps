@@ -1,3 +1,5 @@
+import base64
+import traceback
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -90,7 +92,6 @@ class ChatbotService:
 
         except Exception as e:
             Log.error(f"Error in ChatbotService: {e}")
-            import traceback
             traceback.print_exc()
 
     async def _resolve_tenant(self, alias: str):

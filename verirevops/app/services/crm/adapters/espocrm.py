@@ -1,3 +1,4 @@
+import json
 import httpx
 from typing import Dict, Any, Optional
 from app.services.crm.adapters.base import BaseCRMAdapter
@@ -82,7 +83,6 @@ class EspoCRMAdapter(BaseCRMAdapter):
 
     async def find_contact_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Searches for a Lead by email in EspoCRM."""
-        import json
 
         url = f"{self.url}/api/v1/Lead"
         # Using the searchParams structure which is more robust in some Espo versions

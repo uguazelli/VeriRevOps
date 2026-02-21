@@ -1,6 +1,7 @@
-from app.core.config import settings
+import asyncio
 import httpx
 from typing import Optional
+from app.core.config import settings
 from app.core.logger import Log
 
 class ChatwootClient:
@@ -27,7 +28,6 @@ class ChatwootClient:
 
                     if 500 <= response.status_code < 600 and attempt < 2:
                         Log.warning(f"Chatwoot 5xx error ({response.status_code}) on attempt {attempt+1}. Retrying...")
-                        import asyncio
                         await asyncio.sleep(1 * (attempt + 1))
                         continue
 
@@ -36,7 +36,6 @@ class ChatwootClient:
                 except Exception as e:
                     Log.error(f"HTTP/Communication Error on attempt {attempt+1}: {e}")
                     if attempt < 2:
-                        import asyncio
                         await asyncio.sleep(1 * (attempt+1))
                         continue
                     return None
@@ -59,7 +58,6 @@ class ChatwootClient:
 
                     if 500 <= response.status_code < 600 and attempt < 2:
                         Log.warning(f"Chatwoot 5xx error ({response.status_code}) on attempt {attempt+1}. Retrying...")
-                        import asyncio
                         await asyncio.sleep(1 * (attempt + 1))
                         continue
 
@@ -68,7 +66,6 @@ class ChatwootClient:
                 except Exception as e:
                     Log.error(f"HTTP/Communication Error on attempt {attempt+1}: {e}")
                     if attempt < 2:
-                        import asyncio
                         await asyncio.sleep(1 * (attempt+1))
                         continue
                     return None
@@ -126,7 +123,6 @@ class ChatwootClient:
                     # If we get a 5xx, we retry
                     if 500 <= response.status_code < 600 and attempt < 2:
                         Log.warning(f"Chatwoot 5xx error ({response.status_code}) on attempt {attempt+1}. Retrying...")
-                        import asyncio
                         await asyncio.sleep(1 * (attempt + 1))
                         continue
 
@@ -135,7 +131,6 @@ class ChatwootClient:
                 except Exception as e:
                     Log.error(f"HTTP/Communication Error on attempt {attempt+1}: {e}")
                     if attempt < 2:
-                        import asyncio
                         await asyncio.sleep(1 * (attempt+1))
                         continue
                     return []

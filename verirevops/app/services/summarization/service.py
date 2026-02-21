@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -223,8 +224,6 @@ class SummarizationService:
         if not messages:
             return "Unknown Period"
 
-        from datetime import datetime
-
         # Chatwoot created_at is usually Unix timestamp (integer)
         timestamps = []
         for msg in messages:
@@ -315,8 +314,6 @@ class SummarizationService:
                 await adapter.add_note(external_id, "Conversation Summary", summary)
 
     async def _update_session_status(self, tenant_id: int, account_id: int, conversation_id: int, status: str):
-        """Updates the status and activity timestamp for a session."""
-        from datetime import datetime
         stmt = (
             update(ChatSession)
             .where(
