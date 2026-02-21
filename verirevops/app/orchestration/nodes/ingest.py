@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_core.runnables import RunnableConfig
+from sqlalchemy.exc import IntegrityError
 from app.models import ChatSession, Tenant
 from app.core.logger import Log
 from app.rag.retrieve import get_chat_history
@@ -44,8 +45,8 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> d
                 )
                 db.add(tenant)
                 await db.flush()
-            except Exception as e:
-                # Handle race condition or error
+            except IntegrityError:
+                # Handle race condition: another process created the tenant
                 await db.rollback()
                 # Try fetching again
                 result_tenant = await db.execute(stmt_tenant)

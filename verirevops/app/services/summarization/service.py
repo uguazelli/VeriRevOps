@@ -9,6 +9,7 @@ from langchain_core.output_parsers import StrOutputParser
 from app.core.config import settings
 from app.core.chatwoot import ChatwootClient
 from app.core.logger import Log
+from app.core.decorators import log_and_ignore
 from app.models import IntegrationConfig, ContactMapping, ChatSession
 from app.services.crm.factory import CRMFactory
 from app.prompts.llm_prompts import VERI_SUMMARY_SYSTEM_PROMPT
@@ -111,113 +112,109 @@ class SummarizationService:
         """
         Log.info(f"🚀 Starting summarization for Conversation {conversation_id} (Tenant {tenant_id}, Status: {status})")
 
-        try:
-            # 0. Get Session to find last_summarized_message_id
-            stmt = select(ChatSession).where(
-                ChatSession.tenant_id == tenant_id,
-                ChatSession.chatwoot_account_id == account_id,
-                ChatSession.chatwoot_conversation_id == conversation_id
-            )
-            res = await self.db.execute(stmt)
-            session = res.scalars().first()
+        # 0. Get Session to find last_summarized_message_id
+        stmt = select(ChatSession).where(
+            ChatSession.tenant_id == tenant_id,
+            ChatSession.chatwoot_account_id == account_id,
+            ChatSession.chatwoot_conversation_id == conversation_id
+        )
+        res = await self.db.execute(stmt)
+        session = res.scalars().first()
 
-            last_id = session.last_summarized_message_id if session else None
+        last_id = session.last_summarized_message_id if session else None
 
-            # 1. Fetch incremental messages from Chatwoot (Source of Truth)
-            # We fetch messages AFTER last_id and UP TO (before) latest_message_id if provided
-            fetch_before = latest_message_id + 1 if latest_message_id else None
-            Log.info(f"🔍 Summarization window: after={last_id}, before={fetch_before}")
+        # 1. Fetch incremental messages from Chatwoot (Source of Truth)
+        # We fetch messages AFTER last_id and UP TO (before) latest_message_id if provided
+        fetch_before = latest_message_id + 1 if latest_message_id else None
+        Log.info(f"🔍 Summarization window: after={last_id}, before={fetch_before}")
 
-            incremental_messages = await self.chatwoot_client.get_messages(
-                account_id,
-                conversation_id,
-                after=last_id,
-                before=fetch_before,
-                limit=100
-            )
+        incremental_messages = await self.chatwoot_client.get_messages(
+            account_id,
+            conversation_id,
+            after=last_id,
+            before=fetch_before,
+            limit=100
+        )
 
-            if not incremental_messages:
-                Log.info(f"No new messages for Conversation {conversation_id} (last_id: {last_id}, up_to: {latest_message_id}). Skipping.")
-                return
+        if not incremental_messages:
+            Log.info(f"No new messages for Conversation {conversation_id} (last_id: {last_id}, up_to: {latest_message_id}). Skipping.")
+            return
 
-            msg_ids = [m.get("id") for m in incremental_messages]
-            Log.info(f"📦 Found {len(incremental_messages)} incremental messages: {msg_ids}")
+        msg_ids = [m.get("id") for m in incremental_messages]
+        Log.info(f"📦 Found {len(incremental_messages)} incremental messages: {msg_ids}")
 
-            # Determine tracking ID for updates
-            tracking_id = latest_message_id or incremental_messages[-1].get("id")
+        # Determine tracking ID for updates
+        tracking_id = latest_message_id or incremental_messages[-1].get("id")
 
-            # 2. Format transcript for LLM
-            transcript = self._format_messages(incremental_messages)
-            Log.info(f"📝 Transcript length: {len(transcript)} chars")
-            if not transcript.strip():
-                Log.info(f"No valid transcript content for Conversation {conversation_id}. Skipping.")
-                return
+        # 2. Format transcript for LLM
+        transcript = self._format_messages(incremental_messages)
+        Log.info(f"📝 Transcript length: {len(transcript)} chars")
+        if not transcript.strip():
+            Log.info(f"No valid transcript content for Conversation {conversation_id}. Skipping.")
+            return
 
-            # 3. Calculate Date/Time Range
-            date_range = self._calculate_date_range(incremental_messages)
+        # 3. Calculate Date/Time Range
+        date_range = self._calculate_date_range(incremental_messages)
 
-            # 4. Generate Summary
-            summary = await self._generate_summary(transcript, date_range)
+        # 4. Generate Summary
+        summary = await self._generate_summary(transcript, date_range)
 
-            if not summary:
-                Log.error("Failed to generate summary.")
-                return
+        if not summary:
+            Log.error("Failed to generate summary.")
+            return
 
-            # 5. Push Private Note to Chatwoot
-            await self.chatwoot_client.send_message(account_id, conversation_id, summary, private=True)
+        # 5. Push Private Note to Chatwoot
+        await self.chatwoot_client.send_message(account_id, conversation_id, summary, private=True)
 
-            # 6. Optional: Push to CRM (Only on Resolve)
-            if status == "resolved":
-                # If contact_id not provided, try to resolve it
-                if not contact_id:
-                    conv_data = await self.chatwoot_client.get_conversation(account_id, conversation_id)
-                    conversation = conv_data.get("payload") if conv_data and "payload" in conv_data else conv_data
+        # 6. Optional: Push to CRM (Only on Resolve)
+        if status == "resolved":
+            # If contact_id not provided, try to resolve it
+            if not contact_id:
+                conv_data = await self.chatwoot_client.get_conversation(account_id, conversation_id)
+                conversation = conv_data.get("payload") if conv_data and "payload" in conv_data else conv_data
 
-                    if conversation:
-                        # 1. Direct field
-                        contact_id = conversation.get("contact_id")
-                        # 2. Inside contact_inbox (Common in webhook data)
+                if conversation:
+                    # 1. Direct field
+                    contact_id = conversation.get("contact_id")
+                    # 2. Inside contact_inbox (Common in webhook data)
+                    if not contact_id:
+                        contact_id = conversation.get("contact_inbox", {}).get("contact_id")
+                    # 3. Inside meta (Common in API responses)
+                    if not contact_id:
+                        meta = conversation.get("meta", {})
+                        # sender is standard for API v1
+                        contact_id = meta.get("sender", {}).get("id")
+                        # contact is sometimes seen in SDKs/specific events
                         if not contact_id:
-                            contact_id = conversation.get("contact_inbox", {}).get("contact_id")
-                        # 3. Inside meta (Common in API responses)
-                        if not contact_id:
-                            meta = conversation.get("meta", {})
-                            # sender is standard for API v1
-                            contact_id = meta.get("sender", {}).get("id")
-                            # contact is sometimes seen in SDKs/specific events
-                            if not contact_id:
-                                contact_id = meta.get("contact", {}).get("id")
+                            contact_id = meta.get("contact", {}).get("id")
 
-                if contact_id:
-                    await self._push_to_crms(tenant_id, contact_id, summary)
-                else:
-                    Log.warning(f"Could not resolve contact_id for conversation {conversation_id}. Skipping CRM sync.")
+            if contact_id:
+                await self._push_to_crms(tenant_id, contact_id, summary)
+            else:
+                Log.warning(f"Could not resolve contact_id for conversation {conversation_id}. Skipping CRM sync.")
 
-            # 7. Update tracking ID (Lock the progress for next summary)
-            if tracking_id:
-                if session:
-                    session.last_summarized_message_id = tracking_id
-                    session.status = status
-                    Log.info(f"📍 Updated session {conversation_id} tracking to message {tracking_id} and status {status}")
-                else:
-                    # Need to create session if it doesn't exist
-                    new_session = ChatSession(
-                        id=conversation_id,
-                        tenant_id=tenant_id,
-                        chatwoot_account_id=account_id,
-                        chatwoot_conversation_id=conversation_id,
-                        last_summarized_message_id=tracking_id,
-                        status=status,
-                        last_activity_at=datetime.utcnow()
-                    )
-                    self.db.add(new_session)
-                    Log.info(f"📍 Created new session {conversation_id} with tracking message {tracking_id} and status {status}")
-                await self.db.commit()
+        # 7. Update tracking ID (Lock the progress for next summary)
+        if tracking_id:
+            if session:
+                session.last_summarized_message_id = tracking_id
+                session.status = status
+                Log.info(f"📍 Updated session {conversation_id} tracking to message {tracking_id} and status {status}")
+            else:
+                # Need to create session if it doesn't exist
+                new_session = ChatSession(
+                    id=conversation_id,
+                    tenant_id=tenant_id,
+                    chatwoot_account_id=account_id,
+                    chatwoot_conversation_id=conversation_id,
+                    last_summarized_message_id=tracking_id,
+                    status=status,
+                    last_activity_at=datetime.utcnow()
+                )
+                self.db.add(new_session)
+                Log.info(f"📍 Created new session {conversation_id} with tracking message {tracking_id} and status {status}")
+            await self.db.commit()
 
             Log.success(f"✨ Summarization complete for Conversation {conversation_id}")
-        except Exception as e:
-            Log.error(f"Error in summarize_conversation for {conversation_id}: {e}")
-            await self.db.rollback()
 
     def _calculate_date_range(self, messages: list) -> str:
         """Calculates the date/time range from a list of Chatwoot messages."""
@@ -258,26 +255,23 @@ class SummarizationService:
             lines.append(f"{sender}: {content}")
         return "\n".join(lines)
 
+    @log_and_ignore(default_return="", log_level="error")
     async def _generate_summary(self, transcript: str, date_range: str) -> str:
         """Invokes the LLM to generate the Veri-Summary."""
-        try:
-            llm = ChatGoogleGenerativeAI(
-                model=settings.MODEL,
-                temperature=settings.TEMPERATURE,
-                google_api_key=settings.GOOGLE_API_KEY
-            )
+        llm = ChatGoogleGenerativeAI(
+            model=settings.MODEL,
+            temperature=settings.TEMPERATURE,
+            google_api_key=settings.GOOGLE_API_KEY
+        )
 
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", VERI_SUMMARY_SYSTEM_PROMPT),
-                ("human", "Summary Period: {date_range}\n\nPlease summarize the following conversation:\n\n{transcript}")
-            ])
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", VERI_SUMMARY_SYSTEM_PROMPT),
+            ("human", "Summary Period: {date_range}\n\nPlease summarize the following conversation:\n\n{transcript}")
+        ])
 
-            chain = prompt | llm | StrOutputParser()
-            summary = await chain.ainvoke({"transcript": transcript, "date_range": date_range})
-            return summary
-        except Exception as e:
-            Log.error(f"LLM Summarization failed: {e}")
-            return ""
+        chain = prompt | llm | StrOutputParser()
+        summary = await chain.ainvoke({"transcript": transcript, "date_range": date_range})
+        return summary
 
     async def _push_to_crms(self, tenant_id: int, cw_contact_id: int, summary: str):
         """Finds mapped CRM contacts and adds the summary as a note."""

@@ -29,13 +29,9 @@ async def get_tenants(session: AsyncSession = Depends(get_db)):
 async def create_tenant(tenant: TenantCreate, session: AsyncSession = Depends(get_db)):
     db_tenant = Tenant(**tenant.model_dump())
     session.add(db_tenant)
-    try:
-        await session.commit()
-        await session.refresh(db_tenant)
-        return db_tenant
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    await session.commit()
+    await session.refresh(db_tenant)
+    return db_tenant
 
 
 @router.put("/tenants/{tenant_id}", response_model=Tenants)
@@ -48,13 +44,9 @@ async def update_tenant(tenant_id: int, tenant: TenantCreate, session: AsyncSess
     for key, value in tenant_data.items():
         setattr(db_tenant, key, value)
 
-    try:
-        await session.commit()
-        await session.refresh(db_tenant)
-        return db_tenant
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    await session.commit()
+    await session.refresh(db_tenant)
+    return db_tenant
 
 
 @router.delete("/tenants/{tenant_id}")
@@ -63,13 +55,9 @@ async def delete_tenant(tenant_id: int, session: AsyncSession = Depends(get_db))
     if not db_tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    try:
-        await session.delete(db_tenant)
-        await session.commit()
-        return {"message": "Tenant deleted successfully"}
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    await session.delete(db_tenant)
+    await session.commit()
+    return {"message": "Tenant deleted successfully"}
 
 
 # --- Subscriptions CRUD ---
@@ -100,28 +88,21 @@ async def get_subscriptions(session: AsyncSession = Depends(get_db)):
 async def create_subscription(sub: SubscriptionCreate, session: AsyncSession = Depends(get_db)):
     db_sub = Subscription(**sub.model_dump())
     session.add(db_sub)
-    try:
-        await session.commit()
-        await session.refresh(db_sub)
+    await session.commit()
+    await session.refresh(db_sub)
 
-        # Load tenant relationship for response
-        # Using a separate query or refresh with options if needed, but explicit get is safe
-        # db_sub.tenant is likely not loaded yet unless we eagerly loaded it, but we just inserted it.
-        # We can just fetch the name.
-        tenant = await session.get(Tenant, sub.tenant_id)
+    # Load tenant relationship for response
+    tenant = await session.get(Tenant, sub.tenant_id)
 
-        return Subscriptions(
-            id=db_sub.id,
-            tenant_id=db_sub.tenant_id,
-            quota_limit=db_sub.quota_limit,
-            usage_count=db_sub.usage_count,
-            start_date=db_sub.start_date,
-            end_date=db_sub.end_date,
-            tenant_name=tenant.name if tenant else None
-        )
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    return Subscriptions(
+        id=db_sub.id,
+        tenant_id=db_sub.tenant_id,
+        quota_limit=db_sub.quota_limit,
+        usage_count=db_sub.usage_count,
+        start_date=db_sub.start_date,
+        end_date=db_sub.end_date,
+        tenant_name=tenant.name if tenant else None
+    )
 
 
 @router.put("/subscriptions/{subscription_id}", response_model=Subscriptions)
@@ -134,24 +115,20 @@ async def update_subscription(subscription_id: int, sub: SubscriptionCreate, ses
     for key, value in sub_data.items():
         setattr(db_sub, key, value)
 
-    try:
-        await session.commit()
-        await session.refresh(db_sub)
+    await session.commit()
+    await session.refresh(db_sub)
 
-        tenant = await session.get(Tenant, db_sub.tenant_id)
+    tenant = await session.get(Tenant, db_sub.tenant_id)
 
-        return Subscriptions(
-            id=db_sub.id,
-            tenant_id=db_sub.tenant_id,
-            quota_limit=db_sub.quota_limit,
-            usage_count=db_sub.usage_count,
-            start_date=db_sub.start_date,
-            end_date=db_sub.end_date,
-            tenant_name=tenant.name if tenant else None
-        )
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    return Subscriptions(
+        id=db_sub.id,
+        tenant_id=db_sub.tenant_id,
+        quota_limit=db_sub.quota_limit,
+        usage_count=db_sub.usage_count,
+        start_date=db_sub.start_date,
+        end_date=db_sub.end_date,
+        tenant_name=tenant.name if tenant else None
+    )
 
 
 @router.delete("/subscriptions/{subscription_id}")
@@ -160,13 +137,9 @@ async def delete_subscription(subscription_id: int, session: AsyncSession = Depe
     if not db_sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    try:
-        await session.delete(db_sub)
-        await session.commit()
-        return {"message": "Subscription deleted successfully"}
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    await session.delete(db_sub)
+    await session.commit()
+    return {"message": "Subscription deleted successfully"}
 
 
 # --- Chat Sessions CRUD ---
@@ -192,21 +165,17 @@ async def get_chat_sessions(session: AsyncSession = Depends(get_db)):
 async def create_chat_session(session_in: ChatSessionCreate, session: AsyncSession = Depends(get_db)):
     db_session = ChatSession(tenant_id=session_in.tenant_id)
     session.add(db_session)
-    try:
-        await session.commit()
-        await session.refresh(db_session)
+    await session.commit()
+    await session.refresh(db_session)
 
-        tenant = await session.get(Tenant, db_session.tenant_id)
+    tenant = await session.get(Tenant, db_session.tenant_id)
 
-        return ChatSessions(
-            id=db_session.id,
-            tenant_id=db_session.tenant_id,
-            created_at=db_session.created_at,
-            tenant_name=tenant.name if tenant else None
-        )
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    return ChatSessions(
+        id=db_session.id,
+        tenant_id=db_session.tenant_id,
+        created_at=db_session.created_at,
+        tenant_name=tenant.name if tenant else None
+    )
 
 
 @router.put("/chat_sessions/{session_id}", response_model=ChatSessions)
@@ -219,21 +188,17 @@ async def update_chat_session(session_id: int, session_in: ChatSessionCreate, se
 
     db_session.tenant_id = session_in.tenant_id
 
-    try:
-        await session.commit()
-        await session.refresh(db_session)
+    await session.commit()
+    await session.refresh(db_session)
 
-        tenant = await session.get(Tenant, db_session.tenant_id)
+    tenant = await session.get(Tenant, db_session.tenant_id)
 
-        return ChatSessions(
-            id=db_session.id,
-            tenant_id=db_session.tenant_id,
-            created_at=db_session.created_at,
-            tenant_name=tenant.name if tenant else None
-        )
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    return ChatSessions(
+        id=db_session.id,
+        tenant_id=db_session.tenant_id,
+        created_at=db_session.created_at,
+        tenant_name=tenant.name if tenant else None
+    )
 
 
 @router.delete("/chat_sessions/{session_id}")
@@ -242,13 +207,9 @@ async def delete_chat_session(session_id: int, session: AsyncSession = Depends(g
     if not db_session:
         raise HTTPException(status_code=404, detail="Chat session not found")
 
-    try:
-        await session.delete(db_session)
-        await session.commit()
-        return {"message": "Chat session deleted successfully"}
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    await session.delete(db_session)
+    await session.commit()
+    return {"message": "Chat session deleted successfully"}
 
 
 # --- Integration Config CRUD ---
@@ -264,13 +225,9 @@ async def get_integrations(session: AsyncSession = Depends(get_db)):
 async def create_integration(config_in: IntegrationConfigCreate, session: AsyncSession = Depends(get_db)):
     db_config = IntegrationConfig(**config_in.model_dump())
     session.add(db_config)
-    try:
-        await session.commit()
-        await session.refresh(db_config)
-        return db_config
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    await session.commit()
+    await session.refresh(db_config)
+    return db_config
 
 @router.put("/integrations/{config_id}", response_model=IntegrationConfigs)
 async def update_integration(config_id: int, config_in: IntegrationConfigCreate, session: AsyncSession = Depends(get_db)):
@@ -282,13 +239,9 @@ async def update_integration(config_id: int, config_in: IntegrationConfigCreate,
     for key, value in config_data.items():
         setattr(db_config, key, value)
 
-    try:
-        await session.commit()
-        await session.refresh(db_config)
-        return db_config
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    await session.commit()
+    await session.refresh(db_config)
+    return db_config
 
 @router.delete("/integrations/{config_id}")
 async def delete_integration(config_id: int, session: AsyncSession = Depends(get_db)):
@@ -296,13 +249,9 @@ async def delete_integration(config_id: int, session: AsyncSession = Depends(get
     if not db_config:
         raise HTTPException(status_code=404, detail="Configuration not found")
 
-    try:
-        await session.delete(db_config)
-        await session.commit()
-        return {"message": "Configuration deleted successfully"}
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+    await session.delete(db_config)
+    await session.commit()
+    return {"message": "Configuration deleted successfully"}
 
 # --- Auto-Resolve Manual Execution ---
 
@@ -344,12 +293,9 @@ async def execute_manual_resolve(session_id: int, session: AsyncSession = Depend
         raise HTTPException(status_code=400, detail="Could not resolve Chatwoot client")
 
     # 2. Trigger resolution in Chatwoot
-    try:
-        await client.update_status(
-            db_session.chatwoot_account_id,
-            db_session.chatwoot_conversation_id,
-            "resolved"
-        )
-        return {"message": "Resolution triggered successfully", "session_id": session_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to trigger resolution: {str(e)}")
+    await client.update_status(
+        db_session.chatwoot_account_id,
+        db_session.chatwoot_conversation_id,
+        "resolved"
+    )
+    return {"message": "Resolution triggered successfully", "session_id": session_id}

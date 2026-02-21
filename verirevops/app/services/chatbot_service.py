@@ -25,74 +25,68 @@ class ChatbotService:
             Log.warning("Incomplete webhook data: No content or attachments")
             return
 
+        # 1. Resolve Tenant
+        tenant = await self._resolve_tenant(alias)
+        if not tenant:
+            return
+        tenant_id = tenant.id
+
+        # Update Session Activity and Status
+        await self._update_session_activity(tenant_id, account_id, conversation_id, status)
+
         # Guard: Human handling
-        try:
-            # 1. Resolve Tenant
-            tenant = await self._resolve_tenant(alias)
-            if not tenant:
-                return
-            tenant_id = tenant.id
+        if status == "open":
+            Log.info(f"Conversation {conversation_id} is 'open'. Bot will ignore.")
+            return
 
-            # Update Session Activity and Status
-            await self._update_session_activity(tenant_id, account_id, conversation_id, status)
+        # 2. Resolve Subscription
+        stmt_sub = select(Subscription).where(Subscription.tenant_id == tenant_id)
+        result_sub = await self.db.execute(stmt_sub)
+        subscription = result_sub.scalars().first()
 
-            # Guard: Human handling
-            if status == "open":
-                Log.info(f"Conversation {conversation_id} is 'open'. Bot will ignore.")
-                return
+        if not subscription:
+            Log.warning(f"Tenant {tenant_id} '{alias}' has no active subscription.")
+            return
 
-            # 2. Resolve Subscription
-            stmt_sub = select(Subscription).where(Subscription.tenant_id == tenant_id)
-            result_sub = await self.db.execute(stmt_sub)
-            subscription = result_sub.scalars().first()
+        # Check limits
+        now = datetime.now()
+        if subscription.end_date and now > subscription.end_date:
+            Log.warning(f"Tenant {tenant_id} subscription expired on {subscription.end_date}.")
+            return
 
-            if not subscription:
-                Log.warning(f"Tenant {tenant_id} '{alias}' has no active subscription.")
-                return
+        if subscription.usage_count >= subscription.quota_limit:
+            Log.warning(f"Tenant {tenant_id} quota reached: {subscription.usage_count}/{subscription.quota_limit}")
+            return
 
-            # Check limits
-            now = datetime.now()
-            if subscription.end_date and now > subscription.end_date:
-                Log.warning(f"Tenant {tenant_id} subscription expired on {subscription.end_date}.")
-                return
+        # 3. Resolve Client
+        client = await self._resolve_client(tenant_id)
 
-            if subscription.usage_count >= subscription.quota_limit:
-                Log.warning(f"Tenant {tenant_id} quota reached: {subscription.usage_count}/{subscription.quota_limit}")
-                return
+        # 3. Process Attachments
+        attachments = await self._process_attachments(raw_attachments, client)
 
-            # 3. Resolve Client
-            client = await self._resolve_client(tenant_id)
+        # Guard: No content at all
+        if raw_attachments and not attachments and not content.strip():
+            await self._handle_download_failure(client, account_id, conversation_id)
+            return
 
-            # 3. Process Attachments
-            attachments = await self._process_attachments(raw_attachments, client)
+        # 4. Invoke Orchestrator
+        ai_response, intent = await invoke_chat_orchestrator(
+            tenant_id, account_id, conversation_id, content, self.db, client, attachments=attachments
+        )
+        Log.orchestrator(f"Response: {ai_response} | Intent: {intent}")
 
-            # Guard: No content at all
-            if raw_attachments and not attachments and not content.strip():
-                await self._handle_download_failure(client, account_id, conversation_id)
-                return
+        # 6. Send Response and Manage Status
+        await self._send_ai_response(client, account_id, conversation_id, ai_response, intent)
 
-            # 4. Invoke Orchestrator
-            ai_response, intent = await invoke_chat_orchestrator(
-                tenant_id, account_id, conversation_id, content, self.db, client, attachments=attachments
-            )
-            Log.orchestrator(f"Response: {ai_response} | Intent: {intent}")
-
-            # 6. Send Response and Manage Status
-            await self._send_ai_response(client, account_id, conversation_id, ai_response, intent)
-
-            # 7. Increment Usage
-            stmt_inc = (
-                update(Subscription)
-                .where(Subscription.id == subscription.id)
-                .values(usage_count=Subscription.usage_count + 1)
-            )
-            await self.db.execute(stmt_inc)
-            await self.db.commit()
-            Log.info(f"Incremented usage for tenant {tenant_id}. New count: {subscription.usage_count + 1}")
-
-        except Exception as e:
-            Log.error(f"Error in ChatbotService: {e}")
-            traceback.print_exc()
+        # 7. Increment Usage
+        stmt_inc = (
+            update(Subscription)
+            .where(Subscription.id == subscription.id)
+            .values(usage_count=Subscription.usage_count + 1)
+        )
+        await self.db.execute(stmt_inc)
+        await self.db.commit()
+        Log.info(f"Incremented usage for tenant {tenant_id}. New count: {subscription.usage_count + 1}")
 
     async def _resolve_tenant(self, alias: str):
         """Resolves tenant from alias with guard clause and activation check."""

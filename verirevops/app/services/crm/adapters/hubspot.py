@@ -3,6 +3,7 @@ import httpx
 from typing import Dict, Any, Optional
 from app.services.crm.adapters.base import BaseCRMAdapter
 from app.core.logger import Log
+from app.core.decorators import with_retries
 
 class HubSpotAdapter(BaseCRMAdapter):
     """
@@ -18,6 +19,7 @@ class HubSpotAdapter(BaseCRMAdapter):
             "Content-Type": "application/json"
         }
 
+    @with_retries(attempts=3, log_message="HubSpot create_contact failed")
     async def create_contact(self, contact_data: Dict[str, Any]) -> Optional[str]:
         """
         Creates a contact in HubSpot.
@@ -27,23 +29,19 @@ class HubSpotAdapter(BaseCRMAdapter):
         payload = {"properties": properties}
 
         async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(self.base_url, json=payload, headers=self.headers)
+            response = await client.post(self.base_url, json=payload, headers=self.headers)
 
-                if response.status_code in [200, 201]:
-                    Log.success("Contact created in HubSpot")
-                    return response.json().get("id")
+            if response.status_code in [200, 201]:
+                Log.success("Contact created in HubSpot")
+                return response.json().get("id")
 
-                # Handling 409 Conflict (Contact already exists)
-                if response.status_code == 409:
-                    Log.info("Conflict detected in HubSpot. Attempting to recover and update.")
-                    return await self._handle_conflict(response, contact_data)
+            # Handling 409 Conflict (Contact already exists)
+            if response.status_code == 409:
+                Log.info("Conflict detected in HubSpot. Attempting to recover and update.")
+                return await self._handle_conflict(response, contact_data)
 
-                Log.error(f"HubSpot create contact failed: {response.status_code} - {response.text}")
-                return None
-            except httpx.HTTPError as e:
-                Log.error(f"HTTP Error connecting to HubSpot: {e}")
-                return None
+            response.raise_for_status()
+            return None
 
     async def _handle_conflict(self, response: httpx.Response, contact_data: Dict[str, Any]) -> Optional[str]:
         """Extracts existing ID from conflict response and updates the contact."""
@@ -63,6 +61,7 @@ class HubSpotAdapter(BaseCRMAdapter):
             Log.error(f"Error handling HubSpot conflict: {e}")
             return None
 
+    @with_retries(attempts=3, log_message="HubSpot update_contact failed")
     async def update_contact(self, external_id: str, contact_data: Dict[str, Any]) -> bool:
         """Updates a contact in HubSpot."""
         properties = self._map_chatwoot_to_hubspot(contact_data)
@@ -70,13 +69,13 @@ class HubSpotAdapter(BaseCRMAdapter):
         url = f"{self.base_url}/{external_id}"
 
         async with httpx.AsyncClient() as client:
-            try:
-                response = await client.patch(url, json=payload, headers=self.headers)
-                return response.status_code in [200, 204]
-            except httpx.HTTPError as e:
-                Log.error(f"HTTP Error updating HubSpot contact: {e}")
-                return False
+            response = await client.patch(url, json=payload, headers=self.headers)
+            if response.status_code in [200, 204]:
+                return True
+            response.raise_for_status()
+            return False
 
+    @with_retries(attempts=3, log_message="HubSpot add_note failed")
     async def add_note(self, external_id: str, title: str, content: str) -> bool:
         """
         Adds a note to a contact in HubSpot.
@@ -106,18 +105,15 @@ class HubSpotAdapter(BaseCRMAdapter):
         }
 
         async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(url, json=payload, headers=self.headers)
-                if response.status_code in [200, 201]:
-                    Log.success(f"Summary note added to HubSpot contact {external_id}")
-                    return True
+            response = await client.post(url, json=payload, headers=self.headers)
+            if response.status_code in [200, 201]:
+                Log.success(f"Summary note added to HubSpot contact {external_id}")
+                return True
 
-                Log.error(f"Failed to add note to HubSpot: {response.status_code} - {response.text}")
-                return False
-            except httpx.HTTPError as e:
-                Log.error(f"HTTP Error adding HubSpot note: {e}")
-                return False
+            response.raise_for_status()
+            return False
 
+    @with_retries(attempts=3, log_message="HubSpot find_contact_by_email failed")
     async def find_contact_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Searches for a contact by email in HubSpot."""
         search_url = f"{self.base_url}/search"
@@ -132,15 +128,13 @@ class HubSpotAdapter(BaseCRMAdapter):
         }
 
         async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(search_url, json=payload, headers=self.headers)
-                if response.status_code == 200:
-                    results = response.json().get("results", [])
-                    return results[0] if results else None
-                return None
-            except httpx.HTTPError as e:
-                Log.error(f"HTTP Error searching HubSpot contact: {e}")
-                return None
+            response = await client.post(search_url, json=payload, headers=self.headers)
+            if response.status_code == 200:
+                results = response.json().get("results", [])
+                return results[0] if results else None
+
+            response.raise_for_status()
+            return None
 
     def _map_chatwoot_to_hubspot(self, data: Dict[str, Any]) -> Dict[str, str]:
         """Maps Chatwoot contact fields to HubSpot properties."""

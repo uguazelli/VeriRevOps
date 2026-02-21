@@ -16,6 +16,7 @@ async def _resolve_tenant(db, alias: str) -> Optional[Tenant]:
     result = await db.execute(stmt)
     return result.scalars().first()
 
+
 async def process_webhook_message(data: dict, alias: str):
     message_type = data.get("message_type")
     private = data.get("private", False)

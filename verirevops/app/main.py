@@ -7,7 +7,13 @@ from app.routers import admin, chatwoot, rag, health
 from app.core.db import engine
 from app.core.logger import Log
 from app.models import Base
-from app.core.exceptions import global_exception_handler, http_exception_handler
+from app.core.exceptions import (
+    global_exception_handler,
+    http_exception_handler,
+    sqlalchemy_exception_handler,
+    integrity_exception_handler
+)
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import alembic.config
 import alembic.command
 from concurrent.futures import ThreadPoolExecutor
@@ -50,5 +56,7 @@ app.include_router(rag.router)
 
 app.add_exception_handler(Exception, global_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+app.add_exception_handler(IntegrityError, integrity_exception_handler)
 
 app.mount("/admin", StaticFiles(directory="app/admin", html=True), name="admin")

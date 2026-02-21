@@ -1,4 +1,3 @@
-import asyncio
 from app.core.config import settings
 from typing import List, TypedDict, Annotated, Optional
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
@@ -13,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from flashrank import Ranker, RerankRequest
 from langchain_core.runnables import RunnableConfig
 from app.core.logger import Log
-
+from app.core.decorators import with_retries, log_and_ignore
 from app.models import RagChunk, RagFile
 from app.core.chatwoot import ChatwootClient
 from app.prompts import (
@@ -43,13 +42,10 @@ class RAGState(TypedDict):
     user_query: Annotated[str, "Original query from user"]
     account_id: Annotated[int, "The Chatwoot account ID"]
     chat_history: Annotated[List[BaseMessage], "Last messages from DB"]
-
     contextualized_query: Annotated[str, "Step 1: Query rewritten with history"]
     expanded_queries: Annotated[List[str], "Step 2: Variations of the query"]
-
     retrieved_docs: Annotated[List[Document], "Step 3: Raw results from Vector DB"]
     reranked_docs: Annotated[List[Document], "Step 4: Top K results after reranking"]
-
     final_answer: Annotated[str, "Step 5: The LLM response"]
 
 
@@ -185,16 +181,13 @@ async def retrieve_documents(state: RAGState, config: RunnableConfig) -> dict:
     Log.rag(f"Found {len(all_docs)} raw docs, {len(unique_list)} unique.")
     return {"retrieved_docs": unique_list}
 
-async def _get_embedding_with_retry(embeddings: GoogleGenerativeAIEmbeddings, query: str, max_retries: int = 3) -> Optional[List[float]]:
+
+@with_retries(attempts=3, delay=1.0, log_message="Embedding failed")
+async def _get_embedding_with_retry(embeddings: GoogleGenerativeAIEmbeddings, query: str) -> Optional[List[float]]:
     """Helper to fetch embeddings with exponential backoff."""
-    for attempt in range(max_retries):
-        try:
-            return await embeddings.aembed_query(query)
-        except Exception as e:
-            Log.warning(f"Embedding failed for query '{query}' (Attempt {attempt+1}): {e}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(1)
-    return None
+    return await embeddings.aembed_query(query)
+
+
 
 async def _fetch_top_chunks(db: AsyncSession, vector: List[float], tenant_id: int, limit: int = 5) -> List[RagChunk]:
     """Helper to fetch top relevant chunks for a tenant."""
@@ -210,6 +203,7 @@ async def _fetch_top_chunks(db: AsyncSession, vector: List[float], tenant_id: in
 
 
 # --- Node 4: Rerank ---
+@log_and_ignore(default_return={"reranked_docs": []}, log_level="error")
 async def rerank_documents(state: RAGState, config: RunnableConfig) -> dict:
     """
     Reranks retrieved documents using FlashRank for higher precision.
@@ -230,20 +224,16 @@ async def rerank_documents(state: RAGState, config: RunnableConfig) -> dict:
 
     reranked_docs = []
     if reranker:
-        try:
-            rerank_request = RerankRequest(query=query, passages=passages)
-            results = reranker.rerank(rerank_request)
+        rerank_request = RerankRequest(query=query, passages=passages)
+        results = reranker.rerank(rerank_request)
 
-            # Validating results and taking top 5
-            top_k = 5
-            for res in results[:top_k]:
-                reranked_docs.append(Document(
-                    page_content=res["text"],
-                    metadata=res["meta"]
-                ))
-        except Exception as e:
-            Log.error(f"Reranking failed: {e}")
-            reranked_docs = docs[:5] # Fallback to top 5 raw
+        # Validating results and taking top 5
+        top_k = 5
+        for res in results[:top_k]:
+            reranked_docs.append(Document(
+                page_content=res["text"],
+                metadata=res["meta"]
+            ))
     else:
         reranked_docs = docs[:5] # Fallback if reranker not init
 

@@ -12,21 +12,16 @@ class RagService:
 
     async def ingest_file(self, tenant_id: int, filename: str, content: str):
         """Register and process a RAG file."""
-        try:
-            # 1. Register the file
-            new_file = RagFile(tenant_id=tenant_id, filename=filename)
-            self.db.add(new_file)
-            await self.db.commit()
-            await self.db.refresh(new_file)
+        # 1. Register the file
+        new_file = RagFile(tenant_id=tenant_id, filename=filename)
+        self.db.add(new_file)
+        await self.db.commit()
+        await self.db.refresh(new_file)
 
-            # 2. Ingest (Chunk & Embed)
-            num_chunks = await ingest_file_content(self.db, new_file.id, content)
-            Log.success(f"File '{filename}' ingested for Tenant {tenant_id} ({num_chunks} chunks)")
-            return new_file.id, num_chunks
-        except Exception as e:
-            await self.db.rollback()
-            Log.error(f"Failed to ingest file: {e}")
-            raise e
+        # 2. Ingest (Chunk & Embed)
+        num_chunks = await ingest_file_content(self.db, new_file.id, content)
+        Log.success(f"File '{filename}' ingested for Tenant {tenant_id} ({num_chunks} chunks)")
+        return new_file.id, num_chunks
 
 
     async def list_tenant_files(self, tenant_id: int):
@@ -50,9 +45,4 @@ class RagService:
 
     async def perform_search(self, session_id: int, tenant_id: int, query: str):
         """Perform a RAG search using the orchestrator graph."""
-        try:
-            answer = await invoke_rag_graph(session_id, query, self.db, tenant_id)
-            return answer
-        except Exception as e:
-            Log.error(f"RAG Service Search Error: {e}")
-            raise e
+        return await invoke_rag_graph(session_id, query, self.db, tenant_id)
