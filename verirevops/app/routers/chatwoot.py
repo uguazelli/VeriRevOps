@@ -7,6 +7,7 @@ from app.services.chatbot_service import ChatbotService
 from app.services.summarization.service import SummarizationService
 from app.services.crm.service import CRMService
 from app.models.integration import IntegrationConfig
+from app.schemas.chat import ChatwootMessagePayload, ChatwootContactPayload, ChatwootStatusChangePayload
 from typing import Optional
 
 router = APIRouter(prefix="/api", tags=["chatwoot"])
@@ -18,17 +19,26 @@ async def _resolve_tenant(db, alias: str) -> Optional[Tenant]:
 
 
 async def process_webhook_message(data: dict, alias: str):
-    message_type = data.get("message_type")
-    private = data.get("private", False)
+    try:
+        payload = ChatwootMessagePayload(**data)
+    except Exception as e:
+        Log.error(f"Failed to parse Chatwoot message webhook: {e}")
+        return
 
-    if message_type != "incoming" or private:
+    if payload.message_type != "incoming" or payload.private:
         return
 
     async with AsyncSessionLocal() as db:
         service = ChatbotService(db)
-        await service.process_webhook_message(data, alias)
+        await service.process_webhook_message(payload, alias)
 
 async def process_webhook_contact(data: dict, alias: str):
+    try:
+        payload = ChatwootContactPayload(**data)
+    except Exception as e:
+        Log.error(f"Failed to parse Chatwoot contact webhook: {e}")
+        return
+
     async with AsyncSessionLocal() as db:
         tenant = await _resolve_tenant(db, alias)
         if not tenant:
@@ -36,9 +46,15 @@ async def process_webhook_contact(data: dict, alias: str):
             return
 
         service = CRMService(db)
-        await service.sync_contact(tenant.id, data)
+        await service.sync_contact(tenant.id, payload)
 
 async def process_webhook_status_change(data: dict, alias: str):
+    try:
+        payload = ChatwootStatusChangePayload(**data)
+    except Exception as e:
+        Log.error(f"Failed to parse Chatwoot status change webhook: {e}")
+        return
+
     async with AsyncSessionLocal() as db:
         tenant = await _resolve_tenant(db, alias)
         if not tenant:
@@ -50,7 +66,7 @@ async def process_webhook_status_change(data: dict, alias: str):
 
         # Summarize Logic (Status-based)
         sum_service = SummarizationService(db, client)
-        await sum_service.process_webhook_status_change(data, tenant.id)
+        await sum_service.process_webhook_status_change(payload, tenant.id)
 
 @router.post("/webhook/{alias}")
 async def handle_webhook(

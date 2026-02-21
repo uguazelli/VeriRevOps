@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from app.models.integration import IntegrationConfig, ContactMapping
 from app.services.crm.factory import CRMFactory
+from app.schemas.chat import ChatwootContactPayload
 from app.core.logger import Log
 from typing import Dict, Any, Optional
 
@@ -13,21 +14,18 @@ class CRMService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def sync_contact(self, tenant_id: int, contact_data: Dict[str, Any]):
+    async def sync_contact(self, tenant_id: int, payload: ChatwootContactPayload):
         """
         Coordinates the synchronization of a Chatwoot contact to the configured CRM.
         This is designed to be called in a background task.
         """
         # Guard clause: No email, no sync usually
-        email = contact_data.get("email")
-        cw_contact_id = contact_data.get("id")
+        email = payload.email
+        cw_contact_id = payload.id
 
         if not email or not cw_contact_id:
             Log.warning(f"Skipping CRM sync for tenant {tenant_id}: Missing email or contact ID.")
             return
-
-        # Robustness: lowercase email for case-insensitive matching
-        contact_data["email"] = email.lower()
 
         # 1. Look for active CRM integrations for this tenant
         configs = await self._get_active_crm_configs(tenant_id)
@@ -37,7 +35,7 @@ class CRMService:
 
         # 2. Sync with each configured CRM
         for config in configs:
-            await self._sync_with_adapter(config, contact_data, cw_contact_id)
+            await self._sync_with_adapter(config, payload, cw_contact_id)
 
     async def _get_active_crm_configs(self, tenant_id: int):
         """Fetches active CRM integration configurations for a tenant."""
@@ -49,7 +47,7 @@ class CRMService:
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
-    async def _sync_with_adapter(self, config: IntegrationConfig, contact_data: Dict[str, Any], cw_contact_id: int):
+    async def _sync_with_adapter(self, config: IntegrationConfig, payload: ChatwootContactPayload, cw_contact_id: int):
         """Internal helper to sync with a specific adapter using persistent mapping."""
         adapter = CRMFactory.get_adapter(config)
         if not adapter:
@@ -59,13 +57,15 @@ class CRMService:
         try:
             tenant_id = config.tenant_id
             service_name = config.service_name.lower()
-            email = contact_data.get("email")
+            email = payload.email.lower()
+            contact_dict = payload.model_dump()
+            contact_dict["email"] = email # Ensure lowercase
 
             # 1. Check Persistent Mapping first
             external_id = await self._get_mapped_external_id(tenant_id, cw_contact_id, service_name)
 
             if external_id:
-                success = await adapter.update_contact(external_id, contact_data)
+                success = await adapter.update_contact(external_id, contact_dict)
                 if success:
                     return
                 Log.warning(f"Update failed for {service_name} ID {external_id}. Record might be deleted. Falling back to search.")
@@ -76,13 +76,13 @@ class CRMService:
             if existing:
                 external_id = existing.get("id")
                 Log.info(f"Existing {service_name} contact found via email search: {external_id}. Linking.")
-                await adapter.update_contact(external_id, contact_data)
+                await adapter.update_contact(external_id, contact_dict)
                 await self._save_contact_mapping(tenant_id, cw_contact_id, service_name, external_id)
                 return
 
             # 3. Create new contact
             Log.info(f"Creating new {service_name} contact for {email}")
-            new_external_id = await adapter.create_contact(contact_data)
+            new_external_id = await adapter.create_contact(contact_dict)
 
             if new_external_id:
                 await self._save_contact_mapping(tenant_id, cw_contact_id, service_name, new_external_id)

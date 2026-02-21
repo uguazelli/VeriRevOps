@@ -12,3 +12,42 @@ class ChatSessions(BaseModel):
     status: Optional[str] = None
     last_activity_at: Optional[datetime] = None
     tenant_name: Optional[str] = None
+
+class ChatwootAccount(BaseModel):
+    id: int
+
+class ChatwootConversation(BaseModel):
+    id: int
+    status: Optional[str] = None
+    contact_id: Optional[int] = None
+    last_message_id: Optional[int] = None
+
+class ChatwootAttachment(BaseModel):
+    file_type: str
+    data_url: str
+    content_type: Optional[str] = None
+
+class ChatwootMessagePayload(BaseModel):
+    content: Optional[str] = ""
+    account: Optional[ChatwootAccount] = None
+    conversation: Optional[ChatwootConversation] = None
+    attachments: Optional[list[ChatwootAttachment]] = []
+    message_type: Optional[str] = None
+    private: Optional[bool] = False
+
+class ChatwootContactPayload(BaseModel):
+    id: int
+    email: Optional[str] = None
+    name: Optional[str] = None
+    phone_number: Optional[str] = None
+
+class ChatwootStatusChangePayload(BaseModel):
+    account: Optional[ChatwootAccount] = None
+    account_id: Optional[int] = None
+    conversation: Optional[ChatwootConversation] = None
+    id: Optional[int] = None # Conversation ID
+    status: Optional[str] = None
+    # Flexible fields for contact and message tracking
+    contact_inbox: Optional[dict] = None
+    meta: Optional[dict] = None
+    messages: Optional[list[dict]] = None

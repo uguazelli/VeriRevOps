@@ -1,28 +1,26 @@
 import base64
-import traceback
+from typing import Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from app.models import Tenant, IntegrationConfig, Subscription, ChatSession
 from app.orchestration.chat import invoke_chat_orchestrator
 from app.core.chatwoot import get_chatwoot_client, ChatwootClient
+from app.schemas.chat import ChatwootMessagePayload, ChatwootAttachment
 from app.core.logger import Log
 
 class ChatbotService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def process_webhook_message(self, data: dict, alias: str):
-        content = data.get("content") or ""
-        account_id = data.get("account", {}).get("id")
-        conversation = data.get("conversation", {})
-        conversation_id = conversation.get("id")
-        status = conversation.get("status")
-        raw_attachments = data.get("attachments", [])
+    async def process_webhook_message(self, payload: ChatwootMessagePayload, alias: str):
+        content = payload.content or ""
+        account_id = payload.account.id if payload.account else None
+        conversation_id = payload.conversation.id if payload.conversation else None
+        status = payload.conversation.status if payload.conversation else None
 
-        # Guard: Incomplete data
-        if not account_id or not conversation_id or (not content and not raw_attachments):
-            Log.warning("Incomplete webhook data: No content or attachments")
+        if not account_id or not conversation_id:
+            Log.warning(f"Incomplete message payload: account_id={account_id}, conversation_id={conversation_id}")
             return
 
         # 1. Resolve Tenant
@@ -40,32 +38,18 @@ class ChatbotService:
             return
 
         # 2. Resolve Subscription
-        stmt_sub = select(Subscription).where(Subscription.tenant_id == tenant_id)
-        result_sub = await self.db.execute(stmt_sub)
-        subscription = result_sub.scalars().first()
-
+        subscription = await self._resolve_subscription(tenant_id, alias)
         if not subscription:
-            Log.warning(f"Tenant {tenant_id} '{alias}' has no active subscription.")
-            return
-
-        # Check limits
-        now = datetime.now()
-        if subscription.end_date and now > subscription.end_date:
-            Log.warning(f"Tenant {tenant_id} subscription expired on {subscription.end_date}.")
-            return
-
-        if subscription.usage_count >= subscription.quota_limit:
-            Log.warning(f"Tenant {tenant_id} quota reached: {subscription.usage_count}/{subscription.quota_limit}")
             return
 
         # 3. Resolve Client
         client = await self._resolve_client(tenant_id)
 
         # 3. Process Attachments
-        attachments = await self._process_attachments(raw_attachments, client)
+        attachments = await self._process_attachments(payload.attachments, client)
 
         # Guard: No content at all
-        if raw_attachments and not attachments and not content.strip():
+        if payload.attachments and not attachments and not content.strip():
             await self._handle_download_failure(client, account_id, conversation_id)
             return
 
@@ -104,6 +88,28 @@ class ChatbotService:
 
         Log.tenant(tenant.id, f"Resolved for alias '{alias}'")
         return tenant
+
+    async def _resolve_subscription(self, tenant_id: int, alias: str) -> Optional[Subscription]:
+        """Resolves and validates subscription for a tenant."""
+        stmt_sub = select(Subscription).where(Subscription.tenant_id == tenant_id)
+        result_sub = await self.db.execute(stmt_sub)
+        subscription = result_sub.scalars().first()
+
+        if not subscription:
+            Log.warning(f"Tenant {tenant_id} '{alias}' has no active subscription.")
+            return None
+
+        # Check limits
+        now = datetime.now()
+        if subscription.end_date and now > subscription.end_date:
+            Log.warning(f"Tenant {tenant_id} subscription expired on {subscription.end_date}.")
+            return None
+
+        if subscription.usage_count >= subscription.quota_limit:
+            Log.warning(f"Tenant {tenant_id} quota reached: {subscription.usage_count}/{subscription.quota_limit}")
+            return None
+
+        return subscription
 
     async def _resolve_client(self, tenant_id: int) -> ChatwootClient:
         """Resolves the appropriate Chatwoot client for the tenant."""
@@ -146,15 +152,15 @@ class ChatbotService:
         new_status = "open" if intent == "handoff" else "pending"
         await client.update_status(account_id, conversation_id, new_status)
 
-    async def _process_attachments(self, raw_attachments: list, client: ChatwootClient) -> list:
+    async def _process_attachments(self, raw_attachments: list[ChatwootAttachment], client: ChatwootClient) -> list:
         """Processes raw attachments from Chatwoot into a base64-encoded list."""
         if not raw_attachments or not client:
             return []
 
         attachments = []
         for att in raw_attachments:
-            file_url = att.get("data_url")
-            file_type = att.get("file_type")
+            file_url = att.data_url
+            file_type = att.file_type
 
             if not file_url or file_type not in ["image", "audio"]:
                 continue
@@ -164,7 +170,7 @@ class ChatbotService:
                 continue
 
             base64_data = base64.b64encode(file_bytes).decode("utf-8")
-            mime_type = att.get("content_type") or ("image/jpeg" if file_type == "image" else "audio/mpeg")
+            mime_type = att.content_type or ("image/jpeg" if file_type == "image" else "audio/mpeg")
 
             attachments.append({
                 "type": file_type,
@@ -191,11 +197,6 @@ class ChatbotService:
         )
         result = await self.db.execute(stmt)
         if result.rowcount == 0:
-            # Session might not exist yet (e.g. first message)
-            # We don't necessarily need to create it here if ingest node handles it,
-            # but updating it here ensures even if bot ignores 'open' conv, we track it.
-            # Ingest node also creates it, but if it's 'open', we return early before ingest.
-            # So we SHOULD ensure it exists if it doesn't.
             new_session = ChatSession(
                 id=conversation_id,
                 tenant_id=tenant_id,
