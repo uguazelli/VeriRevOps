@@ -31,11 +31,6 @@ const schemas = {
             { name: 'tenant_id', label: 'Tenant', type: 'select', required: true }
         ]
     },
-    chat_messages: {
-        title: 'Chat Messages',
-        headers: ['ID', 'Tenant', 'Session ID', 'Role', 'Content', 'Created At'],
-        fields: [] // Read-only
-    },
     integrations: {
         title: 'Integrations Management',
         headers: ['ID', 'Tenant', 'Service', 'URL', 'API Key', 'Account ID', 'Actions'],
@@ -281,13 +276,6 @@ function renderTable() {
                     <button class="btn-delete" onclick="deleteRecord(${item.id})">Delete</button>
                 </td>
             `);
-        } else if (currentEntity === 'chat_messages') {
-            $tr.append(`<td>${item.id}</td>`);
-            $tr.append(`<td>${tenantName}</td>`);
-            $tr.append(`<td>${item.session_id}</td>`);
-            $tr.append(`<td><strong>${item.role}</strong></td>`);
-            $tr.append(`<td>${item.content.substring(0, 50)}...</td>`);
-            $tr.append(`<td>${new Date(item.created_at).toLocaleString()}</td>`);
         } else if (currentEntity === 'integrations') {
             $tr.append(`<td>${item.id}</td>`);
             $tr.append(`<td>${tenantName}</td>`);

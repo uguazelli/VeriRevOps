@@ -12,12 +12,3 @@ class ChatSessions(BaseModel):
     status: Optional[str] = None
     last_activity_at: Optional[datetime] = None
     tenant_name: Optional[str] = None
-
-class ChatMessages(BaseModel):
-    id: int
-    session_id: Optional[int] = None
-    tenant_id: Optional[int] = None
-    content: str
-    role: str
-    created_at: datetime
-    tenant_name: Optional[str] = None
