@@ -9,6 +9,9 @@ from app.core.chatwoot import get_chatwoot_client, ChatwootClient
 from app.schemas.chat import ChatwootMessagePayload, ChatwootAttachment
 from app.core.logger import Log
 from app.services.tenant_service import TenantService
+from app.services.integration_service import IntegrationService
+from app.services.chat_session_service import ChatSessionService
+from app.services.subscription_service import SubscriptionService
 
 class ChatbotService:
     def __init__(self, db: AsyncSession):
@@ -32,7 +35,8 @@ class ChatbotService:
         tenant_id = tenant.id
 
         # Update Session Activity and Status
-        await self._update_session_activity(tenant_id, account_id, conversation_id, status)
+        chat_session_service = ChatSessionService(self.db)
+        await chat_session_service.update_session_activity(tenant_id, account_id, conversation_id, status)
 
         # Guard: Human handling
         if status == "open":
@@ -40,12 +44,14 @@ class ChatbotService:
             return
 
         # 2. Resolve Subscription
-        subscription = await self._resolve_subscription(tenant_id, alias)
+        subscription_service = SubscriptionService(self.db)
+        subscription = await subscription_service.validate_subscription(tenant_id, alias)
         if not subscription:
             return
 
         # 3. Resolve Client
-        client = await self._resolve_client(tenant_id)
+        integration_service = IntegrationService(self.db)
+        client = await integration_service.resolve_chatwoot_client(tenant_id)
 
         # 3. Process Attachments
         attachments = await self._process_attachments(payload.attachments, client)
@@ -65,51 +71,10 @@ class ChatbotService:
         await self._send_ai_response(client, account_id, conversation_id, ai_response, intent)
 
         # 7. Increment Usage
-        stmt_inc = (
-            update(Subscription)
-            .where(Subscription.id == subscription.id)
-            .values(usage_count=Subscription.usage_count + 1)
-        )
-        await self.db.execute(stmt_inc)
-        await self.db.commit()
-        Log.info(f"Incremented usage for tenant {tenant_id}. New count: {subscription.usage_count + 1}")
+        await subscription_service.increment_usage(subscription.id)
 
 
-    async def _resolve_subscription(self, tenant_id: int, alias: str) -> Optional[Subscription]:
-        """Resolves and validates subscription for a tenant."""
-        stmt_sub = select(Subscription).where(Subscription.tenant_id == tenant_id)
-        result_sub = await self.db.execute(stmt_sub)
-        subscription = result_sub.scalars().first()
 
-        if not subscription:
-            Log.warning(f"Tenant {tenant_id} '{alias}' has no active subscription.")
-            return None
-
-        # Check limits
-        now = datetime.now()
-        if subscription.end_date and now > subscription.end_date:
-            Log.warning(f"Tenant {tenant_id} subscription expired on {subscription.end_date}.")
-            return None
-
-        if subscription.usage_count >= subscription.quota_limit:
-            Log.warning(f"Tenant {tenant_id} quota reached: {subscription.usage_count}/{subscription.quota_limit}")
-            return None
-
-        return subscription
-
-    async def _resolve_client(self, tenant_id: int) -> ChatwootClient:
-        """Resolves the appropriate Chatwoot client for the tenant."""
-        stmt_config = select(IntegrationConfig).where(
-            IntegrationConfig.tenant_id == tenant_id,
-            IntegrationConfig.service_name == "chatwoot"
-        )
-        result_config = await self.db.execute(stmt_config)
-        config = result_config.scalars().first()
-
-        if config:
-            return ChatwootClient(base_url=config.url, api_token=config.api_key)
-
-        return get_chatwoot_client()
 
     async def _handle_download_failure(self, client: ChatwootClient, account_id: int, conversation_id: int):
         """Handles notification when attachments fail to download."""
@@ -167,31 +132,3 @@ class ChatbotService:
         Log.info(f"Processed {len(attachments)} attachments")
         return attachments
 
-    async def _update_session_activity(self, tenant_id: int, account_id: int, conversation_id: int, status: str):
-        """Updates the last_activity_at and status for a chat session."""
-        stmt = (
-            update(ChatSession)
-            .where(
-                ChatSession.tenant_id == tenant_id,
-                ChatSession.chatwoot_account_id == account_id,
-                ChatSession.chatwoot_conversation_id == conversation_id
-            )
-            .values(
-                last_activity_at=datetime.utcnow(),
-                status=status
-            )
-        )
-        result = await self.db.execute(stmt)
-        if result.rowcount == 0:
-            new_session = ChatSession(
-                id=conversation_id,
-                tenant_id=tenant_id,
-                chatwoot_account_id=account_id,
-                chatwoot_conversation_id=conversation_id,
-                status=status,
-                last_activity_at=datetime.utcnow()
-            )
-            self.db.add(new_session)
-
-        await self.db.commit()
-        Log.info(f"Updated activity for session {conversation_id} (Status: {status})")

@@ -12,7 +12,9 @@ from app.core.logger import Log
 from app.core.decorators import log_and_ignore
 from app.schemas.chat import ChatwootStatusChangePayload
 from app.models import IntegrationConfig, ContactMapping, ChatSession
+from app.services.chat_session_service import ChatSessionService
 from app.services.crm.factory import CRMFactory
+from app.services.integration_service import IntegrationService
 from app.prompts.llm_prompts import VERI_SUMMARY_SYSTEM_PROMPT
 
 class SummarizationService:
@@ -38,7 +40,8 @@ class SummarizationService:
             Log.warning(f"Incomplete status change payload: account_id={account_id}, conv_id={conversation_id}, status={status}")
             return
 
-        await self._update_session_status(tenant_id, int(account_id), int(conversation_id), status)
+        chat_session_service = ChatSessionService(self.db)
+        await chat_session_service.update_session_activity(tenant_id, int(account_id), int(conversation_id), status)
 
         if status != "resolved":
             return
@@ -78,13 +81,8 @@ class SummarizationService:
         Log.info(f"🚀 Starting summarization for Conversation {conversation_id} (Tenant {tenant_id}, Status: {status})")
 
         # 0. Get Session to find last_summarized_message_id
-        stmt = select(ChatSession).where(
-            ChatSession.tenant_id == tenant_id,
-            ChatSession.chatwoot_account_id == account_id,
-            ChatSession.chatwoot_conversation_id == conversation_id
-        )
-        res = await self.db.execute(stmt)
-        session = res.scalars().first()
+        chat_session_service = ChatSessionService(self.db)
+        session = await chat_session_service.get_session(tenant_id, account_id, conversation_id)
 
         last_id = session.last_summarized_message_id if session else None
 
@@ -160,25 +158,10 @@ class SummarizationService:
 
         # 7. Update tracking ID (Lock the progress for next summary)
         if tracking_id:
-            if session:
-                session.last_summarized_message_id = tracking_id
-                session.status = status
-                Log.info(f"📍 Updated session {conversation_id} tracking to message {tracking_id} and status {status}")
-            else:
-                # Need to create session if it doesn't exist
-                new_session = ChatSession(
-                    id=conversation_id,
-                    tenant_id=tenant_id,
-                    chatwoot_account_id=account_id,
-                    chatwoot_conversation_id=conversation_id,
-                    last_summarized_message_id=tracking_id,
-                    status=status,
-                    last_activity_at=datetime.utcnow()
-                )
-                self.db.add(new_session)
-                Log.info(f"📍 Created new session {conversation_id} with tracking message {tracking_id} and status {status}")
-            await self.db.commit()
-
+            chat_session_service = ChatSessionService(self.db)
+            await chat_session_service.update_tracking_id(
+                tenant_id, account_id, conversation_id, tracking_id, status
+            )
             Log.success(f"✨ Summarization complete for Conversation {conversation_id}")
 
     def _calculate_date_range(self, messages: list) -> str:
@@ -245,13 +228,11 @@ class SummarizationService:
         # Wait, the mapping table uses (tenant_id, chatwoot_contact_id, service_name)
 
         # 1. Fetch active CRM configs
-        stmt_configs = select(IntegrationConfig).where(
-            IntegrationConfig.tenant_id == tenant_id,
-            IntegrationConfig.is_active == True,
-            IntegrationConfig.service_name.in_(["hubspot", "espocrm"])
+        integration_service = IntegrationService(self.db)
+        configs = await integration_service.get_active_configs(
+            tenant_id,
+            service_names=["hubspot", "espocrm"]
         )
-        result_configs = await self.db.execute(stmt_configs)
-        configs = result_configs.scalars().all()
 
         for config in configs:
             # 2. Find mapping for this specific CRM
@@ -272,31 +253,4 @@ class SummarizationService:
             if adapter:
                 await adapter.add_note(external_id, "Conversation Summary", summary)
 
-    async def _update_session_status(self, tenant_id: int, account_id: int, conversation_id: int, status: str):
-        stmt = (
-            update(ChatSession)
-            .where(
-                ChatSession.tenant_id == tenant_id,
-                ChatSession.chatwoot_account_id == account_id,
-                ChatSession.chatwoot_conversation_id == conversation_id
-            )
-            .values(
-                status=status,
-                last_activity_at=datetime.utcnow()
-            )
-        )
-        result = await self.db.execute(stmt)
-        if result.rowcount == 0:
-            new_session = ChatSession(
-                id=conversation_id,
-                tenant_id=tenant_id,
-                chatwoot_account_id=account_id,
-                chatwoot_conversation_id=conversation_id,
-                status=status,
-                last_activity_at=datetime.utcnow()
-            )
-            self.db.add(new_session)
-
-        await self.db.commit()
-        Log.info(f"Synced status '{status}' for session {conversation_id}")
 

@@ -4,6 +4,7 @@ from app.models.integration import IntegrationConfig, ContactMapping
 from app.services.crm.factory import CRMFactory
 from app.schemas.chat import ChatwootContactPayload
 from app.core.logger import Log
+from app.services.integration_service import IntegrationService
 from typing import Dict, Any, Optional
 
 class CRMService:
@@ -28,7 +29,11 @@ class CRMService:
             return
 
         # 1. Look for active CRM integrations for this tenant
-        configs = await self._get_active_crm_configs(tenant_id)
+        integration_service = IntegrationService(self.db)
+        configs = await integration_service.get_active_configs(
+            tenant_id,
+            service_names=["hubspot", "espocrm"]
+        )
         if not configs:
             Log.info(f"No active CRM integrations found for tenant {tenant_id}")
             return
@@ -37,15 +42,6 @@ class CRMService:
         for config in configs:
             await self._sync_with_adapter(config, payload, cw_contact_id)
 
-    async def _get_active_crm_configs(self, tenant_id: int):
-        """Fetches active CRM integration configurations for a tenant."""
-        stmt = select(IntegrationConfig).where(
-            IntegrationConfig.tenant_id == tenant_id,
-            IntegrationConfig.is_active == True,
-            IntegrationConfig.service_name.in_(["hubspot", "espocrm"])
-        )
-        result = await self.db.execute(stmt)
-        return result.scalars().all()
 
     async def _sync_with_adapter(self, config: IntegrationConfig, payload: ChatwootContactPayload, cw_contact_id: int):
         """Internal helper to sync with a specific adapter using persistent mapping."""

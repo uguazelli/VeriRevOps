@@ -1,0 +1,73 @@
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.chat import ChatSession
+from app.core.logger import Log
+
+class ChatSessionService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def update_session_activity(self, tenant_id: int, account_id: int, conversation_id: int, status: str):
+        """Updates the last_activity_at and status for a chat session."""
+        stmt = (
+            update(ChatSession)
+            .where(
+                ChatSession.tenant_id == tenant_id,
+                ChatSession.chatwoot_account_id == account_id,
+                ChatSession.chatwoot_conversation_id == conversation_id
+            )
+            .values(
+                last_activity_at=datetime.utcnow(),
+                status=status
+            )
+        )
+        result = await self.db.execute(stmt)
+        if result.rowcount == 0:
+            new_session = ChatSession(
+                id=conversation_id,
+                tenant_id=tenant_id,
+                chatwoot_account_id=account_id,
+                chatwoot_conversation_id=conversation_id,
+                status=status,
+                last_activity_at=datetime.utcnow()
+            )
+            self.db.add(new_session)
+
+        await self.db.commit()
+        Log.info(f"Updated activity for session {conversation_id} (Status: {status})")
+
+    async def update_tracking_id(self, tenant_id: int, account_id: int, conversation_id: int, tracking_id: int, status: str):
+        """Updates the last_summarized_message_id for a session."""
+        session = await self.get_session(tenant_id, account_id, conversation_id)
+
+        if session:
+            session.last_summarized_message_id = tracking_id
+            session.status = status
+            session.last_activity_at = datetime.utcnow()
+            Log.info(f"Updated session {conversation_id} tracking to message {tracking_id}")
+        else:
+            new_session = ChatSession(
+                id=conversation_id,
+                tenant_id=tenant_id,
+                chatwoot_account_id=account_id,
+                chatwoot_conversation_id=conversation_id,
+                last_summarized_message_id=tracking_id,
+                status=status,
+                last_activity_at=datetime.utcnow()
+            )
+            self.db.add(new_session)
+            Log.info(f"Created new session {conversation_id} with tracking message {tracking_id}")
+
+        await self.db.commit()
+
+    async def get_session(self, tenant_id: int, account_id: int, conversation_id: int) -> Optional[ChatSession]:
+        """Fetches a chat session."""
+        stmt = select(ChatSession).where(
+            ChatSession.tenant_id == tenant_id,
+            ChatSession.chatwoot_account_id == account_id,
+            ChatSession.chatwoot_conversation_id == conversation_id
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().first()

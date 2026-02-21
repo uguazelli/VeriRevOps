@@ -8,6 +8,7 @@ from app.services.summarization.service import SummarizationService
 from app.services.crm.service import CRMService
 from app.models.integration import IntegrationConfig
 from app.services.tenant_service import TenantService
+from app.services.integration_service import IntegrationService
 from app.schemas.chat import ChatwootMessagePayload, ChatwootContactPayload, ChatwootStatusChangePayload
 from typing import Optional
 
@@ -59,8 +60,8 @@ async def process_webhook_status_change(data: dict, alias: str):
             return
 
         # Resolve Chatwoot Client
-        chatbot_service = ChatbotService(db)
-        client = await chatbot_service._resolve_client(tenant.id)
+        integration_service = IntegrationService(db)
+        client = await integration_service.resolve_chatwoot_client(tenant.id)
 
         # Summarize Logic (Status-based)
         sum_service = SummarizationService(db, client)

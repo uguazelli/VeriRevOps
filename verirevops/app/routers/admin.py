@@ -13,6 +13,7 @@ from app.schemas import (
     IntegrationConfigs, IntegrationConfigCreate
 )
 from app.services.chatbot_service import ChatbotService
+from app.services.integration_service import IntegrationService
 
 router = APIRouter(prefix="/api", tags=["admin"])
 
@@ -286,8 +287,8 @@ async def execute_manual_resolve(session_id: int, session: AsyncSession = Depend
         raise HTTPException(status_code=404, detail="Chat session not found")
 
     # 1. Resolve Chatwoot Client
-    chatbot_service = ChatbotService(session)
-    client = await chatbot_service._resolve_client(db_session.tenant_id)
+    integration_service = IntegrationService(session)
+    client = await integration_service.resolve_chatwoot_client(db_session.tenant_id)
 
     if not client:
         raise HTTPException(status_code=400, detail="Could not resolve Chatwoot client")
