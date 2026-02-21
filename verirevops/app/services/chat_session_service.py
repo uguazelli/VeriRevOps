@@ -63,6 +63,25 @@ class ChatSessionService:
 
         await self.db.commit()
 
+    async def ensure_session(self, key: SessionKey) -> Optional[ChatSession]:
+        """Ensures a session exists, creating it if necessary."""
+        session = await self.get_session(key)
+        if session:
+            return session
+
+        Log.info(f"Creating missing session {key.conversation_id}")
+        new_session = ChatSession(
+            id=key.conversation_id,
+            tenant_id=key.tenant_id,
+            chatwoot_account_id=key.account_id,
+            chatwoot_conversation_id=key.conversation_id,
+            status="pending",
+            last_activity_at=datetime.utcnow()
+        )
+        self.db.add(new_session)
+        await self.db.commit()
+        return new_session
+
     async def get_session(self, key: SessionKey) -> Optional[ChatSession]:
         """Fetches a chat session."""
         stmt = select(ChatSession).where(

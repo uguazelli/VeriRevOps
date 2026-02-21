@@ -29,11 +29,10 @@ class ChatbotService:
             return
 
         # 1.1 Construct Session Key
-        session_key = SessionKey(
-            tenant_id=tenant.id,
-            account_id=payload.account.id,
-            conversation_id=payload.conversation.id
-        )
+        session_key = SessionKey.from_payload(tenant.id, payload)
+        if not session_key:
+            Log.error(f"Failed to construct session key from payload for tenant {tenant.id}")
+            return
 
         # Update Session Activity and Status
         chat_session_service = ChatSessionService(self.db)

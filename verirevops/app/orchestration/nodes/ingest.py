@@ -1,9 +1,7 @@
-from datetime import datetime
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_core.runnables import RunnableConfig
-from sqlalchemy.exc import IntegrityError
-from app.models import ChatSession, Tenant
+from app.services.tenant_service import TenantService
+from app.services.chat_session_service import ChatSessionService
+from app.schemas.chat import SessionKey
 from app.core.logger import Log
 from app.rag.retrieve import get_chat_history
 from langchain_core.messages import HumanMessage
@@ -14,60 +12,33 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> d
     Ensures the chat session exists and persists the incoming message.
     Populates 'chat_history' and ensures 'session_id' is valid in DB.
     """
-    db: AsyncSession = config["configurable"].get("db")
+    db = config["configurable"].get("db")
+    client = config["configurable"].get("chatwoot_client")
+
     if not db:
         Log.error("DB session missing in Chat Orchestrator config")
         return {}
 
-    # 1. Check/Create Session logic
-    stmt = select(ChatSession).where(
-        ChatSession.tenant_id == state['tenant_id'],
-        ChatSession.chatwoot_account_id == state['account_id'],
-        ChatSession.chatwoot_conversation_id == state['session_id']
+    # 1. Construct Key
+    session_key = SessionKey(
+        tenant_id=state['tenant_id'],
+        account_id=state['account_id'],
+        conversation_id=state['session_id']
     )
-    result = await db.execute(stmt)
-    session = result.scalars().first()
 
-    if not session:
-        # Ensure Tenant exists
-        stmt_tenant = select(Tenant).where(Tenant.id == state['tenant_id'])
-        result_tenant = await db.execute(stmt_tenant)
-        tenant = result_tenant.scalars().first()
+    # 2. Ensure Tenant (Auto-provisioning)
+    tenant_service = TenantService(db)
+    await tenant_service.get_or_create_tenant(session_key.tenant_id)
 
-        if not tenant:
-            # Create Tenant (Auto-provisioning for test/webhook)
-            try:
-                tenant = Tenant(
-                    id=state['tenant_id'],
-                    name=f"Tenant {state['tenant_id']}",
-                    slug=f"tenant-{state['tenant_id']}",
-                    url=f"https://example.com/tenant-{state['tenant_id']}"
-                )
-                db.add(tenant)
-                await db.flush()
-            except IntegrityError:
-                # Handle race condition: another process created the tenant
-                await db.rollback()
-                # Try fetching again
-                result_tenant = await db.execute(stmt_tenant)
-                tenant = result_tenant.scalars().first()
+    # 3. Ensure Session
+    session_service = ChatSessionService(db)
+    await session_service.ensure_session(session_key)
 
-        if tenant:
-            session = ChatSession(
-                id=state['session_id'],
-                tenant_id=state['tenant_id'],
-                chatwoot_conversation_id=state['session_id'],
-                chatwoot_account_id=state['account_id']
-            )
-            db.add(session)
-            await db.commit()
-
-    # 2. Fetch History dynamically from Chatwoot APIs to populate RAG and Chitchat context
-    client = config["configurable"].get("chatwoot_client")
+    # 4. Fetch History
     history = []
-    if state.get("account_id") and client:
-        history = await get_chat_history(client, state['session_id'], state['account_id'], limit=10)
-        # Remove the latest message if it's the exact same as the user query (prevent duplication)
+    if client:
+        history = await get_chat_history(client, session_key.conversation_id, session_key.account_id, limit=10)
+        # Prevent duplication of current message
         if history and isinstance(history[-1], HumanMessage) and history[-1].content == state["user_message"]:
             history = history[:-1]
 

@@ -11,6 +11,7 @@ from app.core.chatwoot import ChatwootClient
 from app.core.logger import Log
 from app.core.decorators import log_and_ignore
 from app.schemas.chat import ChatwootStatusChangePayload, SessionKey
+from app.core.webhook_parser import parse_status_change
 from app.models import IntegrationConfig, ContactMapping, ChatSession
 from app.services.chat_session_service import ChatSessionService
 from app.services.crm.factory import CRMFactory
@@ -32,48 +33,38 @@ class SummarizationService:
         Handles the robust extraction of data from a Chatwoot status_change webhook
         and triggers the summarization process.
         """
-        status = payload.status or (payload.conversation.status if payload.conversation else None)
-        account_id = payload.account_id or (payload.account.id if payload.account else None)
-        conversation_id = payload.id or (payload.conversation.id if payload.conversation else None)
+        # 1. Use centralized parser for complex fields
+        data = parse_status_change(payload)
+        status = data.get("status")
 
-        if not account_id or not conversation_id or not status:
-            Log.warning(f"Incomplete status change payload: account_id={account_id}, conv_id={conversation_id}, status={status}")
+        if not status:
+            Log.warning(f"Incomplete status change payload for tenant {tenant_id}")
             return
 
-        session_key = SessionKey(
-            tenant_id=tenant_id,
-            account_id=int(account_id),
-            conversation_id=int(conversation_id)
-        )
+        # 2. Use SessionKey factory
+        session_key = SessionKey.from_payload(tenant_id, payload)
+        if not session_key:
+            Log.error(f"Failed to construct session key for status change in tenant {tenant_id}")
+            return
 
+        # 3. Update Activity
         chat_session_service = ChatSessionService(self.db)
         await chat_session_service.update_session_activity(session_key, status)
 
         if status != "resolved":
             return
 
-        # 3. Resolve Contact ID (Variations in payload)
-        contact_id = payload.conversation.contact_id if payload.conversation else None
-
-        if not contact_id and payload.contact_inbox:
-            contact_id = payload.contact_inbox.get("contact_id")
-
-        if not contact_id and payload.meta:
-            contact_id = payload.meta.get("sender", {}).get("id")
-
-        # 4. Extract latest_message_id
-        conv = payload.conversation
-        latest_message_id = conv.last_message_id if conv else None
-
-        if not latest_message_id and payload.messages:
-            latest_message_id = payload.messages[-1].get("id")
+        contact_id = data.get("contact_id")
+        latest_message_id = data.get("latest_message_id")
+        conversation_id = data.get("conversation_id")
+        account_id = data.get("account_id")
 
         Log.info(f"Conversation {conversation_id} status changed to '{status}' (Contact: {contact_id}). Triggering summarization.")
 
         # 5. Invoke Summarization
         await self.summarize_conversation(
             tenant_id,
-            int(account_id),
+            account_id,
             conversation_id,
             status=status,
             contact_id=contact_id,

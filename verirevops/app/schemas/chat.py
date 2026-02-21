@@ -8,6 +8,26 @@ class SessionKey(BaseModel):
     account_id: int
     conversation_id: int
 
+    @classmethod
+    def from_payload(cls, tenant_id: int, payload: any):
+        """Helper to create SessionKey from various Chatwoot payloads."""
+        account_id = getattr(payload.account, 'id', None)
+        conv_id = getattr(payload.conversation, 'id', None)
+
+        if not account_id or not conv_id:
+            # Try direct attributes (some fragments have them at root)
+            account_id = account_id or getattr(payload, 'account_id', None)
+            conv_id = conv_id or getattr(payload, 'id', None)
+
+        if not account_id or not conv_id:
+            return None
+
+        return cls(
+            tenant_id=tenant_id,
+            account_id=int(account_id),
+            conversation_id=int(conv_id)
+        )
+
 class OrchestrationInput(BaseModel):
     session_key: SessionKey
     user_message: str
