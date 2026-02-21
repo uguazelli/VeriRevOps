@@ -5,11 +5,12 @@ const API_BASE = '/api';
 const schemas = {
     tenants: {
         title: 'Tenants Management',
-        headers: ['ID', 'Name', 'Slug', 'URL', 'Active', 'Actions'],
+        headers: ['ID', 'Name', 'Slug', 'URL', 'Prompt', 'Active', 'Actions'],
         fields: [
             { name: 'name', label: 'Name', type: 'text', required: true },
             { name: 'slug', label: 'Slug', type: 'text', required: true },
             { name: 'url', label: 'URL', type: 'text', required: true },
+            { name: 'custom_prompt', label: 'Custom Prompt', type: 'textarea', required: false },
             { name: 'is_active', label: 'Active', type: 'checkbox' }
         ]
     },
@@ -148,6 +149,19 @@ function loadEntity(entity) {
         return; // Stop here, no need to fetch standard CRUD data
     }
 
+    // Handle Prompts View
+    if (entity === 'prompts') {
+        $('#page-title').text('Prompt Management');
+        $('#create-btn').hide();
+        $('.table-container').hide();
+        $('.table-toolbar').hide();
+        $('#rag-view').hide();
+        $('#auto-resolve-view').hide();
+        $('#prompts-view').show();
+        populatePromptTenants();
+        return;
+    }
+
     // Handle Auto-Resolve View
     if (entity === 'auto_resolve') {
         $('#page-title').text('Auto-Resolution Management');
@@ -155,6 +169,7 @@ function loadEntity(entity) {
         $('.table-container').hide();
         $('.table-toolbar').hide();
         $('#rag-view').hide();
+        $('#prompts-view').hide();
         $('#auto-resolve-view').show();
         $('#auto-resolve-table-container').show();
         populateAutoResolveTenants();
@@ -164,6 +179,7 @@ function loadEntity(entity) {
     // Handle Standard CRUD Views
     $('.table-container').show();
     $('#rag-view').hide();
+    $('#prompts-view').hide();
     $('#auto-resolve-view').hide();
 
     const schema = schemas[entity];
@@ -246,6 +262,12 @@ function renderTable() {
             $tr.append(`<td>${item.name}</td>`);
             $tr.append(`<td><span class="badge">${item.slug}</span></td>`);
             $tr.append(`<td>${item.url}</td>`);
+
+            const displayPrompt = item.custom_prompt ?
+                (item.custom_prompt.length > 50 ? item.custom_prompt.substring(0, 50) + '...' : item.custom_prompt) :
+                '<span style="color:#666;">-</span>';
+            $tr.append(`<td><small>${displayPrompt}</small></td>`);
+
             $tr.append(`<td>${item.is_active ? '✅' : '❌'}</td>`);
             $tr.append(`
                 <td>
@@ -680,3 +702,60 @@ window.executeManualResolve = function (sessionId, event) {
         }
     });
 };
+
+// --- Prompt Functions ---
+
+function populatePromptTenants() {
+    const $select = $('#prompt-tenant-select');
+    $select.empty().append('<option value="">Select Tenant</option>');
+    allTenants.forEach(t => {
+        $select.append(`<option value="${t.id}">${t.name}</option>`);
+    });
+    $('#prompt-editor-panel').hide();
+}
+
+$('#prompt-tenant-select').change(function () {
+    const tenantId = $(this).val();
+    if (tenantId) {
+        const tenant = allTenants.find(t => t.id == tenantId);
+        if (tenant) {
+            $('#custom-prompt-input').val(tenant.custom_prompt || '');
+            $('#prompt-editor-panel').show();
+        }
+    } else {
+        $('#prompt-editor-panel').hide();
+    }
+});
+
+$('#save-prompt-btn').click(function () {
+    const tenantId = $('#prompt-tenant-select').val();
+    const promptValue = $('#custom-prompt-input').val();
+    if (!tenantId) return;
+
+    const $btn = $(this);
+    setLoading($btn, true, 'Saving...');
+
+    $.ajax({
+        url: `${API_BASE}/tenants/${tenantId}`,
+        type: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            custom_prompt: promptValue,
+            name: allTenants.find(t => t.id == tenantId).name,
+            slug: allTenants.find(t => t.id == tenantId).slug,
+            url: allTenants.find(t => t.id == tenantId).url
+        }),
+        success: function (updatedTenant) {
+            // Update local state
+            const index = allTenants.findIndex(t => t.id == tenantId);
+            if (index !== -1) allTenants[index] = updatedTenant;
+            alert('Prompt updated successfully!');
+        },
+        error: function (xhr) {
+            alert('Failed to save prompt: ' + (xhr.responseJSON?.detail || xhr.responseText));
+        },
+        complete: function () {
+            setLoading($btn, false, 'Save Instructions');
+        }
+    });
+});

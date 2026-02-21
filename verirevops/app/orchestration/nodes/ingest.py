@@ -28,7 +28,8 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> d
 
     # 2. Ensure Tenant (Auto-provisioning)
     tenant_service = TenantService(db)
-    await tenant_service.get_or_create_tenant(session_key.tenant_id)
+    tenant = await tenant_service.get_or_create_tenant(session_key.tenant_id)
+    custom_prompt = tenant.custom_prompt if tenant else None
 
     # 3. Ensure Session
     session_service = ChatSessionService(db)
@@ -42,4 +43,4 @@ async def load_and_ensure_session(state: ChatState, config: RunnableConfig) -> d
         if history and isinstance(history[-1], HumanMessage) and history[-1].content == state["user_message"]:
             history = history[:-1]
 
-    return {"chat_history": history}
+    return {"chat_history": history, "custom_prompt": custom_prompt}

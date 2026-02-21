@@ -46,6 +46,7 @@ class RAGState(TypedDict):
     expanded_queries: Annotated[List[str], "Step 2: Variations of the query"]
     retrieved_docs: Annotated[List[Document], "Step 3: Raw results from Vector DB"]
     reranked_docs: Annotated[List[Document], "Step 4: Top K results after reranking"]
+    custom_prompt: Annotated[Optional[str], "Custom instructions for the tenant"]
     final_answer: Annotated[str, "Step 5: The LLM response"]
 
 
@@ -250,8 +251,12 @@ async def generate_answer(state: RAGState, config: RunnableConfig) -> dict:
     documents = state["reranked_docs"]
     context = "\n\n".join([doc.page_content for doc in documents])
 
+    system_prompt = GENERATE_ANSWER_SYSTEM_PROMPT
+    if state.get("custom_prompt"):
+        system_prompt += f"\n\nAdditional Instructions:\n{state['custom_prompt']}"
+
     prompt = ChatPromptTemplate.from_messages([
-        ("system", GENERATE_ANSWER_SYSTEM_PROMPT),
+        ("system", system_prompt),
         ("placeholder", "{chat_history}"),
         ("human", RAG_USER_PROMPT),
     ])
@@ -294,7 +299,7 @@ def build_rag_graph():
 rag_graph = build_rag_graph()
 
 # --- Public Entry Point ---
-async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSession, tenant_id: int, account_id: int, chat_history: List[BaseMessage] = None):
+async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSession, tenant_id: int, account_id: int, chat_history: List[BaseMessage] = None, custom_prompt: str = None):
     """
     Main function to run the RAG pipeline using native LangGraph.
     """
@@ -311,6 +316,7 @@ async def invoke_rag_graph(session_id: int, user_query: str, db_session: AsyncSe
         expanded_queries=[],
         retrieved_docs=[],
         reranked_docs=[],
+        custom_prompt=custom_prompt,
         final_answer=""
     )
 

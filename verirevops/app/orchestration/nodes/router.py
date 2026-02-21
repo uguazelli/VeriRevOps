@@ -12,6 +12,8 @@ async def router_node(state: ChatState, config: RunnableConfig) -> dict:
     Updates 'intent' based on 'user_message' and 'chat_history'.
     """
     system_prompt = ROUTER_SYSTEM_PROMPT
+    if state.get("custom_prompt"):
+        system_prompt += f"\n\nAdditional Routing Instructions:\n{state['custom_prompt']}"
 
     llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
 

@@ -6,6 +6,7 @@ class TenantBase(BaseModel):
     name: str
     slug: str
     url: str
+    custom_prompt: Optional[str] = None
     is_active: bool = True
 
 class TenantCreate(TenantBase):

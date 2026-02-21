@@ -1,4 +1,4 @@
-from typing import List, TypedDict, Annotated
+from typing import List, TypedDict, Annotated, Optional
 from langchain_core.messages import BaseMessage
 
 class ChatState(TypedDict):
@@ -9,5 +9,6 @@ class ChatState(TypedDict):
     chat_history: Annotated[List[BaseMessage], "The history of the chat"]
     intent: Annotated[str, "The classified intent: rag, chitchat, or handoff"]
     ai_response: Annotated[str, "The response from the AI"]
+    custom_prompt: Annotated[Optional[str], "Custom instructions for the tenant"]
     summary_needed: Annotated[bool, "Whether a summary update is required"]
     attachments: Annotated[List[dict], "Media attachments from Chatwoot"]

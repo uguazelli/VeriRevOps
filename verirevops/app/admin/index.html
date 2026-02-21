@@ -28,6 +28,7 @@
                 <li data-target="subscriptions">Subscriptions</li>
                 <li data-target="chat_sessions">Chat Sessions</li>
                 <li data-target="rag">RAG</li>
+                <li data-target="prompts">Prompts</li>
                 <li data-target="integrations">Integrations</li>
                 <li data-target="auto_resolve">Auto-Resolve</li>
             </ul>
@@ -115,6 +116,29 @@
                 </div>
             </div>
 
+            <div id="prompts-view" style="display: none;">
+                <div class="glass-panel" style="margin-bottom: 20px; padding: 20px;">
+                    <h3>Custom Prompt Management</h3>
+                    <p style="color: #888; margin-bottom: 15px;">Define how the bot should behave for this client (tone,
+                        rules, handoff conditions).</p>
+                    <div class="form-group">
+                        <label>Select Tenant</label>
+                        <select id="prompt-tenant-select">
+                            <option value="">Select Tenant</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="prompt-editor-panel" class="glass-panel" style="padding: 20px; display: none;">
+                    <div class="form-group">
+                        <label>AI Instructions</label>
+                        <textarea id="custom-prompt-input" rows="12"
+                            placeholder="Example: Be very friendly. If someone asks for prices, handoff to human. Never discuss internal issues."></textarea>
+                    </div>
+                    <button id="save-prompt-btn" class="btn-primary">Save Instructions</button>
+                </div>
+            </div>
+
             <div id="auto-resolve-view" style="display: none;">
                 <div class="glass-panel" style="margin-bottom: 20px; padding: 20px;">
                     <h3>Manual Auto-Resolution</h3>
@@ -162,7 +186,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=15"></script>
+    <script src="app.js?v=17"></script>
 </body>
 
 </html>

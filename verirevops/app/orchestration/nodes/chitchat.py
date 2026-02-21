@@ -10,8 +10,12 @@ async def chitchat_node(state: ChatState, config: RunnableConfig) -> dict:
     Generates a conversational response for greetings or general talk.
     Populates 'ai_response' without using the RAG search pipeline.
     """
+    system_prompt = CHITCHAT_SYSTEM_PROMPT
+    if state.get("custom_prompt"):
+        system_prompt += f"\n\nAdditional Instructions:\n{state['custom_prompt']}"
+
     prompt = [
-        SystemMessage(content=CHITCHAT_SYSTEM_PROMPT),
+        SystemMessage(content=system_prompt),
         *state['chat_history'], # Optional: Include history for context
         HumanMessage(content=state['user_message'] or "Olá! Como posso ajudar hoje?")
     ]
