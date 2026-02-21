@@ -95,13 +95,17 @@ class ChatbotService:
             traceback.print_exc()
 
     async def _resolve_tenant(self, alias: str):
-        """Resolves tenant from alias with guard clause."""
+        """Resolves tenant from alias with guard clause and activation check."""
         stmt = select(Tenant).where(Tenant.slug == alias)
         result = await self.db.execute(stmt)
         tenant = result.scalars().first()
 
         if not tenant:
             Log.error(f"Tenant not found for alias: {alias}")
+            return None
+
+        if not tenant.is_active:
+            Log.warning(f"Tenant {tenant.id} ({alias}) is inactive. Operation aborted.")
             return None
 
         Log.tenant(tenant.id, f"Resolved for alias '{alias}'")

@@ -7,11 +7,12 @@ from app.services.chatbot_service import ChatbotService
 from app.services.summarization.service import SummarizationService
 from app.services.crm.service import CRMService
 from app.models.integration import IntegrationConfig
+from typing import Optional
 
 router = APIRouter(prefix="/api", tags=["chatwoot"])
 
-async def _resolve_tenant_id(db, alias: str) -> int:
-    stmt = select(Tenant.id).where(Tenant.slug == alias)
+async def _resolve_tenant(db, alias: str) -> Optional[Tenant]:
+    stmt = select(Tenant).where(Tenant.slug == alias)
     result = await db.execute(stmt)
     return result.scalars().first()
 
@@ -28,27 +29,27 @@ async def process_webhook_message(data: dict, alias: str):
 
 async def process_webhook_contact(data: dict, alias: str):
     async with AsyncSessionLocal() as db:
-        tenant_id = await _resolve_tenant_id(db, alias)
-        if not tenant_id:
+        tenant = await _resolve_tenant(db, alias)
+        if not tenant:
             Log.error(f"Tenant not found for alias: {alias}")
             return
 
         service = CRMService(db)
-        await service.sync_contact(tenant_id, data)
+        await service.sync_contact(tenant.id, data)
 
 async def process_webhook_status_change(data: dict, alias: str):
     async with AsyncSessionLocal() as db:
-        tenant_id = await _resolve_tenant_id(db, alias)
-        if not tenant_id:
+        tenant = await _resolve_tenant(db, alias)
+        if not tenant:
             return
 
         # Resolve Chatwoot Client
         chatbot_service = ChatbotService(db)
-        client = await chatbot_service._resolve_client(tenant_id)
+        client = await chatbot_service._resolve_client(tenant.id)
 
         # Summarize Logic (Status-based)
         sum_service = SummarizationService(db, client)
-        await sum_service.process_webhook_status_change(data, tenant_id)
+        await sum_service.process_webhook_status_change(data, tenant.id)
 
 @router.post("/webhook/{alias}")
 async def handle_webhook(
@@ -56,6 +57,16 @@ async def handle_webhook(
     background_tasks: BackgroundTasks,
     webhook_data: dict = Body(...)
 ):
+    async with AsyncSessionLocal() as db:
+        tenant = await _resolve_tenant(db, alias)
+        if not tenant:
+            Log.error(f"Tenant not found for alias: {alias}")
+            return {"status": "error", "message": "Tenant not found"}
+
+        if not tenant.is_active:
+            Log.warning(f"Tenant {tenant.id} ({alias}) is inactive. Skipping webhook.")
+            return {"status": "ignored", "message": "Tenant inactive"}
+
     event = webhook_data.get("event")
 
     # 1. Handle Message Events (Chatbot)

@@ -6,6 +6,7 @@ from app.models.chat import ChatSession
 from app.models.integration import IntegrationConfig
 from app.core.chatwoot import ChatwootClient, get_chatwoot_client
 from app.core.logger import Log
+from app.models.tenant import Tenant
 
 async def resolve_idle_conversations():
     """
@@ -17,11 +18,18 @@ async def resolve_idle_conversations():
     idle_threshold = datetime.utcnow() - timedelta(minutes=60)
 
     async with AsyncSessionLocal() as db:
+
+
         # 1. Find sessions that are not resolved and have no activity for > 60m
-        # We only target 'open' or 'pending' or NULL status (default)
-        stmt = select(ChatSession).where(
-            ChatSession.status != "resolved",
-            ChatSession.last_activity_at < idle_threshold
+        # Join with Tenant to ensure we only process ACTIVE tenants
+        stmt = (
+            select(ChatSession)
+            .join(Tenant, ChatSession.tenant_id == Tenant.id)
+            .where(
+                ChatSession.status != "resolved",
+                ChatSession.last_activity_at < idle_threshold,
+                Tenant.is_active == True
+            )
         )
         result = await db.execute(stmt)
         idle_sessions = result.scalars().all()
