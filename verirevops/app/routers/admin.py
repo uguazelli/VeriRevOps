@@ -13,8 +13,8 @@ from app.schemas import (
     IntegrationConfigs, IntegrationConfigCreate
 )
 from app.schemas.chat import SessionKey
-from app.services.chatbot_service import ChatbotService
-from app.services.integration_service import IntegrationService
+from app.services.chatbot.service import ChatbotService
+from app.services.integration.service import IntegrationService
 
 router = APIRouter(prefix="/api", tags=["admin"])
 
@@ -302,7 +302,7 @@ async def execute_manual_resolve(session_id: int, session: AsyncSession = Depend
     )
 
     # 3. Update local session status
-    from app.services.chat_session_service import ChatSessionService
+    from app.services.chat_session.service import ChatSessionService
     chat_session_service = ChatSessionService(session)
     key = SessionKey(
         tenant_id=db_session.tenant_id,

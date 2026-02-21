@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 # Add project root to sys.path
 sys.path.append(os.getcwd())
 
-from app.services.chatbot_service import ChatbotService
+from app.services.chatbot.service import ChatbotService
 from app.models import Subscription, Tenant
 
 async def test_subscription_logic():
@@ -26,7 +26,7 @@ async def test_subscription_logic():
     service._send_ai_response = AsyncMock()
 
     # Mock orchestrator
-    import app.services.chatbot_service as cs
+    import app.services.chatbot.service as cs
     cs.invoke_chat_orchestrator = AsyncMock(return_value=("Hi", "chitchat"))
 
     data = {

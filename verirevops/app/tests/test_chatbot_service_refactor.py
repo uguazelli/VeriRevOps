@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 # Add project root to sys.path
 sys.path.append(os.getcwd())
 
-from app.services.chatbot_service import ChatbotService
+from app.services.chatbot.service import ChatbotService
 
 async def test_refactor():
     print("Testing refactored ChatbotService...")
@@ -33,7 +33,7 @@ async def test_refactor():
     service._send_ai_response = AsyncMock()
 
     # Mock orchestrator
-    import app.services.chatbot_service as cs
+    import app.services.chatbot.service as cs
     cs.invoke_chat_orchestrator = AsyncMock(return_value=("Hi", "chitchat"))
 
     data = {

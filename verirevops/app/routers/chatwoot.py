@@ -3,12 +3,12 @@ from sqlalchemy import select
 from app.core.db import AsyncSessionLocal
 from app.core.logger import Log
 from app.models.tenant import Tenant
-from app.services.chatbot_service import ChatbotService
+from app.services.chatbot.service import ChatbotService
 from app.services.summarization.service import SummarizationService
 from app.services.crm.service import CRMService
 from app.models.integration import IntegrationConfig
-from app.services.tenant_service import TenantService
-from app.services.integration_service import IntegrationService
+from app.services.tenant.service import TenantService
+from app.services.integration.service import IntegrationService
 from app.schemas.chat import ChatwootMessagePayload, ChatwootContactPayload, ChatwootStatusChangePayload
 from typing import Optional
 

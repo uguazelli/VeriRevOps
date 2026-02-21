@@ -13,9 +13,9 @@ from app.core.decorators import log_and_ignore
 from app.schemas.chat import ChatwootStatusChangePayload, SessionKey
 from app.core.webhook_parser import parse_status_change
 from app.models import IntegrationConfig, ContactMapping, ChatSession
-from app.services.chat_session_service import ChatSessionService
+from app.services.chat_session.service import ChatSessionService
 from app.services.crm.factory import CRMFactory
-from app.services.integration_service import IntegrationService
+from app.services.integration.service import IntegrationService
 from app.prompts.llm_prompts import VERI_SUMMARY_SYSTEM_PROMPT
 
 class SummarizationService:

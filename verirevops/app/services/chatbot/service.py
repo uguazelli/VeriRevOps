@@ -8,10 +8,10 @@ from app.orchestration.chat import invoke_chat_orchestrator
 from app.core.chatwoot import get_chatwoot_client, ChatwootClient
 from app.schemas.chat import ChatwootMessagePayload, ChatwootAttachment, SessionKey, OrchestrationInput
 from app.core.logger import Log
-from app.services.tenant_service import TenantService
-from app.services.integration_service import IntegrationService
-from app.services.chat_session_service import ChatSessionService
-from app.services.subscription_service import SubscriptionService
+from app.services.tenant.service import TenantService
+from app.services.integration.service import IntegrationService
+from app.services.chat_session.service import ChatSessionService
+from app.services.subscription.service import SubscriptionService
 
 class ChatbotService:
     def __init__(self, db: AsyncSession):

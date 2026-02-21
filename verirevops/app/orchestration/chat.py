@@ -67,7 +67,6 @@ async def invoke_chat_orchestrator(input_data: OrchestrationInput, db: AsyncSess
     """
     Public entry point using native LangGraph ainvoke.
     """
-
     initial_state = ChatState(
         tenant_id=input_data.session_key.tenant_id,
         account_id=input_data.session_key.account_id,

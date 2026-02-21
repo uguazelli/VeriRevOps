@@ -4,7 +4,7 @@ from app.models.integration import IntegrationConfig, ContactMapping
 from app.services.crm.factory import CRMFactory
 from app.schemas.chat import ChatwootContactPayload
 from app.core.logger import Log
-from app.services.integration_service import IntegrationService
+from app.services.integration.service import IntegrationService
 from typing import Dict, Any, Optional
 
 class CRMService:

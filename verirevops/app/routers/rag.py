@@ -3,7 +3,7 @@ from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.schemas import RagFileResponse, RagSearchRequest
-from app.services.rag_service import RagService
+from app.services.rag.service import RagService
 
 router = APIRouter(prefix="/api/rag", tags=["RAG"])
 
