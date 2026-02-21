@@ -30,6 +30,7 @@
                 <li data-target="chat_messages">Chat Messages</li>
                 <li data-target="rag">RAG</li>
                 <li data-target="integrations">Integrations</li>
+                <li data-target="auto_resolve">Auto-Resolve</li>
             </ul>
         </nav>
 
@@ -114,6 +115,37 @@
                     </table>
                 </div>
             </div>
+
+            <div id="auto-resolve-view" style="display: none;">
+                <div class="glass-panel" style="margin-bottom: 20px; padding: 20px;">
+                    <h3>Manual Auto-Resolution</h3>
+                    <p style="color: #888; margin-bottom: 15px;">List of conversations that are NOT resolved. Select a
+                        tenant to filter.</p>
+                    <div class="form-group">
+                        <label>Select Tenant</label>
+                        <select id="auto-resolve-tenant-select">
+                            <option value="">Select Tenant</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-container" id="auto-resolve-table-container">
+                    <table id="auto-resolve-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Status</th>
+                                <th>Last Activity</th>
+                                <th>Created At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Sessions injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -131,7 +163,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=11"></script>
+    <script src="app.js?v=15"></script>
 </body>
 
 </html>

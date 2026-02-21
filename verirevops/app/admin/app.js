@@ -153,9 +153,23 @@ function loadEntity(entity) {
         return; // Stop here, no need to fetch standard CRUD data
     }
 
+    // Handle Auto-Resolve View
+    if (entity === 'auto_resolve') {
+        $('#page-title').text('Auto-Resolution Management');
+        $('#create-btn').hide();
+        $('.table-container').hide();
+        $('.table-toolbar').hide();
+        $('#rag-view').hide();
+        $('#auto-resolve-view').show();
+        $('#auto-resolve-table-container').show();
+        populateAutoResolveTenants();
+        return;
+    }
+
     // Handle Standard CRUD Views
     $('.table-container').show();
     $('#rag-view').hide();
+    $('#auto-resolve-view').hide();
 
     const schema = schemas[entity];
     if (!schema) {
@@ -593,3 +607,88 @@ function setLoading($btn, isLoading, text) {
         $btn.text(text);
     }
 }
+
+// --- Auto-Resolve Functions ---
+
+function populateAutoResolveTenants() {
+    console.log('Populating Auto-Resolve tenants. Current allTenants count:', allTenants.length);
+    const $select = $('#auto-resolve-tenant-select');
+    const currentVal = $select.val();
+    $select.empty().append('<option value="">Select Tenant</option>');
+
+    allTenants.forEach(t => {
+        $select.append(`<option value="${t.id}">${t.name}</option>`);
+    });
+
+    if (currentVal) {
+        console.log('Restoring previous selection:', currentVal);
+        $select.val(currentVal);
+        loadAutoResolveSessions(currentVal);
+    }
+}
+
+$('#auto-resolve-tenant-select').change(function () {
+    const tenantId = $(this).val();
+    if (tenantId) {
+        loadAutoResolveSessions(tenantId);
+    } else {
+        $('#auto-resolve-table tbody').empty();
+    }
+});
+
+function loadAutoResolveSessions(tenantId) {
+    console.log('Loading auto-resolve sessions for tenant:', tenantId);
+    $.get(`${API_BASE}/auto_resolve/sessions/${tenantId}`, function (data) {
+        console.log('Received sessions:', data);
+        const $tbody = $('#auto-resolve-table tbody');
+        $tbody.empty();
+
+        if (data.length === 0) {
+            $tbody.append('<tr><td colspan="5" style="text-align:center;">No idle conversations found</td></tr>');
+            return;
+        }
+
+        data.forEach(s => {
+            const lastActivity = s.last_activity_at ? new Date(s.last_activity_at).toLocaleString() : 'N/A';
+            const createdAt = new Date(s.created_at).toLocaleString();
+
+            $tbody.append(`
+                <tr>
+                    <td>${s.id}</td>
+                    <td><span class="badge">${s.status || 'open'}</span></td>
+                    <td>${lastActivity}</td>
+                    <td>${createdAt}</td>
+                    <td>
+                        <button class="btn-primary" onclick="executeManualResolve(${s.id}, event)">Execute</button>
+                    </td>
+                </tr>
+            `);
+        });
+    }).fail(function () {
+        alert('Failed to load sessions');
+    });
+}
+
+window.executeManualResolve = function (sessionId, event) {
+    if (!confirm('Are you sure you want to manually resolve this conversation?')) return;
+
+    const $btn = $(event.target);
+    const originalText = $btn.text();
+    setLoading($btn, true, 'Executing...');
+
+    $.ajax({
+        url: `${API_BASE}/auto_resolve/execute/${sessionId}`,
+        type: 'POST',
+        success: function (resp) {
+            alert(resp.message);
+            const tenantId = $('#auto-resolve-tenant-select').val();
+            loadAutoResolveSessions(tenantId);
+        },
+        error: function (xhr) {
+            alert('Failed to execute: ' + (xhr.responseJSON?.detail || xhr.responseText));
+        },
+        complete: function () {
+            setLoading($btn, false, originalText);
+        }
+    });
+};

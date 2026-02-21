@@ -28,6 +28,18 @@ class SummarizationService:
         and triggers the summarization process.
         """
         status = data.get("status")
+
+        # Extract account_id and conversation_id first to update status in DB
+        account_id = data.get("account_id") or data.get("account", {}).get("id")
+        conv = data.get("conversation", {})
+        if not account_id and conv:
+            account_id = conv.get("account_id") or conv.get("account", {}).get("id")
+
+        conversation_id = data.get("id") or conv.get("id")
+
+        if account_id and conversation_id:
+            await self._update_session_status(tenant_id, int(account_id), int(conversation_id), status)
+
         if status != "resolved":
             return
 
@@ -184,7 +196,8 @@ class SummarizationService:
             if tracking_id:
                 if session:
                     session.last_summarized_message_id = tracking_id
-                    Log.info(f"📍 Updated session {conversation_id} tracking to message {tracking_id}")
+                    session.status = status
+                    Log.info(f"📍 Updated session {conversation_id} tracking to message {tracking_id} and status {status}")
                 else:
                     # Need to create session if it doesn't exist
                     new_session = ChatSession(
@@ -192,10 +205,12 @@ class SummarizationService:
                         tenant_id=tenant_id,
                         chatwoot_account_id=account_id,
                         chatwoot_conversation_id=conversation_id,
-                        last_summarized_message_id=tracking_id
+                        last_summarized_message_id=tracking_id,
+                        status=status,
+                        last_activity_at=datetime.utcnow()
                     )
                     self.db.add(new_session)
-                    Log.info(f"📍 Created new session {conversation_id} with tracking message {tracking_id}")
+                    Log.info(f"📍 Created new session {conversation_id} with tracking message {tracking_id} and status {status}")
                 await self.db.commit()
 
             Log.success(f"✨ Summarization complete for Conversation {conversation_id}")
@@ -298,4 +313,34 @@ class SummarizationService:
             adapter = CRMFactory.get_adapter(config)
             if adapter:
                 await adapter.add_note(external_id, "Conversation Summary", summary)
+
+    async def _update_session_status(self, tenant_id: int, account_id: int, conversation_id: int, status: str):
+        """Updates the status and activity timestamp for a session."""
+        from datetime import datetime
+        stmt = (
+            update(ChatSession)
+            .where(
+                ChatSession.tenant_id == tenant_id,
+                ChatSession.chatwoot_account_id == account_id,
+                ChatSession.chatwoot_conversation_id == conversation_id
+            )
+            .values(
+                status=status,
+                last_activity_at=datetime.utcnow()
+            )
+        )
+        result = await self.db.execute(stmt)
+        if result.rowcount == 0:
+            new_session = ChatSession(
+                id=conversation_id,
+                tenant_id=tenant_id,
+                chatwoot_account_id=account_id,
+                chatwoot_conversation_id=conversation_id,
+                status=status,
+                last_activity_at=datetime.utcnow()
+            )
+            self.db.add(new_session)
+
+        await self.db.commit()
+        Log.info(f"Synced status '{status}' for session {conversation_id}")
 

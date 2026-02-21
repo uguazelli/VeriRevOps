@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
@@ -301,3 +302,54 @@ async def delete_integration(config_id: int, session: AsyncSession = Depends(get
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+# --- Auto-Resolve Manual Execution ---
+
+@router.get("/auto_resolve/sessions/{tenant_id}", response_model=List[ChatSessions])
+async def get_auto_resolve_sessions(tenant_id: int, session: AsyncSession = Depends(get_db)):
+    """Fetches sessions for a tenant that are not resolved."""
+    stmt = select(ChatSession).where(
+        ChatSession.tenant_id == tenant_id,
+        sa.or_(ChatSession.status != "resolved", ChatSession.status == None)
+    ).options(selectinload(ChatSession.tenant))
+
+    result = await session.execute(stmt)
+    sessions = result.scalars().all()
+
+    response = []
+    for s in sessions:
+        response.append(ChatSessions(
+            id=s.id,
+            tenant_id=s.tenant_id,
+            created_at=s.created_at,
+            status=s.status,
+            last_activity_at=s.last_activity_at,
+            tenant_name=s.tenant.name if s.tenant else None
+        ))
+    return response
+
+@router.post("/auto_resolve/execute/{session_id}")
+async def execute_manual_resolve(session_id: int, session: AsyncSession = Depends(get_db)):
+    """Manually triggers resolution for a specific session."""
+    db_session = await session.get(ChatSession, session_id)
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
+    # 1. Resolve Chatwoot Client
+    from app.services.chatbot_service import ChatbotService
+    chatbot_service = ChatbotService(session)
+    client = await chatbot_service._resolve_client(db_session.tenant_id)
+
+    if not client:
+        raise HTTPException(status_code=400, detail="Could not resolve Chatwoot client")
+
+    # 2. Trigger resolution in Chatwoot
+    try:
+        await client.update_status(
+            db_session.chatwoot_account_id,
+            db_session.chatwoot_conversation_id,
+            "resolved"
+        )
+        return {"message": "Resolution triggered successfully", "session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to trigger resolution: {str(e)}")

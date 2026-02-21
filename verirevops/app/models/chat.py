@@ -14,6 +14,8 @@ class ChatSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     last_summarized_message_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status: Mapped[Optional[str]] = mapped_column(String, index=True, nullable=True)
+    last_activity_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
     # Relationships
     tenant: Mapped["Tenant"] = relationship(back_populates="chat_sessions")

@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from app.models import Tenant, IntegrationConfig, Subscription
+from app.models import Tenant, IntegrationConfig, Subscription, ChatSession
 from app.orchestration.chat import invoke_chat_orchestrator
 from app.core.chatwoot import get_chatwoot_client, ChatwootClient
 from app.core.logger import Log
@@ -24,16 +24,20 @@ class ChatbotService:
             return
 
         # Guard: Human handling
-        if status == "open":
-            Log.info(f"Conversation {conversation_id} is 'open'. Bot will ignore.")
-            return
-
         try:
             # 1. Resolve Tenant
             tenant = await self._resolve_tenant(alias)
             if not tenant:
                 return
             tenant_id = tenant.id
+
+            # Update Session Activity and Status
+            await self._update_session_activity(tenant_id, account_id, conversation_id, status)
+
+            # Guard: Human handling
+            if status == "open":
+                Log.info(f"Conversation {conversation_id} is 'open'. Bot will ignore.")
+                return
 
             # 2. Resolve Subscription
             stmt_sub = select(Subscription).where(Subscription.tenant_id == tenant_id)
@@ -171,3 +175,37 @@ class ChatbotService:
 
         Log.info(f"Processed {len(attachments)} attachments")
         return attachments
+
+    async def _update_session_activity(self, tenant_id: int, account_id: int, conversation_id: int, status: str):
+        """Updates the last_activity_at and status for a chat session."""
+        stmt = (
+            update(ChatSession)
+            .where(
+                ChatSession.tenant_id == tenant_id,
+                ChatSession.chatwoot_account_id == account_id,
+                ChatSession.chatwoot_conversation_id == conversation_id
+            )
+            .values(
+                last_activity_at=datetime.utcnow(),
+                status=status
+            )
+        )
+        result = await self.db.execute(stmt)
+        if result.rowcount == 0:
+            # Session might not exist yet (e.g. first message)
+            # We don't necessarily need to create it here if ingest node handles it,
+            # but updating it here ensures even if bot ignores 'open' conv, we track it.
+            # Ingest node also creates it, but if it's 'open', we return early before ingest.
+            # So we SHOULD ensure it exists if it doesn't.
+            new_session = ChatSession(
+                id=conversation_id,
+                tenant_id=tenant_id,
+                chatwoot_account_id=account_id,
+                chatwoot_conversation_id=conversation_id,
+                status=status,
+                last_activity_at=datetime.utcnow()
+            )
+            self.db.add(new_session)
+
+        await self.db.commit()
+        Log.info(f"Updated activity for session {conversation_id} (Status: {status})")
