@@ -16,6 +16,7 @@ async def rag_node(state: ChatState, config: RunnableConfig) -> dict:
         state['tenant_id'],
         state['account_id'],
         state.get('chat_history', []),
-        state.get('custom_prompt')
+        state.get('custom_prompt'),
+        state.get('languages')
     )
     return {"ai_response": answer, "summary_needed": True}

@@ -14,6 +14,9 @@ async def chitchat_node(state: ChatState, config: RunnableConfig) -> dict:
     if state.get("custom_prompt"):
         system_prompt += f"\n\nAdditional Instructions:\n{state['custom_prompt']}"
 
+    if state.get("languages"):
+        system_prompt += f"\n\nLanguage Consistency:\nAlways respond in the user's language. If it is not clear or you are in doubt, you MUST respond in one of these languages: {state['languages']}."
+
     prompt = [
         SystemMessage(content=system_prompt),
         *state['chat_history'], # Optional: Include history for context

@@ -10,5 +10,6 @@ class ChatState(TypedDict):
     intent: Annotated[str, "The classified intent: rag, chitchat, or handoff"]
     ai_response: Annotated[str, "The response from the AI"]
     custom_prompt: Annotated[Optional[str], "Custom instructions for the tenant"]
+    languages: Annotated[Optional[str], "Comma-separated list of preferred languages"]
     summary_needed: Annotated[bool, "Whether a summary update is required"]
     attachments: Annotated[List[dict], "Media attachments from Chatwoot"]

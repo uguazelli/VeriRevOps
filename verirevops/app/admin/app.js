@@ -11,6 +11,7 @@ const schemas = {
             { name: 'slug', label: 'Slug', type: 'text', required: true },
             { name: 'url', label: 'URL', type: 'text', required: true },
             { name: 'custom_prompt', label: 'Custom Prompt', type: 'textarea', required: false },
+            { name: 'languages', label: 'Languages', type: 'text', required: false },
             { name: 'is_active', label: 'Active', type: 'checkbox' }
         ]
     },
@@ -720,6 +721,7 @@ $('#prompt-tenant-select').change(function () {
         const tenant = allTenants.find(t => t.id == tenantId);
         if (tenant) {
             $('#custom-prompt-input').val(tenant.custom_prompt || '');
+            $('#languages-input').val(tenant.languages || '');
             $('#prompt-editor-panel').show();
         }
     } else {
@@ -730,6 +732,7 @@ $('#prompt-tenant-select').change(function () {
 $('#save-prompt-btn').click(function () {
     const tenantId = $('#prompt-tenant-select').val();
     const promptValue = $('#custom-prompt-input').val();
+    const languagesValue = $('#languages-input').val();
     if (!tenantId) return;
 
     const $btn = $(this);
@@ -741,6 +744,7 @@ $('#save-prompt-btn').click(function () {
         contentType: 'application/json',
         data: JSON.stringify({
             custom_prompt: promptValue,
+            languages: languagesValue,
             name: allTenants.find(t => t.id == tenantId).name,
             slug: allTenants.find(t => t.id == tenantId).slug,
             url: allTenants.find(t => t.id == tenantId).url

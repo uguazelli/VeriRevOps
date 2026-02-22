@@ -15,6 +15,9 @@ async def router_node(state: ChatState, config: RunnableConfig) -> dict:
     if state.get("custom_prompt"):
         system_prompt += f"\n\nAdditional Routing Instructions:\n{state['custom_prompt']}"
 
+    if state.get("languages"):
+        system_prompt += f"\n\nLanguage Consistency:\nAlways respond in the user's language. If it is not clear or you are in doubt, you MUST respond in one of these languages: {state['languages']}."
+
     llm = ChatGoogleGenerativeAI(model=settings.MODEL, temperature=settings.TEMPERATURE, google_api_key=settings.GOOGLE_API_KEY)
 
     # Include some history for better context (last 3 messages)

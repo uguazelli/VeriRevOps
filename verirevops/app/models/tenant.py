@@ -12,6 +12,7 @@ class Tenant(Base):
     slug: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     url: Mapped[str] = mapped_column(String, nullable=False)
     custom_prompt: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    languages: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Relationships
