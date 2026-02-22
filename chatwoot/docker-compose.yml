@@ -27,7 +27,6 @@ services:
 
   sidekiq:
     <<: *base
-    container_name: veridata.sidekiq
     depends_on:
       - postgres
       - redis
@@ -43,7 +42,6 @@ services:
           - veridata.sidekiq
 
   postgres:
-    container_name: veridata.chatwoot_postgres
     image: pgvector/pgvector:pg16
     restart: always
     ports:
@@ -61,7 +59,6 @@ services:
           - veridata.chatwoot_postgres
 
   redis:
-    container_name: veridata.chatwoot_redis
     image: redis:alpine
     restart: always
     command: ["sh", "-c", 'redis-server --requirepass "$REDIS_PASSWORD"']
@@ -73,7 +70,7 @@ services:
     networks:
       veridata.network:
         aliases:
-          - veridata.chatwoot_redis"
+          - veridata.redis"
 
 volumes:
   storage_data:
