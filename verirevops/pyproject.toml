@@ -1,0 +1,25 @@
+[project]
+name = "verirevops"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.129.0",
+    "langchain>=1.2.10",
+    "langchain-postgres>=0.0.17",
+    "psycopg2-binary>=2.9.11",
+    "pydantic>=2.12.5",
+    "uvicorn>=0.41.0",
+    "python-multipart>=0.0.9",
+    "langchain-google-genai>=0.0.3",
+    "langchain-text-splitters>=0.0.1",
+    "sqlalchemy>=2.0.28",
+    "asyncpg>=0.29.0",
+    "pgvector>=0.2.5",
+    "langgraph>=0.0.26",
+    "flashrank>=0.2.0",
+    "rich>=13.9.4",
+    "pydantic-settings>=2.8.1",
+    "alembic>=1.13.1",
+]
