@@ -26,6 +26,7 @@ async def process_webhook_message(data: dict, alias: str):
     if payload.message_type != "incoming" or payload.private:
         return
 
+    Log.webhook(f"Processing incoming message {payload.id} for alias '{alias}'")
     async with AsyncSessionLocal() as db:
         service = ChatbotService(db)
         await service.process_webhook_message(payload, alias)
@@ -67,12 +68,13 @@ async def process_webhook_status_change(data: dict, alias: str):
         sum_service = SummarizationService(db, client)
         await sum_service.process_webhook_status_change(payload, tenant.id)
 
-@router.post("/webhook/{alias}")
-async def handle_webhook(
+@router.post("/webhook/{alias}/messages")
+async def handle_message_webhook(
     alias: str,
     background_tasks: BackgroundTasks,
     webhook_data: dict = Body(...)
 ):
+    """Specific endpoint for message_created events to avoid duplication with account webhooks."""
     async with AsyncSessionLocal() as db:
         tenant_service = TenantService(db)
         tenant = await tenant_service.resolve_tenant(alias)
@@ -80,17 +82,34 @@ async def handle_webhook(
             return {"status": "error", "message": "Tenant not found or inactive"}
 
     event = webhook_data.get("event")
-    Log.webhook(f"Received {event} event for alias '{alias}'", direction="IN")
+    Log.webhook(f"Received {event} on /messages for alias '{alias}'", direction="IN")
 
-    # 1. Handle Message Events (Chatbot)
     if event == "message_created":
         background_tasks.add_task(process_webhook_message, webhook_data, alias)
 
-    # 2. Handle Contact Events (CRM Sync)
-    elif event in ["contact_created", "contact_updated"]:
+    return {"status": "ok"}
+
+@router.post("/webhook/{alias}/events")
+async def handle_events_webhook(
+    alias: str,
+    background_tasks: BackgroundTasks,
+    webhook_data: dict = Body(...)
+):
+    """Endpoint for non-message events (contacts, status changes) from account-level webhooks."""
+    async with AsyncSessionLocal() as db:
+        tenant_service = TenantService(db)
+        tenant = await tenant_service.resolve_tenant(alias)
+        if not tenant:
+            return {"status": "error", "message": "Tenant not found or inactive"}
+
+    event = webhook_data.get("event")
+    Log.webhook(f"Received {event} on /events for alias '{alias}'", direction="IN")
+
+    # 1. Handle Contact Events (CRM Sync)
+    if event in ["contact_created", "contact_updated"]:
         background_tasks.add_task(process_webhook_contact, webhook_data, alias)
 
-    # 3. Handle Status Change (Summarization)
+    # 2. Handle Status Change (Summarization)
     elif event == "conversation_status_changed":
         background_tasks.add_task(process_webhook_status_change, webhook_data, alias)
 

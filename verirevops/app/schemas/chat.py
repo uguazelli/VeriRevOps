@@ -58,6 +58,7 @@ class ChatwootAttachment(BaseModel):
     content_type: Optional[str] = None
 
 class ChatwootMessagePayload(BaseModel):
+    id: Optional[int] = None
     content: Optional[str] = ""
     account: Optional[ChatwootAccount] = None
     conversation: Optional[ChatwootConversation] = None
