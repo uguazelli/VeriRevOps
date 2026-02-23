@@ -80,6 +80,7 @@ async def handle_webhook(
             return {"status": "error", "message": "Tenant not found or inactive"}
 
     event = webhook_data.get("event")
+    Log.webhook(f"Received {event} event for alias '{alias}'", direction="IN")
 
     # 1. Handle Message Events (Chatbot)
     if event == "message_created":

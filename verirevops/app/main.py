@@ -21,8 +21,6 @@ from concurrent.futures import ThreadPoolExecutor
 async def lifespan(app: FastAPI):
     Log.info("Starting up VeriRevOps API...")
 
-    Log.info("Starting up VeriRevOps API...")
-
     # Run Alembic migrations automatically
     try:
         alembic_cfg = alembic.config.Config("alembic.ini")
