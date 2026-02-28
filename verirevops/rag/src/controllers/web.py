@@ -95,6 +95,22 @@ async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends
         }
     )
 
+@router.post("/tenants/{tenant_id}/rename", response_class=HTMLResponse)
+async def rename_tenant(request: Request, tenant_id: UUID, name: Annotated[str, Form()], username: str = Depends(require_auth)):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE tenants SET name = %s WHERE id = %s", (name, tenant_id))
+            conn.commit()
+    return RedirectResponse(url=f"/tenants/{tenant_id}", status_code=303)
+
+@router.delete("/tenants/{tenant_id}")
+async def delete_tenant(request: Request, tenant_id: UUID, username: str = Depends(require_auth)):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
+            conn.commit()
+    return Response(status_code=200, headers={"HX-Redirect": "/"})
+
 @router.post("/ingest", response_class=HTMLResponse)
 async def ingest_file(
     request: Request,
