@@ -23,7 +23,7 @@ def get_current_username(request: Request):
     # Simple token validation (In real app, use better session management)
     # Here we just check if the token matches a secret "admin_token"
     # For simplicity in this "no logic" refactor, we just check a static token
-    correct_token = os.getenv("ADMIN_TOKEN", "secret-admin-token")
+    correct_token = os.getenv("ADMIN_TOKEN")
 
     if not secrets.compare_digest(token, correct_token):
         return None

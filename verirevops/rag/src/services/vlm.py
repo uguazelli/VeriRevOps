@@ -15,7 +15,7 @@ def get_vlm():
     global _vlm
     if _vlm is None:
         api_key = os.getenv("GOOGLE_API_KEY")
-        model_name = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash")
+        model_name = os.getenv("GEMINI_MODEL")
         if not model_name.startswith("models/"):
             model_name = f"models/{model_name}"
 
@@ -36,7 +36,7 @@ def describe_image(image_bytes: bytes, filename: str) -> str:
         api_key = os.getenv("GOOGLE_API_KEY")
         genai.configure(api_key=api_key)
 
-        model_name = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash")
+        model_name = os.getenv("GEMINI_MODEL")
         if not model_name.startswith("models/"):
             model_name = f"models/{model_name}"
 
