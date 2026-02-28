@@ -139,7 +139,8 @@ async def query_rag(
     if not session_id:
         session_id = create_session(tenant_id)
 
-    answer = generate_answer(
+    import json
+    answer, requires_human = generate_answer(
         tenant_id,
         query,
         use_hyde=use_hyde,
@@ -147,9 +148,25 @@ async def query_rag(
         provider=provider,
         session_id=UUID(session_id)
     )
+
+    response_data = {
+        "answer": answer,
+        "requires_human": requires_human,
+        "session_id": session_id,
+        "tenant_id": str(tenant_id),
+        "query": query
+    }
+    full_response_json = json.dumps(response_data, indent=2)
+
     return templates.TemplateResponse(
         "partials/chat_response.html",
-        {"request": request, "answer": answer, "query": query, "session_id": session_id}
+        {
+            "request": request,
+            "answer": answer,
+            "query": query,
+            "session_id": session_id,
+            "full_response_json": full_response_json
+        }
     )
 
 @router.delete("/documents/{doc_id}", response_class=HTMLResponse)
