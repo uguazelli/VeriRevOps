@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from src.db import init_db, close_pool
+from src.core.db import init_db, close_pool
 from src.controllers import web, api
-from src.logging import setup_logging
+from src.core.logging import setup_logging
 
 # Setup Logging
 setup_logging()

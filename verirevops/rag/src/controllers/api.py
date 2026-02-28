@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form
 from uuid import UUID
-from src.schemas import QueryRequest, QueryResponse
-from src.auth import require_auth
-from src.rag import generate_answer
-from src.transcription import transcribe_audio
+from src.core.schemas import QueryRequest, QueryResponse
+from src.core.auth import require_auth
+from src.services.rag import generate_answer
+from src.services.transcription import transcribe_audio
 
 router = APIRouter()
 

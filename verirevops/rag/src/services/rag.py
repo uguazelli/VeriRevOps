@@ -7,13 +7,12 @@ from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.llms.gemini import Gemini
 
-from src.db import get_db
-from src.embeddings import CustomGeminiEmbedding
-from src.hyde import generate_hypothetical_answer
-from src.rerank import rerank_documents
-from src.llm_factory import get_llm
-from src.llm_factory import get_llm
-from src.logging import log_start, log_success, log_error, log_llm, log_skip, log_external_call
+from src.core.db import get_db
+from src.services.embeddings import CustomGeminiEmbedding
+from src.services.hyde import generate_hypothetical_answer
+from src.services.rerank import rerank_documents
+from src.core.llm_factory import get_llm
+from src.core.logging import log_start, log_success, log_error, log_llm, log_skip, log_external_call
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +174,7 @@ def get_embed_model():
 
     return _embed_model
 
-from src.vlm import describe_image
+from src.services.vlm import describe_image
 
 # ... existing imports ...
 

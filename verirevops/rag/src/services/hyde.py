@@ -1,6 +1,6 @@
 import os
 import logging
-from src.llm_factory import get_llm
+from src.core.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
 

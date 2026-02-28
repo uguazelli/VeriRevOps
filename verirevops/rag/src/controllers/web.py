@@ -7,9 +7,9 @@ from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, Backgro
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from src.db import get_db
-from src.auth import require_auth
-from src.rag import ingest_document, generate_answer
+from src.core.db import get_db
+from src.core.auth import require_auth
+from src.services.rag import ingest_document, generate_answer
 
 logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="src/templates")
