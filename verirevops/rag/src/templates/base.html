@@ -12,6 +12,57 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .spinner {
+            animation: rotate 2s linear infinite;
+            width: 1.25rem;
+            height: 1.25rem;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .spinner .path {
+            stroke: currentColor;
+            stroke-linecap: round;
+            animation: dash 1.5s ease-in-out infinite;
+        }
+
+        @keyframes rotate {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes dash {
+            0% {
+                stroke-dasharray: 1, 150;
+                stroke-dashoffset: 0;
+            }
+
+            50% {
+                stroke-dasharray: 90, 150;
+                stroke-dashoffset: -35;
+            }
+
+            100% {
+                stroke-dasharray: 90, 150;
+                stroke-dashoffset: -124;
+            }
+        }
+
+        .loading-indicator {
+            display: none;
+        }
+
+        .htmx-request .loading-indicator {
+            display: inline-block;
+        }
+
+        .htmx-request.btn-disabled {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+    </style>
 </head>
 
 <body class="bg-gray-100 text-gray-900 font-sans antialiased h-screen flex flex-col md:flex-row overflow-hidden">
