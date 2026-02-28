@@ -2,19 +2,17 @@ from pydantic import BaseModel
 from uuid import UUID
 from typing import Optional, Union
 
-class QueryRequest(BaseModel):
+class RagRequest(BaseModel):
     tenant_id: int
-    query: str
-    use_hyde: bool = False
-    use_rerank: bool = False
-    provider: str = "gemini"
-
-class QueryResponse(BaseModel):
-    answer: str
-
-class ChatRequest(BaseModel):
     message: str
     provider: str = "gemini"
 
-class ChatResponse(BaseModel):
+class RagResponse(BaseModel):
+    answer: str
+
+class LlmRequest(BaseModel):
+    message: str
+    provider: str = "gemini"
+
+class LlmResponse(BaseModel):
     answer: str

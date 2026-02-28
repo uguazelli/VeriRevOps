@@ -9,7 +9,6 @@ from llama_index.llms.gemini import Gemini
 
 from src.core.db import get_db
 from src.services.embeddings import CustomGeminiEmbedding
-from src.services.hyde import generate_hypothetical_answer
 from src.services.rerank import rerank_documents
 from src.core.llm_factory import get_llm
 from src.core.logging import log_start, log_success, log_error, log_llm, log_skip, log_external_call
@@ -21,22 +20,19 @@ _embed_model = None
 
 def generate_answer(
     tenant_id: int,
-    query: str,
-    use_hyde: bool = False,
-    use_rerank: bool = False,
+    message: str,
     provider: str = "gemini"
 ) -> str:
     """
     Retrieves context and generates an answer using the requested LLM provider.
     """
-    log_start(logger, f"Generating answer for query: '{query}' | Provider={provider}")
+    log_start(logger, f"Generating answer for message: '{message[:50]}...' | Provider={provider}")
 
     # 1. Retrieve Context
     results = search_documents(
         tenant_id,
-        query,
-        use_hyde=use_hyde,
-        use_rerank=use_rerank,
+        message,
+        use_rerank=True,
         provider=provider
     )
 
@@ -54,7 +50,7 @@ def generate_answer(
         "Priority: Use the retrieved context for factual information about the documents.\n"
         "If the answer is not in the context, say you don't know.\n\n"
         f"Retrieved Context:\n{context_str}\n\n"
-        f"Question: {query}\n\n"
+        f"Question: {message}\n\n"
         "Answer:"
     )
 
@@ -155,23 +151,17 @@ def ingest_document(tenant_id: int, filename: str, content: str = None, file_byt
 
 def search_documents(
     tenant_id: int,
-    query: str,
+    message: str,
     limit: int = 5,
-    use_hyde: bool = False,
-    use_rerank: bool = False,
+    use_rerank: bool = True,
     provider: str = "gemini"
 ) -> List[Dict[str, Any]]:
     """
-    Performs a hybrid search (currently vector similarity) for a query.
-    Supports Query Expansion (HyDE) and Reranking.
+    Performs a hybrid search (currently vector similarity) for a message.
+    Supports Reranking.
     """
-    # 1. Query Expansion (HyDE)
-    search_query = query
-    if use_hyde:
-        logger.info(f"Using HyDE expansion with {provider}")
-        search_query = generate_hypothetical_answer(query, provider=provider)
-
-    # 2. Embed Query
+    # 1. Embed Query
+    search_query = message
     embed_model = get_embed_model()
     try:
         query_embedding = embed_model.get_query_embedding(search_query)
@@ -211,8 +201,8 @@ def search_documents(
     # 4. Reranking
     if use_rerank and results:
         logger.info(f"Reranking results with {provider}")
-        # We rerank against the ORIGINAL query, not the HyDE query
-        results = rerank_documents(query, results, top_k=limit, provider=provider)
+        # We rerank against the ORIGINAL message
+        results = rerank_documents(message, results, top_k=limit, provider=provider)
 
     return results
 

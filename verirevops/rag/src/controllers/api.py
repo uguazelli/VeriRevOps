@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form
-from src.core.schemas import QueryRequest, QueryResponse, ChatRequest, ChatResponse
+from src.core.schemas import RagRequest, RagResponse, LlmRequest, LlmResponse
 from src.core.auth import require_auth
 from src.services.rag import generate_answer
 from src.services.transcription import transcribe_audio
@@ -7,19 +7,17 @@ from src.services.llm import get_chat_response
 
 router = APIRouter()
 
-@router.post("/query", response_model=QueryResponse)
-async def api_query_rag(
-    request: QueryRequest,
+@router.post("/rag", response_model=RagResponse)
+async def api_rag(
+    request: RagRequest,
     username: str = Depends(require_auth)
 ):
     answer = generate_answer(
         request.tenant_id,
-        request.query,
-        use_hyde=request.use_hyde,
-        use_rerank=request.use_rerank,
+        request.message,
         provider=request.provider
     )
-    return QueryResponse(
+    return RagResponse(
         answer=answer
     )
 
@@ -39,9 +37,9 @@ async def api_transcribe(
     return {"text": text}
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def api_chat(
-    request: ChatRequest,
+@router.post("/llm", response_model=LlmResponse)
+async def api_llm(
+    request: LlmRequest,
     username: str = Depends(require_auth)
 ):
     """
@@ -51,4 +49,4 @@ async def api_chat(
         request.message,
         provider=request.provider
     )
-    return ChatResponse(answer=answer)
+    return LlmResponse(answer=answer)
