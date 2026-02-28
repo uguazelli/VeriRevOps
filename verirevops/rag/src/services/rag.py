@@ -59,7 +59,7 @@ def analyze_intent(query: str, provider: str = "gemini") -> Dict[str, bool]:
 # ... existing search_documents ...
 
 def generate_answer(
-    tenant_id: UUID,
+    tenant_id: int,
     query: str,
     use_hyde: bool = False,
     use_rerank: bool = False,
@@ -178,7 +178,7 @@ from src.services.vlm import describe_image
 
 # ... existing imports ...
 
-def ingest_document(tenant_id: UUID, filename: str, content: str = None, file_bytes: bytes = None):
+def ingest_document(tenant_id: int, filename: str, content: str = None, file_bytes: bytes = None):
     """
     Parses, chunks, embeds, and inserts a document into the database.
     Supports text files (content passed) and images (file_bytes passed).
@@ -242,7 +242,7 @@ def ingest_document(tenant_id: UUID, filename: str, content: str = None, file_by
     logger.info(f"Successfully ingested {filename}")
 
 def search_documents(
-    tenant_id: UUID,
+    tenant_id: int,
     query: str,
     limit: int = 5,
     use_hyde: bool = False,

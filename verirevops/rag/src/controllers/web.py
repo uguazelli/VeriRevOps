@@ -22,7 +22,7 @@ def get_tenants():
             cur.execute("SELECT id, slug FROM tenants ORDER BY created_at DESC")
             return cur.fetchall()
 
-def get_tenant_documents(tenant_id: UUID):
+def get_tenant_documents(tenant_id: int):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT id, filename, created_at FROM documents WHERE tenant_id = %s ORDER BY created_at DESC", (tenant_id,))
@@ -73,7 +73,7 @@ async def create_tenant(request: Request, slug: Annotated[str, Form()], username
     return RedirectResponse(url="/", status_code=303)
 
 @router.get("/tenants/{tenant_id}", response_class=HTMLResponse)
-async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends(require_auth)):
+async def view_tenant(request: Request, tenant_id: int, username: str = Depends(require_auth)):
     tenants = get_tenants()
     documents = get_tenant_documents(tenant_id)
     tenant_slug = "Unknown"
@@ -88,7 +88,7 @@ async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends
         {
             "request": request,
             "tenants": tenants,
-            "selected_tenant": {"id": str(tenant_id), "slug": tenant_slug},
+            "selected_tenant": {"id": tenant_id, "slug": tenant_slug},
             "documents": documents,
             "username": username,
             "gemini_model": gemini_model
@@ -96,7 +96,7 @@ async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends
     )
 
 @router.post("/tenants/{tenant_id}/rename", response_class=HTMLResponse)
-async def rename_tenant(request: Request, tenant_id: UUID, slug: Annotated[str, Form()], username: str = Depends(require_auth)):
+async def rename_tenant(request: Request, tenant_id: int, slug: Annotated[str, Form()], username: str = Depends(require_auth)):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE tenants SET slug = %s WHERE id = %s", (slug, tenant_id))
@@ -104,7 +104,7 @@ async def rename_tenant(request: Request, tenant_id: UUID, slug: Annotated[str, 
     return RedirectResponse(url=f"/tenants/{tenant_id}", status_code=303)
 
 @router.delete("/tenants/{tenant_id}")
-async def delete_tenant(request: Request, tenant_id: UUID, username: str = Depends(require_auth)):
+async def delete_tenant(request: Request, tenant_id: int, username: str = Depends(require_auth)):
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
@@ -115,7 +115,7 @@ async def delete_tenant(request: Request, tenant_id: UUID, username: str = Depen
 async def ingest_file(
     request: Request,
     background_tasks: BackgroundTasks,
-    tenant_id: Annotated[UUID, Form()],
+    tenant_id: Annotated[int, Form()],
     file: Annotated[UploadFile, File()],
     username: str = Depends(require_auth)
 ):
@@ -146,7 +146,7 @@ async def ingest_file(
 @router.post("/query", response_class=HTMLResponse)
 async def query_rag(
     request: Request,
-    tenant_id: Annotated[UUID, Form()],
+    tenant_id: Annotated[int, Form()],
     query: Annotated[str, Form()],
     use_hyde: Annotated[bool, Form()] = False,
     use_rerank: Annotated[bool, Form()] = False,

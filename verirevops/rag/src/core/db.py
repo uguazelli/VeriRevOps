@@ -34,28 +34,19 @@ def init_db():
             # Enable pgvector extension
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
+            # [DEVELOPMENT ONLY] Drop existing tables to simplify PK change
+            # logger.warning("Dropping tables for PK refactor (Development Phase)")
+            # cur.execute("DROP TABLE IF EXISTS documents CASCADE;")
+            # cur.execute("DROP TABLE IF EXISTS tenants CASCADE;")
+
             # Create tenants table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS tenants (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    id SERIAL PRIMARY KEY,
                     slug VARCHAR(255) NOT NULL,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
             """)
-            # Migration: Rename name to slug if it exists
-            cur.execute("""
-                DO $$
-                BEGIN
-                    IF EXISTS (
-                        SELECT 1
-                        FROM information_schema.columns
-                        WHERE table_name='tenants' AND column_name='name'
-                    ) THEN
-                        ALTER TABLE tenants RENAME COLUMN name TO slug;
-                    END IF;
-                END $$;
-            """)
-
 
             # Create documents table
             # embedding vector size depends on provider
@@ -83,17 +74,12 @@ def init_db():
             cur.execute(f"""
                 CREATE TABLE IF NOT EXISTS documents (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+                    tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
                     filename VARCHAR(255) NOT NULL,
                     content TEXT NOT NULL,
                     embedding vector({dim}),
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
-            """)
-
-            # Create index for tenant_id for faster filtering
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS documents_tenant_id_idx ON documents (tenant_id);
             """)
 
             # Create index for tenant_id for faster filtering

@@ -3,7 +3,7 @@ from uuid import UUID
 from typing import Optional, Union
 
 class QueryRequest(BaseModel):
-    tenant_id: UUID
+    tenant_id: int
     query: str
     use_hyde: bool = False
     use_rerank: bool = False
