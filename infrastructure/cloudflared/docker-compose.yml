@@ -3,7 +3,7 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: veridata_tunnel
-    restart: always
+    restart: unless-stopped
     command: tunnel run
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}

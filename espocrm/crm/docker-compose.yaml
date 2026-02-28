@@ -40,7 +40,7 @@ services:
       veridata.network:
         aliases:
           - veridata.${CONTAINER_NAME:-espocrm}
-    restart: always
+    restart: unless-stopped
     # --- PRODUCTION UPGRADES ---
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/"]
@@ -50,8 +50,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.50'        # Limits usage to 50% of one core per client
-          memory: 512M        # Prevents memory leaks crashing the host
+          cpus: "0.50" # Limits usage to 50% of one core per client
+          memory: 512M # Prevents memory leaks crashing the host
 
   # ---------------------------------------------------------------------------
   # 3. Daemon (Cron Jobs/Background Tasks) - Alias: .daemon
@@ -73,7 +73,7 @@ services:
       veridata.network:
         aliases:
           - veridata.${CONTAINER_NAME:-espocrm}_daemon
-    restart: always
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # 4. WebSocket (Real-time notifications)
@@ -95,7 +95,7 @@ services:
       veridata.network:
         aliases:
           - veridata.${CONTAINER_NAME:-espocrm}_websocket
-    restart: always
+    restart: unless-stopped
 
 # ---------------------------------------------------------------------------
 # Volumes & Networks

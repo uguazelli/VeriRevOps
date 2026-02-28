@@ -1,18 +1,17 @@
+name: chatwoot
+
 services:
   base: &base
     image: chatwoot/chatwoot:latest
-    env_file: .env ## Change this file for customized env variables
+    env_file: .env
     volumes:
       - storage_data:/app/storage
 
   rails:
     <<: *base
-    container_name: veridata.chatwoot
-    depends_on:
-      - postgres
-      - redis
+    container_name: rails
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${CHATWOOT_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
       - RAILS_ENV=production
@@ -27,9 +26,7 @@ services:
 
   sidekiq:
     <<: *base
-    depends_on:
-      - postgres
-      - redis
+    container_name: chatwoot_sidekiq
     environment:
       - NODE_ENV=production
       - RAILS_ENV=production
@@ -39,43 +36,10 @@ services:
     networks:
       veridata.network:
         aliases:
-          - veridata.sidekiq
-
-  postgres:
-    image: pgvector/pgvector:pg16
-    restart: always
-    ports:
-      - "127.0.0.1:5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=chatwoot
-      - POSTGRES_USER=vd
-      # Please provide your own password.
-      - POSTGRES_PASSWORD=vd
-    networks:
-      veridata.network:
-        aliases:
-          - veridata.chatwoot_postgres
-
-  redis:
-    image: redis:alpine
-    restart: always
-    command: ["sh", "-c", 'redis-server --requirepass "$REDIS_PASSWORD"']
-    env_file: .env
-    volumes:
-      - redis_data:/data
-    ports:
-      - "127.0.0.1:6379:6379"
-    networks:
-      veridata.network:
-        aliases:
-          - veridata.redis"
+          - veridata.chatwoot.sidekiq
 
 volumes:
   storage_data:
-  postgres_data:
-  redis_data:
 
 networks:
   veridata.network:

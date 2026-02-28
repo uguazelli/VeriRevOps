@@ -9,7 +9,7 @@ services:
     #   - 4022:8080
     networks:
       - veridata.network
-    restart: always
+    restart: unless-stopped
 
 networks:
   veridata.network:

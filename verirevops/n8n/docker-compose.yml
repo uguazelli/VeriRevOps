@@ -1,0 +1,60 @@
+name: n8n-revops
+services:
+  veridata-n8n-main:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: "veridata.n8n.main"
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment: &n8n-env
+      - N8N_HOST=${SUBDOMAIN}.${DOMAIN_NAME}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://${SUBDOMAIN}.${DOMAIN_NAME}/
+      - N8N_PROXY_HOPS=1
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+      - TZ=${GENERIC_TIMEZONE}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
+      - N8N_RETRY_ON_FAIL=true
+
+      # Deactivate python
+      - N8N_DISABLE_PYTHON_NODE=true
+
+      # MODO QUEUE
+      - EXECUTIONS_MODE=queue
+
+      # REDIS
+      - QUEUE_BULL_REDIS_HOST=${REDIS_HOST}
+      - QUEUE_BULL_REDIS_PORT=${REDIS_PORT}
+      - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - QUEUE_BULL_REDIS_DB=${REDIS_DB}
+
+      # POSTGRES
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=${POSTGRES_HOST}
+      - DB_POSTGRESDB_PORT=${POSTGRES_PORT}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DATABASE}
+    command: start
+    networks:
+      veridata.network:
+        aliases:
+          - veridata.n8n.main
+
+  veridata-n8n-worker:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: "veridata.n8n.worker"
+    restart: unless-stopped
+    environment: *n8n-env
+    command: worker
+    networks:
+      veridata.network:
+        aliases:
+          - veridata.n8n.worker
+
+networks:
+  veridata.network:
+    external: true
