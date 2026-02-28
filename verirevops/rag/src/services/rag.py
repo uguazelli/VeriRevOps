@@ -19,143 +19,55 @@ logger = logging.getLogger(__name__)
 # Single instance of embedding model
 _embed_model = None
 
-INTENT_PROMPT_TEMPLATE = (
-    "You are a router. Analyze the user's query and decide on two things:\n"
-    "1. Does it require looking up external documents? (RAG)\n"
-    "2. Does the user explicitly ask to speak to a human agent? (HUMAN)\n\n"
-    "Rules for RAG:\n"
-    "1. Greetings, thanks, or personal questions -> RAG = FALSE\n"
-    "2. Questions about entities, products, policies, facts -> RAG = TRUE\n"
-    "3. Ambiguous questions -> RAG = TRUE\n"
-    "4. Unsure -> RAG = TRUE\n\n"
-    "Rules for HUMAN:\n"
-    "1. User says 'talk to human', 'real person', 'support agent', 'manager' -> HUMAN = TRUE\n"
-    "2. Otherwise -> HUMAN = FALSE\n\n"
-    "Return JSON with keys 'requires_rag' (bool) and 'requires_human' (bool).\n\n"
-    "Query: {query}\n\n"
-    "JSON Output:"
-)
-
-def analyze_intent(query: str, provider: str = "gemini") -> Dict[str, bool]:
-    """
-    Uses LLM to decide if RAG is needed and if human handoff is requested.
-    """
-    try:
-        # Use a fast model for routing if possible
-        llm = get_llm(provider)
-        prompt = INTENT_PROMPT_TEMPLATE.format(query=query)
-        response = llm.complete(prompt)
-        text = response.text.replace('```json', '').replace('```', '').strip()
-        import json
-        data = json.loads(text)
-        requires_rag = data.get('requires_rag', True)
-        requires_human = data.get('requires_human', False)
-        logger.info(f"Intent Classification: '{query}' -> RAG: {requires_rag}, Human: {requires_human}")
-        return {"requires_rag": requires_rag, "requires_human": requires_human}
-    except Exception as e:
-        logger.warning(f"Intent classification failed, defaulting to RAG=True, Human=False: {e}")
-        return {"requires_rag": True, "requires_human": False}
-
-# ... existing search_documents ...
-
 def generate_answer(
     tenant_id: int,
     query: str,
     use_hyde: bool = False,
     use_rerank: bool = False,
     provider: str = "gemini"
-) -> tuple[str, bool]:
+) -> str:
     """
     Retrieves context and generates an answer using the requested LLM provider.
-    Supports Intent Classification (Stateless).
     """
     log_start(logger, f"Generating answer for query: '{query}' | Provider={provider}")
 
-    # 1. Intent Classification (Small Talk vs RAG vs Human)
-    intent = analyze_intent(query, provider)
-    requires_rag = intent["requires_rag"]
-    requires_human = intent["requires_human"]
+    # 1. Retrieve Context
+    results = search_documents(
+        tenant_id,
+        query,
+        use_hyde=use_hyde,
+        use_rerank=use_rerank,
+        provider=provider
+    )
 
-    results = []
-    answer = ""
-
-    # If human handoff is requested, short-circuit
-    if requires_human:
-        logger.info("Human handoff requested.")
-        prompt = (
-            "You are a helpful assistant.\n"
-            "The user explicitly asked to speak to a human agent.\n"
-            "Generate a polite response confirming you will transfer them to a human agent.\n"
-            "IMPORTANT: Expected output must be in the SAME language as the user's message.\n"
-            f"User Message: {query}\n"
-            "Response:"
-        )
-        try:
-            llm = get_llm(provider)
-            response = llm.complete(prompt)
-            return response.text.strip(), True
-        except Exception as e:
-            logger.error(f"LLM generation for handoff failed: {e}")
-            return "I will transfer you to a human agent.", True
-
-    if requires_rag:
-        # 2. Retrieve Context (ONLY if needed)
-        results = search_documents(
-            tenant_id,
-            query,
-            use_hyde=use_hyde,
-            use_rerank=use_rerank,
-            provider=provider
-        )
-
-        if not results:
-            # If no docs found, fail gracefully
-            context_str = "No relevant documents found."
-        else:
-            context_str = "\n\n".join([f"Source: {r['filename']}\n{r['content']}" for r in results])
-
-        # 3. Prompt (RAG)
-        prompt = (
-            "You are Veribot 🤖, an AI assistant.\n"
-            "Use the following pieces of retrieved context to answer the user's question.\n"
-            "IMPORTANT: Always answer in the same language as the user's question.\n"
-            "If asked about your identity, say you are Veribot 🤖, an AI assistant capable of answering most questions and redirecting to a human if needed.\n"
-            "Priority: Use the retrieved context for factual information about the documents.\n"
-            "If the answer is not in the context, say you don't know.\n\n"
-            f"Retrieved Context:\n{context_str}\n\n"
-            f"Question: {query}\n\n"
-            "Answer:"
-        )
-
-        # 4. Generate
-        try:
-            llm = get_llm(provider)
-            response = llm.complete(prompt)
-            answer = response.text
-        except Exception as e:
-            log_error(logger, f"LLM generation failed: {e}")
-            answer = "Sorry, I encountered an error generating the answer."
+    if not results:
+        context_str = "No relevant documents found."
     else:
-        # 3. Small Talk / Direct Generation
-        log_skip(logger, "Small talk detected. Bypassing RAG.")
-        prompt = (
-            "You are Veribot 🤖, a helpful AI assistant.\n"
-            "Respond to the following user message nicely and concisely.\n"
-            "If this is a greeting, introduce yourself as Veribot 🤖, an AI assistant who can answer most questions or redirect you to a human agent.\n"
-            "IMPORTANT: Always answer in the same language as the user's message.\n"
-            "Do NOT hallucinate information about documents you don't see.\n"
-            f"Message: {query}\n\n"
-            "Response:"
-        )
-        try:
-            llm = get_llm(provider)
-            response = llm.complete(prompt)
-            answer = response.text
-        except Exception as e:
-            logger.error(f"LLM generation failed: {e}")
-            answer = "Sorry, I encountered an error generating the answer."
+        context_str = "\n\n".join([f"Source: {r['filename']}\n{r['content']}" for r in results])
 
-    return answer, False
+    # 2. Prompt (RAG)
+    prompt = (
+        "You are Veribot 🤖, an AI assistant.\n"
+        "Use the following pieces of retrieved context to answer the user's question.\n"
+        "IMPORTANT: Always answer in the same language as the user's question.\n"
+        "If asked about your identity, say you are Veribot 🤖, an AI assistant capable of answering most questions and redirecting to a human if needed.\n"
+        "Priority: Use the retrieved context for factual information about the documents.\n"
+        "If the answer is not in the context, say you don't know.\n\n"
+        f"Retrieved Context:\n{context_str}\n\n"
+        f"Question: {query}\n\n"
+        "Answer:"
+    )
+
+    # 3. Generate
+    try:
+        llm = get_llm(provider)
+        response = llm.complete(prompt)
+        answer = response.text
+    except Exception as e:
+        log_error(logger, f"LLM generation failed: {e}")
+        answer = "Sorry, I encountered an error generating the answer."
+
+    return answer
 
 def get_embed_model():
     """

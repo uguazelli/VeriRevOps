@@ -12,7 +12,7 @@ async def api_query_rag(
     request: QueryRequest,
     username: str = Depends(require_auth)
 ):
-    answer, requires_human = generate_answer(
+    answer = generate_answer(
         request.tenant_id,
         request.query,
         use_hyde=request.use_hyde,
@@ -20,8 +20,7 @@ async def api_query_rag(
         provider=request.provider
     )
     return QueryResponse(
-        answer=answer,
-        requires_human=requires_human
+        answer=answer
     )
 
 
