@@ -37,6 +37,8 @@ def get_llm(provider: str = "gemini") -> Any:
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not set.")
         model_name = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash")
+        if not model_name.startswith("models/"):
+            model_name = f"models/{model_name}"
         llm = Gemini(model=model_name, api_key=api_key)
 
     else:

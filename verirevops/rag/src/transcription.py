@@ -43,6 +43,8 @@ async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> 
 
     # Gemini Flash is good for this
     model_name = os.getenv("GEMINI_MODEL", "models/gemini-2.0-flash")
+    if not model_name.startswith("models/"):
+        model_name = f"models/{model_name}"
     model = genai.GenerativeModel(model_name)
 
     try:

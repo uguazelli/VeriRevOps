@@ -58,9 +58,10 @@ async def logout(request: Request):
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, username: str = Depends(require_auth)):
     tenants = get_tenants()
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").replace("models/", "")
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "tenants": tenants, "selected_tenant": None, "username": username}
+        {"request": request, "tenants": tenants, "selected_tenant": None, "username": username, "gemini_model": gemini_model}
     )
 
 @router.post("/tenants", response_class=HTMLResponse)
@@ -81,6 +82,7 @@ async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends
             tenant_name = t_name
             break
 
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").replace("models/", "")
     return templates.TemplateResponse(
         "index.html",
         {
@@ -88,7 +90,8 @@ async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends
             "tenants": tenants,
             "selected_tenant": {"id": str(tenant_id), "name": tenant_name},
             "documents": documents,
-            "username": username
+            "username": username,
+            "gemini_model": gemini_model
         }
     )
 
