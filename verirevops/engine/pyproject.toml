@@ -15,5 +15,7 @@ dependencies = [
     "psycopg[binary,pool]>=3.3.2",
     "python-dotenv>=1.2.1",
     "python-multipart>=0.0.20",
+    "sqladmin>=0.20.1",
+    "sqlalchemy>=2.0.38",
     "uvicorn>=0.38.0",
 ]

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.core.db import init_db, close_pool
+from src.core.admin import setup_admin
 from src.controllers import web, api
 from src.core.logging import setup_logging
 
@@ -19,6 +20,9 @@ async def lifespan(app: FastAPI):
     close_pool()
 
 app = FastAPI(title="VeriRag Core", lifespan=lifespan)
+
+# Setup SQLAdmin
+setup_admin(app)
 
 # Include Routers
 # Web (HTML) Router - Mounts at root

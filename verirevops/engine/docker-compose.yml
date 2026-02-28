@@ -1,9 +1,9 @@
 name: veridata
 
 services:
-  veridata_rag:
+  veridata_revops_rag:
     build: .
-    container_name: veridata.rag
+    container_name: veridata.revops.rag
     env_file:
       - .env
     environment:
@@ -13,11 +13,22 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./src:/app/src
-    command: ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command:
+      [
+        "uv",
+        "run",
+        "uvicorn",
+        "src.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
     networks:
       veridata.network:
         aliases:
-          - veridata.rag
+          - veridata.revops.rag
     develop:
       watch:
         - action: sync

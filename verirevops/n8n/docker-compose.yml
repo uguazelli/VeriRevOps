@@ -1,8 +1,8 @@
 name: n8n-revops
 services:
-  veridata-n8n-main:
+  veridata_revops_n8n_main:
     image: docker.n8n.io/n8nio/n8n
-    container_name: "veridata.n8n.main"
+    container_name: "veridata.revops.n8n.main"
     restart: unless-stopped
     ports:
       - "5678:5678"
@@ -42,18 +42,18 @@ services:
     networks:
       veridata.network:
         aliases:
-          - veridata.n8n.main
+          - veridata.revops.n8n.main
 
   veridata-n8n-worker:
     image: docker.n8n.io/n8nio/n8n
-    container_name: "veridata.n8n.worker"
+    container_name: "veridata.revops.n8n.worker"
     restart: unless-stopped
     environment: *n8n-env
     command: worker
     networks:
       veridata.network:
         aliases:
-          - veridata.n8n.worker
+          - veridata.revops.n8n.worker
 
 networks:
   veridata.network:
