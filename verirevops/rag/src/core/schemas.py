@@ -12,3 +12,10 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     requires_human: bool = False
+
+class ChatRequest(BaseModel):
+    message: str
+    provider: str = "gemini"
+
+class ChatResponse(BaseModel):
+    answer: str

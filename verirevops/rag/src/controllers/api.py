@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form
-from uuid import UUID
-from src.core.schemas import QueryRequest, QueryResponse
+from src.core.schemas import QueryRequest, QueryResponse, ChatRequest, ChatResponse
 from src.core.auth import require_auth
 from src.services.rag import generate_answer
 from src.services.transcription import transcribe_audio
+from src.services.llm import get_chat_response
 
 router = APIRouter()
 
@@ -38,3 +38,18 @@ async def api_transcribe(
     text = await transcribe_audio(content, file.filename, provider)
 
     return {"text": text}
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def api_chat(
+    request: ChatRequest,
+    username: str = Depends(require_auth)
+):
+    """
+    Direct endpoint to query LLM without RAG.
+    """
+    answer = await get_chat_response(
+        request.message,
+        provider=request.provider
+    )
+    return ChatResponse(answer=answer)
