@@ -1,8 +1,8 @@
-import logging
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from sqladmin import Admin, ModelView, BaseView, expose
 from src.core.models import Tenant, Subscription, Configuration, Service, ContactMapping, ChatSession, Document
 from src.core.db import get_engine
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +13,8 @@ class DashboardView(BaseView):
 
     @expose("/", methods=["GET"])
     async def index(self, request):
-        logger.info("Redirecting from Admin to Dashboard")
-        return RedirectResponse(url="/", status_code=302)
+        # Using JS redirect to ensure we break out of SQLAdmin's AJAX content area
+        return HTMLResponse("<script>window.location.href='/';</script>")
 
 class TenantAdmin(ModelView, model=Tenant):
     column_list = [Tenant.id, Tenant.slug, Tenant.created_at]
