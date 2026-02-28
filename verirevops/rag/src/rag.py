@@ -12,88 +12,13 @@ from src.embeddings import CustomGeminiEmbedding
 from src.hyde import generate_hypothetical_answer
 from src.rerank import rerank_documents
 from src.llm_factory import get_llm
-from src.memory import add_message, get_chat_history, get_full_chat_history
+from src.llm_factory import get_llm
 from src.logging import log_start, log_success, log_error, log_llm, log_skip, log_external_call
 
 logger = logging.getLogger(__name__)
 
 # Single instance of embedding model
 _embed_model = None
-
-SUMMARY_PROMPT_TEMPLATE = (
-    "You are an expert CRM analyst. Analyze the following conversation between a user and an AI assistant.\n"
-    "Extract structured information for lead qualification and CRM updates.\n\n"
-    "Conversation:\n{history_str}\n\n"
-    "Tasks:\n"
-    "1. Analyze Purchase Intent (High, Medium, Low, None)\n"
-    "2. Assess Urgency (Urgent, Normal, Low)\n"
-    "3. Determine Sentiment Score (Positive, Neutral, Negative)\n"
-    "4. Detect Budget (if mentioned)\n"
-    "5. Extract Contact Info (Name, Phone, Email, Address, Industry)\n"
-    "6. Write a concise AI Summary (Markdown)\n"
-    "7. Write a Client Description (Professional tone)\n\n"
-    "Output must be valid JSON with this structure:\n"
-    "{{\n"
-    "  \"purchase_intent\": \"...\",\n"
-    "  \"urgency_level\": \"...\",\n"
-    "  \"sentiment_score\": \"...\",\n"
-    "  \"detected_budget\": null,\n"
-    "  \"ai_summary\": \"...\",\n"
-    "  \"contact_info\": {{\"name\": null, \"phone\": null, \"email\": null, \"address\": null, \"industry\": null}},\n"
-    "  \"client_description\": \"...\"\n"
-    "}}\n\n"
-    "JSON Output:"
-)
-
-def summarize_conversation(session_id: UUID, provider: str = "gemini") -> Dict[str, Any]:
-    """
-    Summarizes a full conversation session into structured JSON.
-    """
-    history = get_full_chat_history(session_id)
-    if not history:
-        logger.warning(f"No history found for session {session_id}")
-        return {}
-
-    history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
-
-    try:
-        llm = get_llm(provider)
-        prompt = SUMMARY_PROMPT_TEMPLATE.format(history_str=history_str)
-        response = llm.complete(prompt)
-        text = response.text.replace('```json', '').replace('```', '').strip()
-        log_llm(logger, f"Summarization response: {text}")
-
-        import json
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            import ast
-            logger.warning("JSON decode failed, trying literal_eval")
-            return ast.literal_eval(text)
-
-    except Exception as e:
-        log_error(logger, f"Summarization failed: {e}")
-        # Return fallback object that matches the Pydantic schema
-        return {
-            "purchase_intent": "None",
-            "urgency_level": "Low",
-            "sentiment_score": "Neutral",
-            "detected_budget": None,
-            "ai_summary": f"Summarization failed due to error: {str(e)}",
-            "contact_info": {},
-            "client_description": None
-        }
-
-# ... existing imports ...
-
-CONTEXTUALIZE_PROMPT_TEMPLATE = (
-    "Given a chat history and the latest user question which might reference context in the chat history, "
-    "formulate a standalone question which can be understood without the chat history. "
-    "Do NOT answer the question, just reformulate it if needed and otherwise return it as is.\n\n"
-    "Chat History:\n{history_str}\n\n"
-    "Latest Question: {query}\n\n"
-    "Standalone Question:"
-)
 
 INTENT_PROMPT_TEMPLATE = (
     "You are a router. Analyze the user's query and decide on two things:\n"
@@ -132,26 +57,6 @@ def analyze_intent(query: str, provider: str = "gemini") -> Dict[str, bool]:
         logger.warning(f"Intent classification failed, defaulting to RAG=True, Human=False: {e}")
         return {"requires_rag": True, "requires_human": False}
 
-def contextualize_query(query: str, history: List[Dict[str, str]], provider: str = "gemini") -> str:
-    """
-    Rewrites the user query to be standalone based on chat history.
-    """
-    if not history:
-        return query
-
-    history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
-
-    try:
-        llm = get_llm(provider)
-        prompt = CONTEXTUALIZE_PROMPT_TEMPLATE.format(history_str=history_str, query=query)
-        response = llm.complete(prompt)
-        rewritten = response.text.strip()
-        logger.info(f"Contextualized query: '{query}' -> '{rewritten}'")
-        return rewritten
-    except Exception as e:
-        logger.error(f"Contextualization failed: {e}")
-        return query
-
 # ... existing search_documents ...
 
 def generate_answer(
@@ -159,25 +64,16 @@ def generate_answer(
     query: str,
     use_hyde: bool = False,
     use_rerank: bool = False,
-    provider: str = "gemini",
-    session_id: Optional[UUID] = None
+    provider: str = "gemini"
 ) -> tuple[str, bool]:
     """
     Retrieves context and generates an answer using the requested LLM provider.
-    Supports Conversational Memory and Intent Classification.
+    Supports Intent Classification (Stateless).
     """
-    log_start(logger, f"Generating answer for query: '{query}' | Session={session_id} | Provider={provider}")
+    log_start(logger, f"Generating answer for query: '{query}' | Provider={provider}")
 
-    # 1. Handle Memory (Contextualization)
-    search_query = query
-    history = []
-    if session_id:
-        history = get_chat_history(session_id, limit=5)
-        if history:
-            search_query = contextualize_query(query, history, provider)
-
-    # 2. Intent Classification (Small Talk vs RAG vs Human)
-    intent = analyze_intent(search_query, provider)
+    # 1. Intent Classification (Small Talk vs RAG vs Human)
+    intent = analyze_intent(query, provider)
     requires_rag = intent["requires_rag"]
     requires_human = intent["requires_human"]
 
@@ -192,7 +88,7 @@ def generate_answer(
             "The user explicitly asked to speak to a human agent.\n"
             "Generate a polite response confirming you will transfer them to a human agent.\n"
             "IMPORTANT: Expected output must be in the SAME language as the user's message.\n"
-            f"User Message: {search_query}\n"
+            f"User Message: {query}\n"
             "Response:"
         )
         try:
@@ -203,23 +99,18 @@ def generate_answer(
             logger.error(f"LLM generation for handoff failed: {e}")
             return "I will transfer you to a human agent.", True
 
-    # Format history for EITHER prompt
-    history_str = ""
-    if history:
-        history_str = "\n".join([f"{msg['role'].upper()}: {msg['content']}" for msg in history])
-
     if requires_rag:
-        # 3. Retrieve Context (ONLY if needed)
+        # 2. Retrieve Context (ONLY if needed)
         results = search_documents(
             tenant_id,
-            search_query,
+            query,
             use_hyde=use_hyde,
             use_rerank=use_rerank,
             provider=provider
         )
 
         if not results:
-            # If no docs found, try answering from history alone if possible, or fail gracefully
+            # If no docs found, fail gracefully
             context_str = "No relevant documents found."
         else:
             context_str = "\n\n".join([f"Source: {r['filename']}\n{r['content']}" for r in results])
@@ -227,16 +118,13 @@ def generate_answer(
         # 3. Prompt (RAG)
         prompt = (
             "You are Veribot 🤖, an AI assistant.\n"
-            "Use the following pieces of retrieved context AND the chat history to answer the user's question.\n"
+            "Use the following pieces of retrieved context to answer the user's question.\n"
             "IMPORTANT: Always answer in the same language as the user's question.\n"
             "If asked about your identity, say you are Veribot 🤖, an AI assistant capable of answering most questions and redirecting to a human if needed.\n"
-            "Priority:\n"
-            "1. Use the retrieved context for factual information about the documents.\n"
-            "2. Use the chat history for conversational context (e.g., user's name, previous topics).\n"
-            "If the answer is not in the context or history, say you don't know.\n\n"
-            f"Chat History:\n{history_str}\n\n"
+            "Priority: Use the retrieved context for factual information about the documents.\n"
+            "If the answer is not in the context, say you don't know.\n\n"
             f"Retrieved Context:\n{context_str}\n\n"
-            f"Question: {search_query}\n\n"
+            f"Question: {query}\n\n"
             "Answer:"
         )
 
@@ -249,17 +137,15 @@ def generate_answer(
             log_error(logger, f"LLM generation failed: {e}")
             answer = "Sorry, I encountered an error generating the answer."
     else:
-        # 4. Small Talk / Direct Generation
+        # 3. Small Talk / Direct Generation
         log_skip(logger, "Small talk detected. Bypassing RAG.")
         prompt = (
             "You are Veribot 🤖, a helpful AI assistant.\n"
             "Respond to the following user message nicely and concisely.\n"
             "If this is a greeting, introduce yourself as Veribot 🤖, an AI assistant who can answer most questions or redirect you to a human agent.\n"
             "IMPORTANT: Always answer in the same language as the user's message.\n"
-            "Use the chat history to maintain conversation context (e.g. remember names).\n"
             "Do NOT hallucinate information about documents you don't see.\n"
-            f"Chat History:\n{history_str}\n\n"
-            f"Message: {search_query}\n\n"
+            f"Message: {query}\n\n"
             "Response:"
         )
         try:
@@ -269,14 +155,6 @@ def generate_answer(
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
             answer = "Sorry, I encountered an error generating the answer."
-
-    # 5. Save Logic (if session active)
-    if session_id:
-        try:
-            add_message(session_id, "user", query) # Save ORIGINAL query
-            add_message(session_id, "ai", answer)
-        except Exception as e:
-            logger.error(f"Failed to save message history: {e}")
 
     return answer, False
 

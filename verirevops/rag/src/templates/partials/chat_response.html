@@ -10,7 +10,8 @@
 
         <div class="mt-6 pt-4 border-t border-gray-200">
             <details class="text-xs">
-                <summary class="cursor-pointer text-blue-600 hover:text-blue-800 font-medium">View Full JSON Response</summary>
+                <summary class="cursor-pointer text-blue-600 hover:text-blue-800 font-medium">View Full JSON Response
+                </summary>
                 <div class="mt-2 bg-gray-900 text-gray-100 p-4 rounded-md overflow-x-auto">
                     <pre>{{ full_response_json }}</pre>
                 </div>
@@ -18,14 +19,3 @@
         </div>
     </div>
 </div>
-
-{% if session_id %}
-<!-- Update the hidden session_id input for subsequent requests -->
-<script>
-    var sessionInput = document.getElementById("session-id-input");
-    if (sessionInput) {
-        sessionInput.value = "{{ session_id }}";
-        console.log("Session ID updated to: {{ session_id }}");
-    }
-</script>
-{% endif %}

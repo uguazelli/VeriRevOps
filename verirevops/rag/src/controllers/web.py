@@ -125,7 +125,7 @@ async def ingest_file(
         logger.error(f"Error reading file: {e}")
         return HTMLResponse(f'<div class="text-red-500">Error reading file</div>')
 
-from src.memory import create_session
+# Query Route
 
 @router.post("/query", response_class=HTMLResponse)
 async def query_rag(
@@ -135,27 +135,20 @@ async def query_rag(
     use_hyde: Annotated[bool, Form()] = False,
     use_rerank: Annotated[bool, Form()] = False,
     provider: Annotated[str, Form()] = "gemini",
-    session_id: Annotated[Optional[str], Form()] = None,
     username: str = Depends(require_auth)
 ):
-    # Create session if needed
-    if not session_id:
-        session_id = create_session(tenant_id)
-
     import json
     answer, requires_human = generate_answer(
         tenant_id,
         query,
         use_hyde=use_hyde,
         use_rerank=use_rerank,
-        provider=provider,
-        session_id=UUID(session_id)
+        provider=provider
     )
 
     response_data = {
         "answer": answer,
         "requires_human": requires_human,
-        "session_id": session_id,
         "tenant_id": str(tenant_id),
         "query": query
     }
@@ -167,7 +160,6 @@ async def query_rag(
             "request": request,
             "answer": answer,
             "query": query,
-            "session_id": session_id,
             "full_response_json": full_response_json
         }
     )
