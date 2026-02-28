@@ -135,7 +135,8 @@ async def ingest_file(
 
         background_tasks.add_task(ingest_document, tenant_id, file.filename, content=text_content, file_bytes=file_bytes)
         return HTMLResponse(
-            f'<div class="text-green-500 mb-2">Started processing {file.filename}... check back soon.</div>'
+            f'<div class="text-green-500 mb-2">Processing {file.filename}... refreshing page.</div>'
+            f'<script>setTimeout(() => window.location.reload(), 1500);</script>'
         )
     except Exception as e:
         logger.error(f"Error reading file: {e}")
@@ -148,23 +149,19 @@ async def query_rag(
     request: Request,
     tenant_id: Annotated[int, Form()],
     query: Annotated[str, Form()],
-    use_hyde: Annotated[bool, Form()] = False,
-    use_rerank: Annotated[bool, Form()] = False,
     provider: Annotated[str, Form()] = "gemini",
     username: str = Depends(require_auth)
 ):
     import json
-    answer, requires_human = generate_answer(
+    answer = generate_answer(
         tenant_id,
         query,
-        use_hyde=use_hyde,
-        use_rerank=use_rerank,
         provider=provider
     )
 
     response_data = {
         "answer": answer,
-        "requires_human": requires_human,
+        "requires_human": False,
         "tenant_id": str(tenant_id),
         "query": query
     }
