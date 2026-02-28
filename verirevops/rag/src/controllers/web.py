@@ -19,7 +19,7 @@ router = APIRouter()
 def get_tenants():
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, name FROM tenants ORDER BY created_at DESC")
+            cur.execute("SELECT id, slug FROM tenants ORDER BY created_at DESC")
             return cur.fetchall()
 
 def get_tenant_documents(tenant_id: UUID):
@@ -65,10 +65,10 @@ async def dashboard(request: Request, username: str = Depends(require_auth)):
     )
 
 @router.post("/tenants", response_class=HTMLResponse)
-async def create_tenant(request: Request, name: Annotated[str, Form()], username: str = Depends(require_auth)):
+async def create_tenant(request: Request, slug: Annotated[str, Form()], username: str = Depends(require_auth)):
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("INSERT INTO tenants (name) VALUES (%s) RETURNING id", (name,))
+            cur.execute("INSERT INTO tenants (slug) VALUES (%s) RETURNING id", (slug,))
             conn.commit()
     return RedirectResponse(url="/", status_code=303)
 
@@ -76,10 +76,10 @@ async def create_tenant(request: Request, name: Annotated[str, Form()], username
 async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends(require_auth)):
     tenants = get_tenants()
     documents = get_tenant_documents(tenant_id)
-    tenant_name = "Unknown"
-    for t_id, t_name in tenants:
+    tenant_slug = "Unknown"
+    for t_id, t_slug in tenants:
         if str(t_id) == str(tenant_id):
-            tenant_name = t_name
+            tenant_slug = t_slug
             break
 
     gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").replace("models/", "")
@@ -88,7 +88,7 @@ async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends
         {
             "request": request,
             "tenants": tenants,
-            "selected_tenant": {"id": str(tenant_id), "name": tenant_name},
+            "selected_tenant": {"id": str(tenant_id), "slug": tenant_slug},
             "documents": documents,
             "username": username,
             "gemini_model": gemini_model
@@ -96,10 +96,10 @@ async def view_tenant(request: Request, tenant_id: UUID, username: str = Depends
     )
 
 @router.post("/tenants/{tenant_id}/rename", response_class=HTMLResponse)
-async def rename_tenant(request: Request, tenant_id: UUID, name: Annotated[str, Form()], username: str = Depends(require_auth)):
+async def rename_tenant(request: Request, tenant_id: UUID, slug: Annotated[str, Form()], username: str = Depends(require_auth)):
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE tenants SET name = %s WHERE id = %s", (name, tenant_id))
+            cur.execute("UPDATE tenants SET slug = %s WHERE id = %s", (slug, tenant_id))
             conn.commit()
     return RedirectResponse(url=f"/tenants/{tenant_id}", status_code=303)
 

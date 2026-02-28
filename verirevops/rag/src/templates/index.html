@@ -45,7 +45,7 @@
         <span class="font-bold text-lg">VeriRag</span>
     </div>
     {% if selected_tenant %}
-    <span class="text-sm text-gray-400 truncate max-w-[150px]">{{ selected_tenant.name }}</span>
+    <span class="text-sm text-gray-400 truncate max-w-[150px]">{{ selected_tenant.slug }}</span>
     {% endif %}
 </div>
 
@@ -74,18 +74,18 @@
     <div class="flex-1 overflow-y-auto p-4 space-y-2">
         <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tenants</h2>
         <ul class="space-y-1">
-            {% for t_id, t_name in tenants %}
+            {% for t_id, t_slug in tenants %}
             <li>
                 <a href="/tenants/{{ t_id }}"
                     class="block px-3 py-2 rounded-md text-sm font-medium {% if selected_tenant and selected_tenant.id == t_id|string %}bg-gray-800 text-white{% else %}text-gray-300 hover:bg-gray-800 hover:text-white{% endif %}">
-                    {{ t_name }}
+                    {{ t_slug }}
                 </a>
             </li>
             {% endfor %}
         </ul>
 
         <form action="/tenants" method="post" class="mt-4 pt-4 border-t border-gray-700">
-            <input name="name" type="text" placeholder="New Tenant Name"
+            <input name="slug" type="text" placeholder="New Tenant Slug"
                 class="w-full px-3 py-2 bg-gray-800 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 mb-2">
             <button type="submit" id="add-tenant-btn"
                 class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition flex items-center justify-center gap-2 btn-disabled">
@@ -130,7 +130,7 @@
             <div id="tenant-name-container" class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 group">
                     <h2 class="text-xl sm:text-2xl font-bold text-gray-800 truncate" id="tenant-display-name">{{
-                        selected_tenant.name }}</h2>
+                        selected_tenant.slug }}</h2>
                     <button onclick="toggleRenameForm()" class="text-gray-400 hover:text-blue-600 transition p-1">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -142,7 +142,7 @@
                 <!-- Hidden Rename Form -->
                 <form id="rename-form" action="/tenants/{{ selected_tenant.id }}/rename" method="post"
                     class="hidden flex items-center gap-2">
-                    <input name="name" type="text" value="{{ selected_tenant.name }}"
+                    <input name="slug" type="text" value="{{ selected_tenant.slug }}"
                         class="flex-1 px-2 py-1 border rounded text-lg font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <button type="submit" class="p-1 text-green-600 hover:text-green-700">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -175,7 +175,7 @@
         </div>
 
         <button hx-delete="/tenants/{{ selected_tenant.id }}"
-            hx-confirm="Are you sure you want to delete the tenant '{{ selected_tenant.name }}'? All its documents will be lost."
+            hx-confirm="Are you sure you want to delete the tenant '{{ selected_tenant.slug }}'? All its documents will be lost."
             class="px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 transition text-sm font-medium flex items-center gap-2 btn-disabled">
             <svg class="spinner loading-indicator" viewBox="0 0 50 50">
                 <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
