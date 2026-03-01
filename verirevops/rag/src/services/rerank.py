@@ -1,7 +1,14 @@
 import os
 import logging
 import json
+import warnings
+import logging as py_logging
 from typing import List, Dict, Any
+
+from llama_index.postprocessor.sbert_rerank import SentenceTransformerRerank
+from llama_index.core.schema import NodeWithScore, TextNode
+from llama_index.core import QueryBundle
+
 from src.core.llm_factory import get_llm
 from src.core.prompts import RERANK_PROMPT_TEMPLATE
 
@@ -18,13 +25,7 @@ def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5
     logger.info(f"Reranking {len(documents)} documents using local BGE Cross-Encoder")
 
     try:
-        import warnings
-        import os
-        from llama_index.postprocessor.sbert_rerank import SentenceTransformerRerank
-        from llama_index.core.schema import NodeWithScore, TextNode
-
         # Suppress HF API Token warnings resulting from open-source model downloads
-        import logging as py_logging
         py_logging.getLogger("huggingface_hub").setLevel(py_logging.ERROR)
         warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub.*")
 
@@ -44,7 +45,6 @@ def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5
             # Give initial score from RRF or original retrieval
             nodes_with_scores.append(NodeWithScore(node=node, score=doc.get('distance', 1.0)))
 
-        from llama_index.core import QueryBundle
         query_bundle = QueryBundle(query_str=query)
 
         # Perform the actual reranking

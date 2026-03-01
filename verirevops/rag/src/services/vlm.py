@@ -1,5 +1,9 @@
 import os
+import io
 import logging
+import google.generativeai as genai
+from PIL import Image
+from src.core.prompts import VLM_IMAGE_DESCRIPTION_PROMPT
 from llama_index.multi_modal_llms.gemini import GeminiMultiModal
 from llama_index.core.multi_modal_llms.generic_utils import load_image_urls
 from llama_index.core.schema import ImageDocument
@@ -29,10 +33,6 @@ def describe_image(image_bytes: bytes, filename: str) -> str:
     try:
         logger.info(f"Generating caption for image: {filename}")
 
-        import google.generativeai as genai
-        from PIL import Image
-        import io
-
         api_key = os.getenv("GOOGLE_API_KEY")
         genai.configure(api_key=api_key)
 
@@ -43,8 +43,6 @@ def describe_image(image_bytes: bytes, filename: str) -> str:
         model = genai.GenerativeModel(model_name)
 
         image = Image.open(io.BytesIO(image_bytes))
-
-        from src.core.prompts import VLM_IMAGE_DESCRIPTION_PROMPT
 
         response = model.generate_content([VLM_IMAGE_DESCRIPTION_PROMPT, image])
         description = response.text

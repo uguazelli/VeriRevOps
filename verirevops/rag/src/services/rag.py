@@ -1,13 +1,19 @@
 import os
+import json
 import logging
 from typing import List, Dict, Any, Optional
-from uuid import UUID
 
-from llama_index.core import Document
-from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core import Document, SimpleDirectoryReader
+from llama_index.core.node_parser import SentenceSplitter, SemanticSplitterNodeParser
+from llama_index.core.extractors import TitleExtractor, SummaryExtractor
+from llama_index.core.ingestion import IngestionPipeline
 from llama_index.llms.gemini import Gemini
 
-from src.core.db import get_db
+from sqlalchemy import text
+
+from src.core.db import get_db, get_session
+from src.core.queries import INSERT_DOCUMENT_QUERY, INSERT_PARENT_DOCUMENT_QUERY
+from src.core.prompts import RAG_SYSTEM_PROMPT
 from src.services.embeddings import CustomGeminiEmbedding
 from src.services.rerank import rerank_documents
 from src.core.llm_factory import get_llm
@@ -42,7 +48,6 @@ async def generate_answer(
         context_str = "\n\n".join([f"Source: {r['filename']}\n{r['content']}" for r in results])
 
     # 2. Prompt (RAG)
-    from src.core.prompts import RAG_SYSTEM_PROMPT
     prompt = RAG_SYSTEM_PROMPT.format(context_str=context_str, message=message)
 
     # 3. Generate
@@ -56,8 +61,6 @@ async def generate_answer(
 
     # 4. Log the search and answer quality
     try:
-        from src.core.db import get_session
-        from sqlalchemy import text
         async with get_session() as session:
             log_query = """
                 INSERT INTO query_logs (tenant_id, query_text, answer_text, provider, model_name)
@@ -115,9 +118,7 @@ async def ingest_document(tenant_id: int, filename: str, content: str = None, fi
 
     # 1. Parse File
     if temp_file_path:
-        import os
         try:
-            from llama_index.core import SimpleDirectoryReader
             reader = SimpleDirectoryReader(input_files=[temp_file_path])
             # Load the document using the appropriate internal reader (PDF, Docx, etc)
             docs = reader.load_data()
@@ -166,10 +167,6 @@ async def ingest_document(tenant_id: int, filename: str, content: str = None, fi
          return
 
     # 2. Extract Metadata & Chunking
-    from llama_index.core.extractors import TitleExtractor, SummaryExtractor
-    from llama_index.core.ingestion import IngestionPipeline
-    from llama_index.core.node_parser import SemanticSplitterNodeParser
-
     llm = get_llm("gemini")
     embed_model = get_embed_model()
 
@@ -203,18 +200,13 @@ async def ingest_document(tenant_id: int, filename: str, content: str = None, fi
         return
 
     # 4. Insert into DB
-    import json
-    from src.core.db import get_session
     async with get_session() as session:
-        from src.core.queries import INSERT_DOCUMENT_QUERY, INSERT_PARENT_DOCUMENT_QUERY
-
         # 4a. Insert parent document to get its ID
         # Combine possible multiple LlamaIndex Docs into one parent text
         full_content = "\n\n".join([doc.get_content() for doc in docs])
         # Use first doc's metadata as representative
         parent_meta = docs[0].metadata if docs else {}
 
-        from sqlalchemy import text
         cursor = await session.execute(
             text(INSERT_PARENT_DOCUMENT_QUERY),
             {
@@ -268,8 +260,6 @@ async def search_documents(
     candidate_limit = limit * 4 if use_rerank else limit
 
     results = []
-    from src.core.db import get_session
-    from sqlalchemy import text
     async with get_session() as session:
         # Build Metadata Filter Clause
         # Simplistic implementation matching exact key-value pairs at the root of doc_metadata

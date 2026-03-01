@@ -1,6 +1,9 @@
 import logging
 import os
 import secrets
+import json
+import tempfile
+import shutil
 from uuid import UUID
 from typing import Annotated, Optional
 from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, BackgroundTasks, Response, status
@@ -126,10 +129,6 @@ async def ingest_file(
 
     try:
         # Save securely to a temporary file
-        import tempfile
-        import shutil
-        import os
-
         # Create a temporary file with the correct extension so readers know how to parse it
         ext = os.path.splitext(file.filename)[1]
         fd, temp_path = tempfile.mkstemp(suffix=ext)
@@ -158,7 +157,6 @@ async def query_rag(
     provider: Annotated[str, Form()] = "gemini",
     username: str = Depends(require_auth)
 ):
-    import json
     answer = await generate_answer(
         tenant_id,
         query,
