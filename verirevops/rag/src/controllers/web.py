@@ -7,7 +7,9 @@ from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, Backgro
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from src.core.db import get_db
+from src.core.db import get_db, get_session
+from src.core.models import Tenant, Document
+from sqlalchemy import select, update, delete
 from src.core.auth import require_auth
 from src.services.rag import ingest_document, generate_answer
 
@@ -17,16 +19,18 @@ router = APIRouter()
 
 # Helpers
 def get_tenants():
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT id, slug FROM tenants ORDER BY created_at DESC")
-            return cur.fetchall()
+    with get_session() as session:
+        tenants = session.execute(select(Tenant).order_by(Tenant.created_at.desc())).scalars().all()
+        return [(t.id, t.slug) for t in tenants]
 
 def get_tenant_documents(tenant_id: int):
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT id, filename, created_at FROM documents WHERE tenant_id = %s ORDER BY created_at DESC", (tenant_id,))
-            return cur.fetchall()
+    with get_session() as session:
+        docs = session.execute(
+            select(Document)
+            .where(Document.tenant_id == tenant_id)
+            .order_by(Document.created_at.desc())
+        ).scalars().all()
+        return [(d.id, d.filename, d.created_at) for d in docs]
 
 # Login Routes
 @router.get("/login", response_class=HTMLResponse)
@@ -66,10 +70,9 @@ async def dashboard(request: Request, username: str = Depends(require_auth)):
 
 @router.post("/tenants", response_class=HTMLResponse)
 async def create_tenant(request: Request, slug: Annotated[str, Form()], username: str = Depends(require_auth)):
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO tenants (slug) VALUES (%s) RETURNING id", (slug,))
-            conn.commit()
+    with get_session() as session:
+        session.add(Tenant(slug=slug))
+        session.commit()
     return RedirectResponse(url="/", status_code=303)
 
 @router.get("/tenants/{tenant_id}", response_class=HTMLResponse)
@@ -97,18 +100,16 @@ async def view_tenant(request: Request, tenant_id: int, username: str = Depends(
 
 @router.post("/tenants/{tenant_id}/rename", response_class=HTMLResponse)
 async def rename_tenant(request: Request, tenant_id: int, slug: Annotated[str, Form()], username: str = Depends(require_auth)):
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE tenants SET slug = %s WHERE id = %s", (slug, tenant_id))
-            conn.commit()
+    with get_session() as session:
+        session.execute(update(Tenant).where(Tenant.id == tenant_id).values(slug=slug))
+        session.commit()
     return RedirectResponse(url=f"/tenants/{tenant_id}", status_code=303)
 
 @router.delete("/tenants/{tenant_id}")
 async def delete_tenant(request: Request, tenant_id: int, username: str = Depends(require_auth)):
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
-            conn.commit()
+    with get_session() as session:
+        session.execute(delete(Tenant).where(Tenant.id == tenant_id))
+        session.commit()
     return Response(status_code=200, headers={"HX-Redirect": "/"})
 
 @router.post("/ingest", response_class=HTMLResponse)
@@ -179,8 +180,7 @@ async def query_rag(
 
 @router.delete("/documents/{doc_id}", response_class=HTMLResponse)
 async def delete_document(request: Request, doc_id: UUID, username: str = Depends(require_auth)):
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
-            conn.commit()
+    with get_session() as session:
+        session.execute(delete(Document).where(Document.id == doc_id))
+        session.commit()
     return HTMLResponse("")

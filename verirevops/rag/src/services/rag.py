@@ -130,12 +130,10 @@ def ingest_document(tenant_id: int, filename: str, content: str = None, file_byt
     # 4. Insert into DB
     with get_db() as conn:
         with conn.cursor() as cur:
+            from src.core.queries import INSERT_DOCUMENT_QUERY
             for node, embedding in zip(nodes, embeddings):
                 cur.execute(
-                    """
-                    INSERT INTO documents (tenant_id, filename, content, embedding)
-                    VALUES (%s, %s, %s, %s)
-                    """,
+                    INSERT_DOCUMENT_QUERY,
                     (tenant_id, filename, node.get_content(), embedding)
                 )
     logger.info(f"Successfully ingested {filename}")
@@ -170,38 +168,9 @@ def search_documents(
             # Hybrid search using Reciprocal Rank Fusion (RRF)
             # - vector_search: Cosine Similarity (<=>)
             # - keyword_search: Full Text Search ranking (ts_rank)
+            from src.core.queries import HYBRID_SEARCH_QUERY
             cur.execute(
-                """
-                WITH vector_search AS (
-                    SELECT id, filename, content,
-                           (embedding <=> %s::vector) as distance,
-                           ROW_NUMBER() OVER(ORDER BY (embedding <=> %s::vector) ASC) as rank
-                    FROM documents
-                    WHERE tenant_id = %s
-                    ORDER BY distance ASC
-                    LIMIT %s
-                ),
-                keyword_search AS (
-                    SELECT id, filename, content,
-                           ts_rank(fts, websearch_to_tsquery('english', %s)) as rank_score,
-                           ROW_NUMBER() OVER(ORDER BY ts_rank(fts, websearch_to_tsquery('english', %s)) DESC) as rank
-                    FROM documents
-                    WHERE tenant_id = %s
-                      AND fts @@ websearch_to_tsquery('english', %s)
-                    ORDER BY rank_score DESC
-                    LIMIT %s
-                )
-                SELECT
-                    COALESCE(v.id, k.id) as id,
-                    COALESCE(v.filename, k.filename) as filename,
-                    COALESCE(v.content, k.content) as content,
-                    COALESCE(1.0 / (60 + v.rank), 0.0) +
-                    COALESCE(1.0 / (60 + k.rank), 0.0) as rrf_score
-                FROM vector_search v
-                FULL OUTER JOIN keyword_search k ON v.id = k.id
-                ORDER BY rrf_score DESC
-                LIMIT %s;
-                """,
+                HYBRID_SEARCH_QUERY,
                 (
                     query_embedding, query_embedding, tenant_id, candidate_limit,  # Vector parameters
                     message, message, tenant_id, message, candidate_limit,         # Keyword parameters

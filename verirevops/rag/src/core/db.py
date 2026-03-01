@@ -6,12 +6,14 @@ import psycopg
 from psycopg_pool import ConnectionPool
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
 
 # Singleton pool
 _pool: ConnectionPool = None
 _engine: Engine = None
+_SessionLocal = sessionmaker()
 
 def get_engine() -> Engine:
     global _engine
@@ -25,6 +27,7 @@ def get_engine() -> Engine:
             db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
         _engine = create_engine(db_url)
+        _SessionLocal.configure(bind=_engine)
     return _engine
 
 def get_pool() -> ConnectionPool:
@@ -42,6 +45,16 @@ def get_db() -> Generator[psycopg.Connection, None, None]:
     pool = get_pool()
     with pool.connection() as conn:
         yield conn
+
+@contextmanager
+def get_session():
+    """Get a SQLAlchemy ORM session."""
+    get_engine() # ensure engine and SessionLocal are configured
+    session = _SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
 
 def init_db():
     """Initialize the database schema."""
