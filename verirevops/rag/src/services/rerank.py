@@ -15,35 +15,57 @@ def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5
     if not documents:
         return []
 
-    logger.info(f"Reranking {len(documents)} documents for query: {query} using {provider}")
-    llm = get_llm(provider)
-    scored_docs = []
+    logger.info(f"Reranking {len(documents)} documents using local BGE Cross-Encoder")
 
-    # Optimization: For better performance, we could batch this or use a CrossEncoder model.
-    # For simplicity, we iterate.
+    try:
+        import warnings
+        import os
+        from llama_index.postprocessor.sbert_rerank import SentenceTransformerRerank
+        from llama_index.core.schema import NodeWithScore, TextNode
 
-    for doc in documents:
-        try:
-            # Truncate content for reranking to save cost/latency
-            content_preview = doc['content'][:1000]
-            prompt = RERANK_PROMPT_TEMPLATE.format(query=query, content=content_preview)
+        # Suppress HF API Token warnings resulting from open-source model downloads
+        import logging as py_logging
+        py_logging.getLogger("huggingface_hub").setLevel(py_logging.ERROR)
+        warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub.*")
 
-            response = llm.complete(prompt)
-            # Try to parse JSON from response
-            text = response.text.replace('```json', '').replace('```', '').strip()
-            score_data = json.loads(text)
-            score = score_data.get('score', 0)
+        # Initialize the reranker (downloads the model ~1GB on first run)
+        reranker = SentenceTransformerRerank(
+            top_n=top_k,
+            model="BAAI/bge-reranker-base"
+        )
 
-            doc['rerank_score'] = score
-            scored_docs.append(doc)
+        # Convert dictionary documents to LlamaIndex Nodes
+        nodes_with_scores = []
+        for doc in documents:
+            node = TextNode(
+                text=doc['content'],
+                metadata={"id": doc['id'], "filename": doc.get('filename', '')}
+            )
+            # Give initial score from RRF or original retrieval
+            nodes_with_scores.append(NodeWithScore(node=node, score=doc.get('distance', 1.0)))
 
-        except Exception as e:
-            logger.warning(f"Reranking failed for doc {doc.get('id')}: {e}")
-            doc['rerank_score'] = 0
-            scored_docs.append(doc)
+        from llama_index.core import QueryBundle
+        query_bundle = QueryBundle(query_str=query)
 
-    # Sort by score DESC
-    scored_docs.sort(key=lambda x: x['rerank_score'], reverse=True)
+        # Perform the actual reranking
+        reranked_nodes = reranker.postprocess_nodes(nodes_with_scores, query_bundle=query_bundle)
 
-    # Return top K
-    return scored_docs[:top_k]
+        # Convert back to our dictionary format
+        scored_docs = []
+        for ranked_node in reranked_nodes:
+            # Reconstruct the dict
+            doc_dict = {
+                "id": ranked_node.node.metadata.get("id"),
+                "filename": ranked_node.node.metadata.get("filename"),
+                "content": ranked_node.node.get_content(),
+                # Map the cross-encoder logit score
+                "rerank_score": ranked_node.score
+            }
+            scored_docs.append(doc_dict)
+
+        return scored_docs
+
+    except Exception as e:
+        logger.error(f"Local Cross-Encoder Reranking failed: {e}. Falling back to original retrieval order.")
+        # If it fails, just return the original documents up to top_k
+        return documents[:top_k]

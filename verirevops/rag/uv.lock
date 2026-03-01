@@ -1075,6 +1075,18 @@ wheels = [
 ]
 
 [[package]]
+name = "llama-index-postprocessor-flag-embedding-reranker"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "llama-index-core" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/7e/5dc9d4936480d5a33867b5193b230df03f39880e8db9a9487e9390ecad74/llama_index_postprocessor_flag_embedding_reranker-0.4.1.tar.gz", hash = "sha256:e0bae3524dc33f530e8eaec0600844bcbd3515806cd7bf6fac4c13e4332603d5", size = 4076, upload-time = "2025-09-08T20:35:09.575Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/9f/badcd4329463c1e86ed75d468cfa8abac61eb2b5414fcd569bf028a90d4e/llama_index_postprocessor_flag_embedding_reranker-0.4.1-py3-none-any.whl", hash = "sha256:03b1c76e578ea7bdbe1d026f3be700d75b989aad625930154a915c23ef00cb11", size = 3894, upload-time = "2025-09-08T20:35:08.884Z" },
+]
+
+[[package]]
 name = "llama-index-readers-file"
 version = "0.5.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2415,6 +2427,7 @@ dependencies = [
     { name = "llama-index-llms-gemini" },
     { name = "llama-index-llms-openai" },
     { name = "llama-index-multi-modal-llms-gemini" },
+    { name = "llama-index-postprocessor-flag-embedding-reranker" },
     { name = "llama-index-readers-file" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "python-dotenv" },
@@ -2435,6 +2448,7 @@ requires-dist = [
     { name = "llama-index-llms-gemini", specifier = ">=0.6.1" },
     { name = "llama-index-llms-openai", specifier = ">=0.6.10" },
     { name = "llama-index-multi-modal-llms-gemini", specifier = ">=0.6.1" },
+    { name = "llama-index-postprocessor-flag-embedding-reranker", specifier = ">=0.4.1" },
     { name = "llama-index-readers-file", specifier = ">=0.5.6" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.2" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
