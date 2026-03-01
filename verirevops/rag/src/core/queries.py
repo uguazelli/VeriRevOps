@@ -35,6 +35,12 @@ LIMIT %s;
 """
 
 INSERT_DOCUMENT_QUERY = """
-INSERT INTO documents (tenant_id, filename, content, embedding)
-VALUES (%s, %s, %s, %s)
+INSERT INTO documents (tenant_id, filename, content, embedding, metadata_, parent_id)
+VALUES (%s, %s, %s, %s, %s, %s)
+"""
+
+INSERT_PARENT_DOCUMENT_QUERY = """
+INSERT INTO documents (tenant_id, filename, content, metadata_)
+VALUES (:tenant, :file, :content, :meta)
+RETURNING id;
 """

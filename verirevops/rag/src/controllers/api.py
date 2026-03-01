@@ -12,7 +12,7 @@ async def api_rag(
     request: RagRequest,
     username: str = Depends(require_auth)
 ):
-    answer = generate_answer(
+    answer = await generate_answer(
         request.tenant_id,
         request.message,
         provider=request.provider

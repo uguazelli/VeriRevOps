@@ -18,18 +18,18 @@ templates = Jinja2Templates(directory="src/templates")
 router = APIRouter()
 
 # Helpers
-def get_tenants():
-    with get_session() as session:
-        tenants = session.execute(select(Tenant).order_by(Tenant.created_at.desc())).scalars().all()
+async def get_tenants():
+    async with get_session() as session:
+        tenants = (await session.execute(select(Tenant).order_by(Tenant.created_at.desc()))).scalars().all()
         return [(t.id, t.slug) for t in tenants]
 
-def get_tenant_documents(tenant_id: int):
-    with get_session() as session:
-        docs = session.execute(
+async def get_tenant_documents(tenant_id: int):
+    async with get_session() as session:
+        docs = (await session.execute(
             select(Document)
             .where(Document.tenant_id == tenant_id)
             .order_by(Document.created_at.desc())
-        ).scalars().all()
+        )).scalars().all()
         return [(d.id, d.filename, d.created_at) for d in docs]
 
 # Login Routes
@@ -61,7 +61,7 @@ async def logout(request: Request):
 # Routes
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, username: str = Depends(require_auth)):
-    tenants = get_tenants()
+    tenants = await get_tenants()
     gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").replace("models/", "")
     return templates.TemplateResponse(
         "index.html",
@@ -70,15 +70,15 @@ async def dashboard(request: Request, username: str = Depends(require_auth)):
 
 @router.post("/tenants", response_class=HTMLResponse)
 async def create_tenant(request: Request, slug: Annotated[str, Form()], username: str = Depends(require_auth)):
-    with get_session() as session:
+    async with get_session() as session:
         session.add(Tenant(slug=slug))
-        session.commit()
+        await session.commit()
     return RedirectResponse(url="/", status_code=303)
 
 @router.get("/tenants/{tenant_id}", response_class=HTMLResponse)
 async def view_tenant(request: Request, tenant_id: int, username: str = Depends(require_auth)):
-    tenants = get_tenants()
-    documents = get_tenant_documents(tenant_id)
+    tenants = await get_tenants()
+    documents = await get_tenant_documents(tenant_id)
     tenant_slug = "Unknown"
     for t_id, t_slug in tenants:
         if str(t_id) == str(tenant_id):
@@ -100,16 +100,16 @@ async def view_tenant(request: Request, tenant_id: int, username: str = Depends(
 
 @router.post("/tenants/{tenant_id}/rename", response_class=HTMLResponse)
 async def rename_tenant(request: Request, tenant_id: int, slug: Annotated[str, Form()], username: str = Depends(require_auth)):
-    with get_session() as session:
-        session.execute(update(Tenant).where(Tenant.id == tenant_id).values(slug=slug))
-        session.commit()
+    async with get_session() as session:
+        await session.execute(update(Tenant).where(Tenant.id == tenant_id).values(slug=slug))
+        await session.commit()
     return RedirectResponse(url=f"/tenants/{tenant_id}", status_code=303)
 
 @router.delete("/tenants/{tenant_id}")
 async def delete_tenant(request: Request, tenant_id: int, username: str = Depends(require_auth)):
-    with get_session() as session:
-        session.execute(delete(Tenant).where(Tenant.id == tenant_id))
-        session.commit()
+    async with get_session() as session:
+        await session.execute(delete(Tenant).where(Tenant.id == tenant_id))
+        await session.commit()
     return Response(status_code=200, headers={"HX-Redirect": "/"})
 
 @router.post("/ingest", response_class=HTMLResponse)
@@ -120,21 +120,26 @@ async def ingest_file(
     file: Annotated[UploadFile, File()],
     username: str = Depends(require_auth)
 ):
-    if not file.filename.lower().endswith(('.txt', '.md', '.jpg', '.jpeg', '.png', '.webp')):
-        return HTMLResponse('<div class="text-red-500">Supported formats: .txt, .md, .jpg, .png, .webp</div>')
+    valid_extensions = ('.txt', '.md', '.jpg', '.jpeg', '.png', '.webp', '.pdf', '.docx')
+    if not file.filename.lower().endswith(valid_extensions):
+        return HTMLResponse(f'<div class="text-red-500">Supported formats: {", ".join(valid_extensions)}</div>')
 
-    content = await file.read()
     try:
-        # If text, decode it. If image, pass bytes.
-        text_content = None
-        file_bytes = None
+        # Save securely to a temporary file
+        import tempfile
+        import shutil
+        import os
 
-        if file.filename.lower().endswith(('.txt', '.md')):
-            text_content = content.decode("utf-8")
-        else:
-            file_bytes = content
+        # Create a temporary file with the correct extension so readers know how to parse it
+        ext = os.path.splitext(file.filename)[1]
+        fd, temp_path = tempfile.mkstemp(suffix=ext)
+        with os.fdopen(fd, 'wb') as f:
+            shutil.copyfileobj(file.file, f)
 
-        background_tasks.add_task(ingest_document, tenant_id, file.filename, content=text_content, file_bytes=file_bytes)
+        # Pass the temp file path instead of raw bytes
+        # The background task will read from this path and is responsible for deleting it
+        background_tasks.add_task(ingest_document, tenant_id, file.filename, temp_file_path=temp_path)
+
         return HTMLResponse(
             f'<div class="text-green-500 mb-2">Processing {file.filename}... refreshing page.</div>'
             f'<script>setTimeout(() => window.location.reload(), 1500);</script>'
@@ -154,7 +159,7 @@ async def query_rag(
     username: str = Depends(require_auth)
 ):
     import json
-    answer = generate_answer(
+    answer = await generate_answer(
         tenant_id,
         query,
         provider=provider
@@ -180,7 +185,7 @@ async def query_rag(
 
 @router.delete("/documents/{doc_id}", response_class=HTMLResponse)
 async def delete_document(request: Request, doc_id: UUID, username: str = Depends(require_auth)):
-    with get_session() as session:
-        session.execute(delete(Document).where(Document.id == doc_id))
-        session.commit()
+    async with get_session() as session:
+        await session.execute(delete(Document).where(Document.id == doc_id))
+        await session.commit()
     return HTMLResponse("")

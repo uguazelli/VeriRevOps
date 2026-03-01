@@ -5,13 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "docx2txt>=0.9",
     "fastapi>=0.124.0",
     "google-generativeai>=0.8.3",
     "jinja2>=3.1.6",
+    "llama-index-cli>=0.5.3",
     "llama-index-core>=0.14.10",
     "llama-index-llms-gemini>=0.6.1",
     "llama-index-llms-openai>=0.6.10",
     "llama-index-multi-modal-llms-gemini>=0.6.1",
+    "llama-index-readers-file>=0.5.6",
     "psycopg[binary,pool]>=3.3.2",
     "python-dotenv>=1.2.1",
     "python-multipart>=0.0.20",
