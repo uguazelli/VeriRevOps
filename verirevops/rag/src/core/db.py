@@ -142,10 +142,12 @@ def init_db():
                     filename VARCHAR(255) NOT NULL,
                     content TEXT NOT NULL,
                     embedding vector({dim}),
+                    fts tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(content, ''))) STORED,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS documents_tenant_id_idx ON documents (tenant_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_fts ON documents USING GIN (fts);")
 
     logger.info("Database schema initialized.")
 

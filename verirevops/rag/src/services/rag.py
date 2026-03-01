@@ -157,10 +157,10 @@ def search_documents(
     provider: str = "gemini"
 ) -> List[Dict[str, Any]]:
     """
-    Performs a hybrid search (currently vector similarity) for a message.
-    Supports Reranking.
+    Performs a hybrid search (vector similarity + keyword search) for a message.
+    Scores from both methods are merged using Reciprocal Rank Fusion (RRF).
     """
-    # 1. Embed Query
+    # 1. Embed Query for Semantic Search
     search_query = message
     embed_model = get_embed_model()
     try:
@@ -176,17 +176,46 @@ def search_documents(
     results = []
     with get_db() as conn:
         with conn.cursor() as cur:
-            # Vector search with Cosine Similarity (<=> operator)
-            # Ordered by distance ASC (closest first)
+            # Hybrid search using Reciprocal Rank Fusion (RRF)
+            # - vector_search: Cosine Similarity (<=>)
+            # - keyword_search: Full Text Search ranking (ts_rank)
             cur.execute(
                 """
-                SELECT id, filename, content, (embedding <=> %s::vector) as distance
-                FROM documents
-                WHERE tenant_id = %s
-                ORDER BY distance ASC
-                LIMIT %s
+                WITH vector_search AS (
+                    SELECT id, filename, content,
+                           (embedding <=> %s::vector) as distance,
+                           ROW_NUMBER() OVER(ORDER BY (embedding <=> %s::vector) ASC) as rank
+                    FROM documents
+                    WHERE tenant_id = %s
+                    ORDER BY distance ASC
+                    LIMIT %s
+                ),
+                keyword_search AS (
+                    SELECT id, filename, content,
+                           ts_rank(fts, websearch_to_tsquery('english', %s)) as rank_score,
+                           ROW_NUMBER() OVER(ORDER BY ts_rank(fts, websearch_to_tsquery('english', %s)) DESC) as rank
+                    FROM documents
+                    WHERE tenant_id = %s
+                      AND fts @@ websearch_to_tsquery('english', %s)
+                    ORDER BY rank_score DESC
+                    LIMIT %s
+                )
+                SELECT
+                    COALESCE(v.id, k.id) as id,
+                    COALESCE(v.filename, k.filename) as filename,
+                    COALESCE(v.content, k.content) as content,
+                    COALESCE(1.0 / (60 + v.rank), 0.0) +
+                    COALESCE(1.0 / (60 + k.rank), 0.0) as rrf_score
+                FROM vector_search v
+                FULL OUTER JOIN keyword_search k ON v.id = k.id
+                ORDER BY rrf_score DESC
+                LIMIT %s;
                 """,
-                (query_embedding, tenant_id, candidate_limit)
+                (
+                    query_embedding, query_embedding, tenant_id, candidate_limit,  # Vector parameters
+                    message, message, tenant_id, message, candidate_limit,         # Keyword parameters
+                    candidate_limit                                                # Final Limit
+                )
             )
             rows = cur.fetchall()
 
@@ -195,7 +224,7 @@ def search_documents(
                     "id": str(row[0]),
                     "filename": row[1],
                     "content": row[2],
-                    "distance": float(row[3])
+                    "distance": 1.0 - float(row[3]) # In RRF, higher is better, so we map it logically if distance is used down stream
                 })
 
     # 4. Reranking
