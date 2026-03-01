@@ -42,17 +42,8 @@ def generate_answer(
         context_str = "\n\n".join([f"Source: {r['filename']}\n{r['content']}" for r in results])
 
     # 2. Prompt (RAG)
-    prompt = (
-        "You are Veribot 🤖, an AI assistant.\n"
-        "Use the following pieces of retrieved context to answer the user's question.\n"
-        "IMPORTANT: Always answer in the same language as the user's question.\n"
-        "If asked about your identity, say you are Veribot 🤖, an AI assistant capable of answering most questions and redirecting to a human if needed.\n"
-        "Priority: Use the retrieved context for factual information about the documents.\n"
-        "If the answer is not in the context, say you don't know.\n\n"
-        f"Retrieved Context:\n{context_str}\n\n"
-        f"Question: {message}\n\n"
-        "Answer:"
-    )
+    from src.core.prompts import RAG_SYSTEM_PROMPT
+    prompt = RAG_SYSTEM_PROMPT.format(context_str=context_str, message=message)
 
     # 3. Generate
     try:

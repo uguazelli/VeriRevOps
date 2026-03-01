@@ -44,13 +44,9 @@ def describe_image(image_bytes: bytes, filename: str) -> str:
 
         image = Image.open(io.BytesIO(image_bytes))
 
-        prompt = (
-            "Describe this image in extreme detail for retrieval purposes. "
-            "Include any visible text, numbers, layout structure, and visual elements. "
-            "The goal is to allow someone to find this image by searching for its content."
-        )
+        from src.core.prompts import VLM_IMAGE_DESCRIPTION_PROMPT
 
-        response = model.generate_content([prompt, image])
+        response = model.generate_content([VLM_IMAGE_DESCRIPTION_PROMPT, image])
         description = response.text
 
         logger.info(f"Caption generated: {description[:100]}...")

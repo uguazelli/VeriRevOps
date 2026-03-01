@@ -3,18 +3,9 @@ import logging
 import json
 from typing import List, Dict, Any
 from src.core.llm_factory import get_llm
+from src.core.prompts import RERANK_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
-
-RERANK_PROMPT_TEMPLATE = (
-    "You are a relevance ranking system. "
-    "Check if the following document is relevant to the query. "
-    "Assign a relevance score from 0 to 10. "
-    "Return ONLY a JSON object with a single key 'score' (integer).\n\n"
-    "Query: {query}\n"
-    "Document: {content}\n\n"
-    "JSON Output:"
-)
 
 def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5, provider: str = "gemini") -> List[Dict[str, Any]]:
     """
