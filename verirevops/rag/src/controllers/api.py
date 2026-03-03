@@ -2,10 +2,11 @@ from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy import select
 from src.core.db import get_session
-from src.core.models import ChatSession
+from src.core.models import ChatSession, GlobalConfig
 from src.core.schemas import (
     RagRequest, RagResponse, LlmRequest, LlmResponse,
-    ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse
+    ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse,
+    GlobalConfigCreate, GlobalConfigUpdate, GlobalConfigResponse
 )
 from src.core.auth import require_auth
 from src.services.rag import generate_answer
@@ -173,3 +174,41 @@ async def delete_chat_session(
         await db.delete(chat_session)
         await db.commit()
         return {"ok": True}
+
+
+# --- Global Config CRUD ---
+
+@router.get("/global_configs", response_model=GlobalConfigResponse)
+async def get_global_config(username: str = Depends(require_auth)):
+    """
+    Get the global configuration (assumes single row with id=1).
+    """
+    async with get_session() as db:
+        result = await db.execute(select(GlobalConfig).where(GlobalConfig.id == 1))
+        config = result.scalar_one_or_none()
+        if not config:
+            raise HTTPException(status_code=404, detail="Global config not found")
+        return config
+
+@router.post("/global_configs", response_model=GlobalConfigResponse)
+async def upsert_global_config(
+    config_data: GlobalConfigCreate,
+    username: str = Depends(require_auth)
+):
+    """
+    Upsert the single global configuration (id=1).
+    """
+    async with get_session() as db:
+        result = await db.execute(select(GlobalConfig).where(GlobalConfig.id == 1))
+        config = result.scalar_one_or_none()
+
+        if config:
+            config.settings = config_data.settings
+        else:
+            # First row gets forced to ID 1
+            config = GlobalConfig(id=1, settings=config_data.settings)
+            db.add(config)
+
+        await db.commit()
+        await db.refresh(config)
+        return config

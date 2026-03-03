@@ -38,3 +38,16 @@ class ChatSessionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class GlobalConfigCreate(BaseModel):
+    settings: dict
+
+class GlobalConfigUpdate(BaseModel):
+    settings: dict
+
+class GlobalConfigResponse(BaseModel):
+    id: int
+    settings: Optional[dict] = None
+
+    class Config:
+        from_attributes = True

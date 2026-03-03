@@ -1,6 +1,6 @@
 from fastapi.responses import RedirectResponse, HTMLResponse
 from sqladmin import Admin, ModelView, BaseView, expose
-from src.core.models import Tenant, Subscription, Configuration, Service, ContactMapping, ChatSession, Document
+from src.core.models import Tenant, Subscription, Configuration, Service, ContactMapping, ChatSession, Document, GlobalConfig
 from src.core.db import get_engine
 import logging
 
@@ -54,6 +54,11 @@ class DocumentAdmin(ModelView, model=Document):
     name_plural = "Documents"
     icon = "fa-solid fa-file-lines"
 
+class GlobalConfigAdmin(ModelView, model=GlobalConfig):
+    column_list = [GlobalConfig.id]
+    name_plural = "Global Configs"
+    icon = "fa-solid fa-globe"
+
 def setup_admin(app):
     admin = Admin(
         app,
@@ -73,4 +78,5 @@ def setup_admin(app):
     admin.add_view(ContactMappingAdmin)
     admin.add_view(ChatSessionAdmin)
     admin.add_view(DocumentAdmin)
+    admin.add_view(GlobalConfigAdmin)
     return admin
