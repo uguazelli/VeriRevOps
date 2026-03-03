@@ -99,3 +99,9 @@ class Document(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     tenant: Mapped["Tenant"] = relationship(back_populates="documents")
+
+class GlobalConfig(Base):
+    __tablename__ = "global_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    settings: Mapped[Optional[dict]] = mapped_column(JSONB)
