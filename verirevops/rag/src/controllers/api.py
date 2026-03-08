@@ -12,6 +12,7 @@ from src.core.auth import require_auth
 from src.services.rag import generate_answer
 from src.services.transcription import transcribe_audio
 from src.services.llm import get_chat_response
+from src.services.image_analysis import analyze_image
 
 router = APIRouter()
 
@@ -43,6 +44,22 @@ async def api_transcribe(
     text = await transcribe_audio(content, file.filename, provider)
 
     return {"text": text}
+
+
+@router.post("/analyze-image")
+async def api_analyze_image(
+    file: UploadFile = File(...),
+    prompt: str = Form("Describe this image in detail."),
+    provider: str = Form("gemini"),
+    username: str = Depends(require_auth)
+):
+    """
+    Analyzes uploaded image using the specified LLM.
+    """
+    content = await file.read()
+    answer = await analyze_image(content, file.filename, prompt, provider)
+
+    return {"answer": answer}
 
 
 @router.post("/llm", response_model=LlmResponse)
