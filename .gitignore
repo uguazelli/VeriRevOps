@@ -22,3 +22,5 @@ logs/
 .vscodereplacements.txt
 .env.apis
 .ruff_cache/
+/kestra
+/windmill
