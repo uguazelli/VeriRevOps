@@ -26,24 +26,28 @@ class AnalyzeImageUrlRequest(BaseModel):
     prompt: str = "Describe this image in detail."
     provider: str = "gemini"
 
-class ChatSessionCreate(BaseModel):
+
+
+class ChatMessageCreate(BaseModel):
     tenant_id: int
     chatwoot_account_id: int
     chatwoot_conversation_id: int
-    last_summarized_message_id: int = 0
-    last_private_summarized_message_id: int = 0
+    message_id: int
+    role: str
+    message: str
 
-class ChatSessionUpdate(BaseModel):
-    last_summarized_message_id: Optional[int] = None
-    last_private_summarized_message_id: Optional[int] = None
+class ChatMessageUpdate(BaseModel):
+    is_summarized: Optional[bool] = None
 
-class ChatSessionResponse(BaseModel):
+class ChatMessageResponse(BaseModel):
     id: int
     tenant_id: int
     chatwoot_account_id: int
     chatwoot_conversation_id: int
-    last_summarized_message_id: int
-    last_private_summarized_message_id: int
+    message_id: int
+    role: str
+    message: str
+    is_summarized: bool
 
     class Config:
         from_attributes = True

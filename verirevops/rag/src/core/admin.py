@@ -1,6 +1,6 @@
 from fastapi.responses import RedirectResponse, HTMLResponse
 from sqladmin import Admin, ModelView, BaseView, expose
-from src.core.models import Tenant, Subscription, Configuration, Service, ContactMapping, ChatSession, Document, GlobalConfig
+from src.core.models import Tenant, Subscription, Configuration, Service, ContactMapping, ChatMessage, Document, GlobalConfig
 from src.core.db import get_engine
 import logging
 
@@ -43,9 +43,9 @@ class ContactMappingAdmin(ModelView, model=ContactMapping):
     name_plural = "Contact Mappings"
     icon = "fa-solid fa-address-book"
 
-class ChatSessionAdmin(ModelView, model=ChatSession):
-    column_list = [ChatSession.id, ChatSession.tenant_id, ChatSession.chatwoot_conversation_id]
-    name_plural = "Chat Sessions"
+class ChatMessageAdmin(ModelView, model=ChatMessage):
+    column_list = [ChatMessage.id, ChatMessage.tenant_id, ChatMessage.chatwoot_conversation_id, ChatMessage.is_summarized]
+    name_plural = "Chat Messages"
     icon = "fa-solid fa-comments"
 
 class DocumentAdmin(ModelView, model=Document):
@@ -76,7 +76,7 @@ def setup_admin(app):
     admin.add_view(ConfigurationAdmin)
     admin.add_view(ServiceAdmin)
     admin.add_view(ContactMappingAdmin)
-    admin.add_view(ChatSessionAdmin)
+    admin.add_view(ChatMessageAdmin)
     admin.add_view(DocumentAdmin)
     admin.add_view(GlobalConfigAdmin)
     return admin

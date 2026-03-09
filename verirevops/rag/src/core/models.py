@@ -20,7 +20,7 @@ class Tenant(Base):
     configurations: Mapped[List["Configuration"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
     services: Mapped[List["Service"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
     contact_mappings: Mapped[List["ContactMapping"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
-    chat_sessions: Mapped[List["ChatSession"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
+    chat_messages: Mapped[List["ChatMessage"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
     documents: Mapped[List["Document"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
 
     def __str__(self):
@@ -72,17 +72,22 @@ class ContactMapping(Base):
 
     tenant: Mapped["Tenant"] = relationship(back_populates="contact_mappings")
 
-class ChatSession(Base):
-    __tablename__ = "chat_session"
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    last_summarized_message_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_private_summarized_message_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     chatwoot_account_id: Mapped[int] = mapped_column(Integer, nullable=False)
     chatwoot_conversation_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    message_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str] = mapped_column(String(50), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    is_summarized: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
-    tenant: Mapped["Tenant"] = relationship(back_populates="chat_sessions")
+    tenant: Mapped["Tenant"] = relationship(back_populates="chat_messages")
 
 class Document(Base):
     __tablename__ = "documents"

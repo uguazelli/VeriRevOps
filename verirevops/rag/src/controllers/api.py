@@ -2,11 +2,11 @@ from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy import select
 from src.core.db import get_session
-from src.core.models import ChatSession, GlobalConfig
+from src.core.models import GlobalConfig, ChatMessage
 from src.core.schemas import (
     RagRequest, RagResponse, LlmRequest, LlmResponse,
     TranscribeUrlRequest, AnalyzeImageUrlRequest,
-    ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse,
+    ChatMessageCreate, ChatMessageUpdate, ChatMessageResponse,
     GlobalConfigCreate, GlobalConfigUpdate, GlobalConfigResponse
 )
 from src.core.auth import require_auth
@@ -107,118 +107,91 @@ async def api_llm(
     return LlmResponse(answer=answer)
 
 
-# --- Chat Session CRUD ---
+# --- Chat Messages CRUD ---
 
-@router.post("/chat_sessions", response_model=ChatSessionResponse)
-async def upsert_chat_session(
-    session_data: ChatSessionCreate,
+@router.post("/chat_messages", response_model=ChatMessageResponse)
+async def create_chat_message(
+    message_data: ChatMessageCreate,
     username: str = Depends(require_auth)
 ):
     """
-    Create or update a Chat Session checkpoint for summarization.
+    Save a processed individual chat message.
     """
     async with get_session() as db:
-        # Check if the session already exists
-        query = select(ChatSession).where(
-            ChatSession.tenant_id == session_data.tenant_id,
-            ChatSession.chatwoot_account_id == session_data.chatwoot_account_id,
-            ChatSession.chatwoot_conversation_id == session_data.chatwoot_conversation_id
-        )
-        result = await db.execute(query)
-        existing_session = result.scalar_one_or_none()
-
-        if existing_session:
-            # Update existing
-            if session_data.last_summarized_message_id is not None:
-                existing_session.last_summarized_message_id = session_data.last_summarized_message_id
-            if session_data.last_private_summarized_message_id is not None:
-                existing_session.last_private_summarized_message_id = session_data.last_private_summarized_message_id
-            session_to_return = existing_session
-        else:
-            # Create new
-            new_session = ChatSession(**session_data.model_dump())
-            db.add(new_session)
-            session_to_return = new_session
-
+        new_message = ChatMessage(**message_data.model_dump())
+        db.add(new_message)
         await db.commit()
-        await db.refresh(session_to_return)
-        return session_to_return
+        await db.refresh(new_message)
+        return new_message
 
-@router.get("/chat_sessions", response_model=List[ChatSessionResponse])
-async def list_chat_sessions(
+@router.get("/chat_messages", response_model=List[ChatMessageResponse])
+async def list_chat_messages(
     tenant_id: int = None,
     chatwoot_account_id: int = None,
     chatwoot_conversation_id: int = None,
+    is_summarized: bool = None,
     username: str = Depends(require_auth)
 ):
     """
-    List Chat Sessions with optional filtering.
+    List individual chat messages with optional filtering.
     """
     async with get_session() as db:
-        query = select(ChatSession)
+        query = select(ChatMessage)
         if tenant_id:
-            query = query.where(ChatSession.tenant_id == tenant_id)
+            query = query.where(ChatMessage.tenant_id == tenant_id)
         if chatwoot_account_id:
-            query = query.where(ChatSession.chatwoot_account_id == chatwoot_account_id)
+            query = query.where(ChatMessage.chatwoot_account_id == chatwoot_account_id)
         if chatwoot_conversation_id:
-            query = query.where(ChatSession.chatwoot_conversation_id == chatwoot_conversation_id)
+            query = query.where(ChatMessage.chatwoot_conversation_id == chatwoot_conversation_id)
+        if is_summarized is not None:
+            query = query.where(ChatMessage.is_summarized == is_summarized)
+
+        # Optional: Order by message_id or created_at if needed
+        query = query.order_by(ChatMessage.message_id.asc())
 
         result = await db.execute(query)
         return result.scalars().all()
 
-@router.get("/chat_sessions/{session_id}", response_model=ChatSessionResponse)
-async def get_chat_session(
-    session_id: int,
+
+@router.put("/chat_messages/{message_id}", response_model=ChatMessageResponse)
+async def update_chat_message(
+    message_id: int,
+    message_update: ChatMessageUpdate,
     username: str = Depends(require_auth)
 ):
     """
-    Get a specific Chat Session by ID.
+    Update a Chat Message (e.g., mark as summarized).
+    NOTE: message_id refers to the primary key id of the chat_messages table, NOT the chatwoot message ID.
     """
     async with get_session() as db:
-        result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
-        chat_session = result.scalar_one_or_none()
-        if not chat_session:
-            raise HTTPException(status_code=404, detail="ChatSession not found")
-        return chat_session
+        result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
+        chat_message = result.scalar_one_or_none()
+        if not chat_message:
+            raise HTTPException(status_code=404, detail="ChatMessage not found")
 
-@router.put("/chat_sessions/{session_id}", response_model=ChatSessionResponse)
-async def update_chat_session(
-    session_id: int,
-    session_update: ChatSessionUpdate,
-    username: str = Depends(require_auth)
-):
-    """
-    Update a Chat Session's last summarized message IDs.
-    """
-    async with get_session() as db:
-        result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
-        chat_session = result.scalar_one_or_none()
-        if not chat_session:
-            raise HTTPException(status_code=404, detail="ChatSession not found")
-
-        update_data = session_update.model_dump(exclude_unset=True)
+        update_data = message_update.model_dump(exclude_unset=True)
         for key, value in update_data.items():
-            setattr(chat_session, key, value)
+            setattr(chat_message, key, value)
 
         await db.commit()
-        await db.refresh(chat_session)
-        return chat_session
+        await db.refresh(chat_message)
+        return chat_message
 
-@router.delete("/chat_sessions/{session_id}")
-async def delete_chat_session(
-    session_id: int,
+@router.delete("/chat_messages/{message_id}")
+async def delete_chat_message(
+    message_id: int,
     username: str = Depends(require_auth)
 ):
     """
-    Delete a Chat Session.
+    Delete a Chat Message manually.
     """
     async with get_session() as db:
-        result = await db.execute(select(ChatSession).where(ChatSession.id == session_id))
-        chat_session = result.scalar_one_or_none()
-        if not chat_session:
-            raise HTTPException(status_code=404, detail="ChatSession not found")
+        result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
+        chat_message = result.scalar_one_or_none()
+        if not chat_message:
+            raise HTTPException(status_code=404, detail="ChatMessage not found")
 
-        await db.delete(chat_session)
+        await db.delete(chat_message)
         await db.commit()
         return {"ok": True}
 
