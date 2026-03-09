@@ -5,6 +5,7 @@ from src.core.db import get_session
 from src.core.models import ChatSession, GlobalConfig
 from src.core.schemas import (
     RagRequest, RagResponse, LlmRequest, LlmResponse,
+    TranscribeUrlRequest, AnalyzeImageUrlRequest,
     ChatSessionCreate, ChatSessionUpdate, ChatSessionResponse,
     GlobalConfigCreate, GlobalConfigUpdate, GlobalConfigResponse
 )
@@ -13,6 +14,7 @@ from src.services.rag import generate_answer
 from src.services.transcription import transcribe_audio
 from src.services.llm import get_chat_response
 from src.services.image_analysis import analyze_image
+from src.services.media_downloader import download_file_from_url
 
 router = APIRouter()
 
@@ -46,6 +48,20 @@ async def api_transcribe(
     return {"text": text}
 
 
+@router.post("/transcribe-url")
+async def api_transcribe_url(
+    request: TranscribeUrlRequest,
+    username: str = Depends(require_auth)
+):
+    """
+    Downloads audio from URL and transcribes it.
+    """
+    content, filename = await download_file_from_url(request.url)
+    text = await transcribe_audio(content, filename, request.provider)
+
+    return {"text": text}
+
+
 @router.post("/analyze-image")
 async def api_analyze_image(
     file: UploadFile = File(...),
@@ -58,6 +74,20 @@ async def api_analyze_image(
     """
     content = await file.read()
     answer = await analyze_image(content, file.filename, prompt, provider)
+
+    return {"answer": answer}
+
+
+@router.post("/analyze-image-url")
+async def api_analyze_image_url(
+    request: AnalyzeImageUrlRequest,
+    username: str = Depends(require_auth)
+):
+    """
+    Downloads image from URL and analyzes it using the specified LLM.
+    """
+    content, filename = await download_file_from_url(request.url)
+    answer = await analyze_image(content, filename, request.prompt, request.provider)
 
     return {"answer": answer}
 

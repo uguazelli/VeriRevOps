@@ -17,6 +17,15 @@ class LlmRequest(BaseModel):
 class LlmResponse(BaseModel):
     answer: str
 
+class TranscribeUrlRequest(BaseModel):
+    url: str
+    provider: str = "gemini"
+
+class AnalyzeImageUrlRequest(BaseModel):
+    url: str
+    prompt: str = "Describe this image in detail."
+    provider: str = "gemini"
+
 class ChatSessionCreate(BaseModel):
     tenant_id: int
     chatwoot_account_id: int

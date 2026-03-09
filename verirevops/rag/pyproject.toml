@@ -8,6 +8,7 @@ dependencies = [
     "docx2txt>=0.9",
     "fastapi>=0.124.0",
     "google-generativeai>=0.8.3",
+    "httpx>=0.28.1",
     "jinja2>=3.1.6",
     "llama-index-cli>=0.5.3",
     "llama-index-core>=0.14.10",
