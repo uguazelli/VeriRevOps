@@ -3,4 +3,4 @@ include:
   - path: ./dozzle/docker-compose.yml
   - path: ./postgres/docker-compose.yml
   - path: ./redis/docker-compose.yml
-  # - path: ./pgadmin/docker-compose.yml
+  - path: ./kong/docker-compose.yml

@@ -1,0 +1,3 @@
+include:
+  - path: ./rag/docker-compose.yml
+  - path: ./n8n/docker-compose.yml

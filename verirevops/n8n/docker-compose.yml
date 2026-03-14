@@ -1,4 +1,5 @@
-name: n8n-revops
+name: verirevops
+
 services:
   veridata_revops_n8n_main:
     image: docker.n8n.io/n8nio/n8n

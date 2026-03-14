@@ -1,0 +1,89 @@
+name: infrastructure
+
+services:
+  # 1. The Init Container: Runs once to set up the DB tables, then exits
+  kong-migrations:
+    image: kong:latest
+    container_name: veridata.kong.migrations
+    command: kong migrations bootstrap
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: veridata.postgres # Using your network alias
+      KONG_PG_PORT: ${POSTGRES_PORT}
+      KONG_PG_USER: ${POSTGRES_USER}
+      KONG_PG_PASSWORD: ${POSTGRES_PASSWORD}
+      KONG_PG_DATABASE: ${POSTGRES_DB}
+    networks:
+      - veridata.network
+
+  # 2. The Main Gateway: The actual router and API manager
+  kong:
+    image: kong:latest
+    container_name: veridata.kong
+    restart: unless-stopped
+    # We delay the start to give the migrations container time to finish
+    depends_on:
+      kong-migrations:
+        condition: service_completed_successfully
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: veridata.postgres
+      KONG_PG_PORT: ${POSTGRES_PORT}
+      KONG_PG_USER: ${POSTGRES_USER}
+      KONG_PG_PASSWORD: ${POSTGRES_PASSWORD}
+      KONG_PG_DATABASE: ${POSTGRES_DB}
+
+      # Kong Configuration
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+
+      # --- Listeners ---
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
+      KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+      KONG_ADMIN_GUI_LISTEN: 0.0.0.0:8002, 0.0.0.0:8445 ssl # Added UI Listener
+
+      # --- UI Configuration ---
+      # This tells the UI where to send API requests.
+      KONG_ADMIN_GUI_URL: ${KONG_ADMIN_GUI_URL}
+
+      # Tells the browser to fetch the data from the newly exposed API route
+      KONG_ADMIN_GUI_API_URL: ${KONG_ADMIN_GUI_API_URL}
+
+    ports:
+      # Exposing to localhost (127.0.0.1) prevents public internet access
+      # while allowing you to reach them via SSH tunnel or locally.
+      - "127.0.0.1:8001:8001" # Admin API
+      - "127.0.0.1:8000:8000" # Proxy (Data Plane)
+      - "127.0.0.1:8002:8002" # Admin GUI (Added)
+    networks:
+      veridata.network:
+        aliases:
+          - veridata.kong
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: veridata.prometheus
+    restart: unless-stopped
+    volumes:
+      # We will create this config file in Step 2
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - veridata.network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: veridata.grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+    networks:
+      veridata.network:
+        aliases:
+          - veridata.grafana
+
+networks:
+  veridata.network:
+    external: true

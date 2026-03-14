@@ -8,7 +8,9 @@ services:
     # ports:
     #   - 4022:8080
     networks:
-      - veridata.network
+      veridata.network:
+        aliases:
+          - veridata.dozzle
     restart: unless-stopped
 
 networks:
