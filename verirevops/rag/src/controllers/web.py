@@ -31,6 +31,7 @@ async def get_tenant_documents(tenant_id: int):
         docs = (await session.execute(
             select(Document)
             .where(Document.tenant_id == tenant_id)
+            .where(Document.parent_id.is_(None))
             .order_by(Document.created_at.desc())
         )).scalars().all()
         return [(d.id, d.filename, d.created_at) for d in docs]

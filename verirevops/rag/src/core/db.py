@@ -29,7 +29,7 @@ def get_engine() -> AsyncEngine:
         # psycopg3 supports async, we just need to ensure the dialect reflects it if needed,
         # but SQLAlchemy natively handles async with `postgresql+psycopg` when using create_async_engine
 
-        _engine = create_async_engine(db_url, echo=False)
+        _engine = create_async_engine(db_url, echo=False, pool_pre_ping=True)
         _SessionLocal = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
     return _engine
 

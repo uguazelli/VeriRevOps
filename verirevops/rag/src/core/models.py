@@ -94,6 +94,7 @@ class Document(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # embedding is handled by pgvector, which SQLAlchemy can handle via custom types if needed,
