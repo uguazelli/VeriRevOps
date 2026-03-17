@@ -1,0 +1,65 @@
+name: infrastructure
+
+services:
+  etcd:
+    image: bitnamilegacy/etcd:latest
+    container_name: apisix-etcd
+    restart: always
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+    ports:
+      - "2379:2379"
+    networks:
+      - veridata.network
+
+  apisix:
+    image: apache/apisix:latest
+    container_name: apisix.gateway
+    restart: always
+    depends_on:
+      - etcd
+    ports:
+      - "9080:9080" # Standard HTTP Traffic
+      - "9180:9180" # Admin API (X-API-KEY required)
+      - "9443:9443" # HTTPS Traffic
+    environment:
+      - APISIX_STANDALONE=false
+    # Note: In a real setup, you'd mount your custom config.yaml here
+    volumes:
+      - ./gateway_conf.yaml:/usr/local/apisix/conf/config.yaml:ro
+    networks:
+      veridata.network:
+        aliases:
+          - apisix.gateway
+
+  dashboard:
+    image: apache/apisix-dashboard:latest
+    container_name: apisix.dashboard
+    restart: always
+    depends_on:
+      - etcd
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./dashboard_conf.yaml:/usr/local/apisix-dashboard/conf/conf.yaml:ro
+    networks:
+      veridata.network:
+        aliases:
+          - apisix.dashboard
+
+  # AI Mock Service for Veridata testing
+  ai-mock:
+    image: kennethreitz/httpbin
+    container_name: apisix.ai.mock
+    ports:
+      - "8080:80"
+    networks:
+      veridata.network:
+        aliases:
+          - apisix.ai.mock
+
+networks:
+  veridata.network:
+    external: true
