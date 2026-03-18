@@ -1,0 +1,45 @@
+name: infrastructure
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: veridata.prometheus
+    restart: always
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    networks:
+      veridata.network:
+        aliases:
+          - veridata.prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: veridata.grafana
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      veridata.network:
+        aliases:
+          - veridata.grafana
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  veridata.network:
+    external: true

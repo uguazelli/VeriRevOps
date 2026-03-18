@@ -58,9 +58,17 @@ deployment:
     config_provider: etcd
   etcd:
     host:
-      - "http://etcd:2379"
+      - "http://veridata.etcd:2379"
   admin:
     admin_key:
       - name: admin
         key: 'edd1c9f034335f136f87ad84b625c8f1'
         role: admin
+
+plugin_attr:
+  prometheus:
+    export_uri: /apisix/prometheus/metrics
+    enable_export_server: true
+    export_addr:
+      ip: 0.0.0.0
+      port: 9091

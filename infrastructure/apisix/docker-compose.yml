@@ -1,25 +1,10 @@
 name: infrastructure
 
 services:
-  etcd:
-    image: bitnamilegacy/etcd:latest
-    container_name: apisix-etcd
-    restart: always
-    environment:
-      - ALLOW_NONE_AUTHENTICATION=yes
-      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
-      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
-    ports:
-      - "2379:2379"
-    networks:
-      - veridata.network
-
   apisix:
     image: apache/apisix:latest
     container_name: apisix.gateway
     restart: always
-    depends_on:
-      - etcd
     ports:
       - "9080:9080" # Standard HTTP Traffic
       - "9180:9180" # Admin API (X-API-KEY required)
@@ -38,8 +23,6 @@ services:
     image: apache/apisix-dashboard:latest
     container_name: apisix.dashboard
     restart: always
-    depends_on:
-      - etcd
     ports:
       - "9000:9000"
     volumes:
