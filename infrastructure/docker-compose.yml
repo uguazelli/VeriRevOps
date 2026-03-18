@@ -1,9 +1,0 @@
-include:
-  - path: ./apisix/docker-compose.yml
-  - path: ./cloudflared/docker-compose.yml
-  - path: ./dozzle/docker-compose.yml
-  - path: ./etcd/docker-compose.yml
-  - path: ./monitoring/docker-compose.yml
-  - path: ./postgres/docker-compose.yml
-  - path: ./redis/docker-compose.yml
-  - path: ./pgadmin/docker-compose.yml

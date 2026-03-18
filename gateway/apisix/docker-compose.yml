@@ -1,4 +1,4 @@
-name: infrastructure
+name: gateway
 
 services:
   apisix:

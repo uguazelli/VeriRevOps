@@ -1,4 +1,4 @@
-name: infrastructure
+name: storage
 services:
   redis:
     image: redis:alpine

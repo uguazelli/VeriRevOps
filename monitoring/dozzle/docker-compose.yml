@@ -1,4 +1,4 @@
-name: infrastructure
+name: monitoring
 services:
   dozzle:
     container_name: veridata.dozzle
