@@ -143,11 +143,9 @@ def init_db():
                     chatwoot_account_id INTEGER NOT NULL,
                     chatwoot_conversation_id INTEGER NOT NULL,
                     message_id INTEGER NOT NULL,
-                    role VARCHAR(50) NOT NULL,
-                    message TEXT NOT NULL,
-                    is_summarized BOOLEAN NOT NULL DEFAULT false,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    CONSTRAINT fk_tenant FOREIGN KEY("tenant_id") REFERENCES "tenants"("id") ON DELETE CASCADE
+                    CONSTRAINT fk_tenant FOREIGN KEY("tenant_id") REFERENCES "tenants"("id") ON DELETE CASCADE,
+                    CONSTRAINT uq_chat_message_conversation UNIQUE("tenant_id", "chatwoot_account_id", "chatwoot_conversation_id")
                 );
             """)
 

@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
+from sqlalchemy import UniqueConstraint
 from sqlalchemy import Column, Integer, String, Boolean, BigInteger, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -82,12 +83,13 @@ class ChatMessage(Base):
     chatwoot_account_id: Mapped[int] = mapped_column(Integer, nullable=False)
     chatwoot_conversation_id: Mapped[int] = mapped_column(Integer, nullable=False)
     message_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    role: Mapped[str] = mapped_column(String(50), nullable=False)
-    message: Mapped[str] = mapped_column(Text, nullable=False)
-    is_summarized: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     tenant: Mapped["Tenant"] = relationship(back_populates="chat_messages")
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "chatwoot_account_id", "chatwoot_conversation_id", name="uq_chat_message_conversation"),
+    )
 
 class Document(Base):
     __tablename__ = "documents"

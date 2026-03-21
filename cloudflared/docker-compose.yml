@@ -1,4 +1,3 @@
-name: infrastructure
 services:
   tunnel:
     image: cloudflare/cloudflared:latest
@@ -6,6 +5,7 @@ services:
     restart: unless-stopped
     command: tunnel run
     environment:
+      - TUNNEL_TRANSPORT_PROTOCOL=http2
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - veridata.network

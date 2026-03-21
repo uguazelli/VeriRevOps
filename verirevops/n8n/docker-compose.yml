@@ -42,6 +42,10 @@ services:
       - DB_POSTGRESDB_USER=${POSTGRES_USER}
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
       - DB_POSTGRESDB_DATABASE=${POSTGRES_DATABASE}
+
+      - ENGINE_URL=${ENGINE_URL}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+
     command: start
     networks:
       veridata.network:

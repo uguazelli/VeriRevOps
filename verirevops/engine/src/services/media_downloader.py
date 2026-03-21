@@ -1,6 +1,7 @@
 import httpx
 import logging
 from typing import Tuple
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,9 @@ async def download_file_from_url(url: str) -> Tuple[bytes, str]:
                     filename = possible_name
 
             return response.content, filename
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error occurred while downloading: {e}")
+        raise HTTPException(status_code=e.response.status_code, detail=f"Failed to fetch media from URL: {e}")
     except Exception as e:
         logger.error(f"Failed to download file from URL {url}: {e}")
-        raise e
+        raise HTTPException(status_code=400, detail=f"Bad request or invalid URL: {str(e)}")

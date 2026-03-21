@@ -1,9 +1,9 @@
 name: verirevops
 
 services:
-  veridata_revops:
+  veridata_engine:
     build: .
-    container_name: veridata.revops
+    container_name: veridata.engine
     env_file:
       - .env
     environment:
@@ -30,7 +30,7 @@ services:
     networks:
       veridata.network:
         aliases:
-          - veridata.revops
+          - veridata.engine
     develop:
       watch:
         - action: sync

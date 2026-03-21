@@ -44,7 +44,7 @@ class ContactMappingAdmin(ModelView, model=ContactMapping):
     icon = "fa-solid fa-address-book"
 
 class ChatMessageAdmin(ModelView, model=ChatMessage):
-    column_list = [ChatMessage.id, ChatMessage.tenant_id, ChatMessage.chatwoot_conversation_id, ChatMessage.is_summarized]
+    column_list = [ChatMessage.id, ChatMessage.tenant_id, ChatMessage.chatwoot_conversation_id, ChatMessage.message_id]
     name_plural = "Chat Messages"
     icon = "fa-solid fa-comments"
 

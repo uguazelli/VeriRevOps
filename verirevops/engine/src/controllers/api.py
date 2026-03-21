@@ -1,15 +1,17 @@
 from typing import List
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from src.core.db import get_session
-from src.core.models import GlobalConfig, ChatMessage
+from src.core.models import GlobalConfig, ChatMessage, Tenant
 from src.core.schemas import (
     RagRequest, RagResponse, LlmRequest, LlmResponse,
     TranscribeUrlRequest, AnalyzeImageUrlRequest,
-    ChatMessageCreate, ChatMessageUpdate, ChatMessageResponse,
-    GlobalConfigCreate, GlobalConfigUpdate, GlobalConfigResponse
+    TranscribeUrlRequest, AnalyzeImageUrlRequest,
+    ChatMessageCreate, ChatMessageResponse,
+    GlobalConfigCreate, GlobalConfigUpdate, GlobalConfigResponse,
+    TenantResponse, TenantFullResponse
 )
-from src.core.auth import require_auth
 from src.services.rag import generate_answer
 from src.services.transcription import transcribe_audio
 from src.services.llm import get_chat_response
@@ -20,8 +22,7 @@ router = APIRouter()
 
 @router.post("/rag", response_model=RagResponse)
 async def api_rag(
-    request: RagRequest,
-    username: str = Depends(require_auth)
+    request: RagRequest
 ):
     answer = await generate_answer(
         request.tenant_id,
@@ -36,8 +37,7 @@ async def api_rag(
 @router.post("/transcribe")
 async def api_transcribe(
     file: UploadFile = File(...),
-    provider: str = Form("gemini"),
-    username: str = Depends(require_auth)
+    provider: str = Form("gemini")
 ):
     """
     Transcribes uploaded audio file.
@@ -50,8 +50,7 @@ async def api_transcribe(
 
 @router.post("/transcribe-url")
 async def api_transcribe_url(
-    request: TranscribeUrlRequest,
-    username: str = Depends(require_auth)
+    request: TranscribeUrlRequest
 ):
     """
     Downloads audio from URL and transcribes it.
@@ -66,8 +65,7 @@ async def api_transcribe_url(
 async def api_analyze_image(
     file: UploadFile = File(...),
     prompt: str = Form("Describe this image in detail."),
-    provider: str = Form("gemini"),
-    username: str = Depends(require_auth)
+    provider: str = Form("gemini")
 ):
     """
     Analyzes uploaded image using the specified LLM.
@@ -80,8 +78,7 @@ async def api_analyze_image(
 
 @router.post("/analyze-image-url")
 async def api_analyze_image_url(
-    request: AnalyzeImageUrlRequest,
-    username: str = Depends(require_auth)
+    request: AnalyzeImageUrlRequest
 ):
     """
     Downloads image from URL and analyzes it using the specified LLM.
@@ -94,8 +91,7 @@ async def api_analyze_image_url(
 
 @router.post("/llm", response_model=LlmResponse)
 async def api_llm(
-    request: LlmRequest,
-    username: str = Depends(require_auth)
+    request: LlmRequest
 ):
     """
     Direct endpoint to query LLM without RAG.
@@ -110,30 +106,39 @@ async def api_llm(
 # --- Chat Messages CRUD ---
 
 @router.post("/chat_messages", response_model=ChatMessageResponse)
-async def create_chat_message(
-    message_data: ChatMessageCreate,
-    username: str = Depends(require_auth)
+async def upsert_chat_message(
+    message_data: ChatMessageCreate
 ):
     """
-    Save a processed individual chat message.
+    Save or update the last summarized message for a conversation.
     """
     async with get_session() as db:
-        new_message = ChatMessage(**message_data.model_dump())
-        db.add(new_message)
+        query = select(ChatMessage).where(
+            ChatMessage.tenant_id == message_data.tenant_id,
+            ChatMessage.chatwoot_account_id == message_data.chatwoot_account_id,
+            ChatMessage.chatwoot_conversation_id == message_data.chatwoot_conversation_id
+        )
+        result = await db.execute(query)
+        chat_message = result.scalar_one_or_none()
+
+        if chat_message:
+            chat_message.message_id = message_data.message_id
+        else:
+            chat_message = ChatMessage(**message_data.model_dump())
+            db.add(chat_message)
+
         await db.commit()
-        await db.refresh(new_message)
-        return new_message
+        await db.refresh(chat_message)
+        return chat_message
 
 @router.get("/chat_messages", response_model=List[ChatMessageResponse])
 async def list_chat_messages(
     tenant_id: int = None,
     chatwoot_account_id: int = None,
-    chatwoot_conversation_id: int = None,
-    is_summarized: bool = None,
-    username: str = Depends(require_auth)
+    chatwoot_conversation_id: int = None
 ):
     """
-    List individual chat messages with optional filtering.
+    List tracking records with optional filtering.
     """
     async with get_session() as db:
         query = select(ChatMessage)
@@ -143,63 +148,17 @@ async def list_chat_messages(
             query = query.where(ChatMessage.chatwoot_account_id == chatwoot_account_id)
         if chatwoot_conversation_id:
             query = query.where(ChatMessage.chatwoot_conversation_id == chatwoot_conversation_id)
-        if is_summarized is not None:
-            query = query.where(ChatMessage.is_summarized == is_summarized)
-
-        # Optional: Order by message_id or created_at if needed
-        query = query.order_by(ChatMessage.message_id.asc())
 
         result = await db.execute(query)
         return result.scalars().all()
 
 
-@router.put("/chat_messages/{message_id}", response_model=ChatMessageResponse)
-async def update_chat_message(
-    message_id: int,
-    message_update: ChatMessageUpdate,
-    username: str = Depends(require_auth)
-):
-    """
-    Update a Chat Message (e.g., mark as summarized).
-    NOTE: message_id refers to the primary key id of the chat_messages table, NOT the chatwoot message ID.
-    """
-    async with get_session() as db:
-        result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
-        chat_message = result.scalar_one_or_none()
-        if not chat_message:
-            raise HTTPException(status_code=404, detail="ChatMessage not found")
-
-        update_data = message_update.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(chat_message, key, value)
-
-        await db.commit()
-        await db.refresh(chat_message)
-        return chat_message
-
-@router.delete("/chat_messages/{message_id}")
-async def delete_chat_message(
-    message_id: int,
-    username: str = Depends(require_auth)
-):
-    """
-    Delete a Chat Message manually.
-    """
-    async with get_session() as db:
-        result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
-        chat_message = result.scalar_one_or_none()
-        if not chat_message:
-            raise HTTPException(status_code=404, detail="ChatMessage not found")
-
-        await db.delete(chat_message)
-        await db.commit()
-        return {"ok": True}
 
 
 # --- Global Config CRUD ---
 
 @router.get("/global_configs", response_model=GlobalConfigResponse)
-async def get_global_config(username: str = Depends(require_auth)):
+async def get_global_config():
     """
     Get the global configuration (assumes single row with id=1).
     """
@@ -212,8 +171,7 @@ async def get_global_config(username: str = Depends(require_auth)):
 
 @router.post("/global_configs", response_model=GlobalConfigResponse)
 async def upsert_global_config(
-    config_data: GlobalConfigCreate,
-    username: str = Depends(require_auth)
+    config_data: GlobalConfigCreate
 ):
     """
     Upsert the single global configuration (id=1).
@@ -232,3 +190,50 @@ async def upsert_global_config(
         await db.commit()
         await db.refresh(config)
         return config
+
+# --- Tenant CRUD ---
+
+@router.get("/tenants/{slug}", response_model=TenantFullResponse)
+async def get_tenant_by_slug(
+    slug: str
+):
+    """
+    Get all tenant details (subscriptions, services, configurations) and global configs by slug.
+    """
+    async with get_session() as db:
+        query = (
+            select(Tenant)
+            .where(Tenant.slug == slug)
+            .options(
+                selectinload(Tenant.services),
+                selectinload(Tenant.subscriptions),
+                selectinload(Tenant.configurations)
+            )
+        )
+        result = await db.execute(query)
+        tenant = result.scalar_one_or_none()
+
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+
+        global_configs_result = await db.execute(select(GlobalConfig))
+        global_configs = global_configs_result.scalars().all()
+
+        services_dict = {svc.name: svc for svc in tenant.services} if tenant.services else {}
+        subscription = tenant.subscriptions[0] if tenant.subscriptions else None
+        configuration = tenant.configurations[0] if tenant.configurations else None
+        global_config = global_configs[0] if global_configs else None
+
+        tenant_response = TenantResponse(
+            id=tenant.id,
+            slug=tenant.slug,
+            created_at=tenant.created_at,
+            services=services_dict,
+            subscription=subscription,
+            configuration=configuration
+        )
+
+        return TenantFullResponse(
+            tenant=tenant_response,
+            global_config=global_config
+        )
