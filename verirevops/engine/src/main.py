@@ -21,6 +21,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="VeriRag Core", lifespan=lifespan)
 
+# Custom ASGI Middleware to force HTTPS scheme when behind proxies
+# that strip or misconfigure X-Forwarded-Proto (like APISIX/Cloudflare)
+class ForceHTTPSMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            headers = dict(scope.get("headers", []))
+            host = headers.get(b"host", b"").decode("latin-1")
+            
+            # If accessed via a public domain (not local dev), force HTTPS
+            if "localhost" not in host and "127.0.0.1" not in host:
+                scope["scheme"] = "https"
+                
+        await self.app(scope, receive, send)
+
+app.add_middleware(ForceHTTPSMiddleware)
+
 # Setup SQLAdmin
 setup_admin(app)
 
