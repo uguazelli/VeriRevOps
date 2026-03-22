@@ -3,14 +3,16 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from src.core.db import get_session
-from src.core.models import GlobalConfig, ChatMessage, Tenant, ContactMapping
-from src.core.schemas import (
-    RagRequest, RagResponse, LlmRequest, LlmResponse,
-    TranscribeUrlRequest, AnalyzeImageUrlRequest,
+from src.core.models import (
+    GlobalConfig, ChatMessage, Tenant, ContactMapping,
     ContactMappingCreate, ContactMappingUpdate, ContactMappingResponse,
     ChatMessageCreate, ChatMessageResponse,
     GlobalConfigCreate, GlobalConfigUpdate, GlobalConfigResponse,
     TenantResponse, TenantFullResponse
+)
+from src.core.schemas import (
+    RagRequest, RagResponse, LlmRequest, LlmResponse,
+    TranscribeUrlRequest, AnalyzeImageUrlRequest
 )
 from src.services.rag import generate_answer
 from src.services.transcription import transcribe_audio

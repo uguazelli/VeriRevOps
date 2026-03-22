@@ -1,115 +1,158 @@
 from datetime import datetime
-from typing import Optional, List
-from sqlalchemy import UniqueConstraint
-from sqlalchemy import Column, Integer, String, Boolean, BigInteger, DateTime, ForeignKey, JSON, Text
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from typing import Optional, List, Dict, Any
+from sqlmodel import SQLModel, Field, Relationship, Column, UniqueConstraint
+from sqlalchemy import Integer, String, Boolean, BigInteger, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 
-class Base(DeclarativeBase):
+# --- GLOBAL CONFIG ---
+class GlobalConfigBase(SQLModel):
+    settings: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+
+class GlobalConfig(GlobalConfigBase, table=True):
+    __tablename__ = "global_configs"
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+class GlobalConfigCreate(GlobalConfigBase):
     pass
 
-class Tenant(Base):
+class GlobalConfigUpdate(GlobalConfigBase):
+    pass
+
+class GlobalConfigResponse(GlobalConfigBase):
+    id: int
+
+
+# --- TENANT ---
+class TenantBase(SQLModel):
+    slug: str = Field(sa_column=Column(String(255), nullable=False, unique=True))
+    created_at: datetime = Field(default_factory=datetime.utcnow, sa_column=Column(DateTime(timezone=True)))
+
+class Tenant(TenantBase, table=True):
     __tablename__ = "tenants"
+    id: Optional[int] = Field(default=None, primary_key=True)
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    slug: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    subscriptions: List["Subscription"] = Relationship(back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    configurations: List["Configuration"] = Relationship(back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    services: List["Service"] = Relationship(back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    contact_mappings: List["ContactMapping"] = Relationship(back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    chat_messages: List["ChatMessage"] = Relationship(back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    documents: List["Document"] = Relationship(back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
-    # Relationships
-    subscriptions: Mapped[List["Subscription"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
-    configurations: Mapped[List["Configuration"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
-    services: Mapped[List["Service"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
-    contact_mappings: Mapped[List["ContactMapping"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
-    chat_messages: Mapped[List["ChatMessage"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
-    documents: Mapped[List["Document"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
+# --- SUBSCRIPTION ---
+class SubscriptionBase(SQLModel):
+    tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
+    is_active: bool = Field(default=True)
+    quota_limit: int = Field(default=0, sa_column=Column(BigInteger, default=0, nullable=False))
+    usage_count: int = Field(default=0, sa_column=Column(BigInteger, default=0, nullable=False))
+    start_dat: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    end_date: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
 
-    def __str__(self):
-        return f"Tenant({self.id}, {self.slug})"
-
-class Subscription(Base):
+class Subscription(SubscriptionBase, table=True):
     __tablename__ = "subscriptions"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant: Optional["Tenant"] = Relationship(back_populates="subscriptions")
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    quota_limit: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
-    usage_count: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
-    start_dat: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+class SubscriptionResponse(SubscriptionBase):
+    id: int
 
-    tenant: Mapped["Tenant"] = relationship(back_populates="subscriptions")
+# --- CONFIGURATION ---
+class ConfigurationBase(SQLModel):
+    tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
+    settings: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
 
-class Configuration(Base):
+class Configuration(ConfigurationBase, table=True):
     __tablename__ = "configurations"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant: Optional["Tenant"] = Relationship(back_populates="configurations")
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    settings: Mapped[Optional[dict]] = mapped_column(JSONB)
+class ConfigurationResponse(ConfigurationBase):
+    id: int
 
-    tenant: Mapped["Tenant"] = relationship(back_populates="configurations")
+# --- SERVICE ---
+class ServiceBase(SQLModel):
+    tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
+    name: str = Field(max_length=255)
+    url: Optional[str] = Field(default=None, max_length=255)
+    api_key: Optional[str] = Field(default=None, max_length=255)
+    account_id: Optional[str] = Field(default=None, max_length=255)
+    settings: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
 
-class Service(Base):
+class Service(ServiceBase, table=True):
     __tablename__ = "services"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant: Optional["Tenant"] = Relationship(back_populates="services")
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    url: Mapped[Optional[str]] = mapped_column(String(255))
-    api_key: Mapped[Optional[str]] = mapped_column(String(255))
-    account_id: Mapped[Optional[str]] = mapped_column(String(255))
-    settings: Mapped[Optional[dict]] = mapped_column(JSONB)
+class ServiceResponse(ServiceBase):
+    id: int
 
-    tenant: Mapped["Tenant"] = relationship(back_populates="services")
+# --- TENANT RESPONSES ---
+class TenantResponse(TenantBase):
+    id: int
+    services: Dict[str, ServiceResponse] = {}
+    subscription: Optional[SubscriptionResponse] = None
+    configuration: Optional[ConfigurationResponse] = None
 
-class ContactMapping(Base):
+class TenantFullResponse(SQLModel):
+    tenant: TenantResponse
+    global_config: Optional[GlobalConfigResponse] = None
+
+# --- CONTACT MAPPING ---
+class ContactMappingBase(SQLModel):
+    tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
+    chatwoot_contact_id: int
+    service_name: str = Field(max_length=255)
+    external_id: str = Field(max_length=255)
+
+class ContactMapping(ContactMappingBase, table=True):
     __tablename__ = "contact_mappings"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant: Optional["Tenant"] = Relationship(back_populates="contact_mappings")
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    chatwoot_contact_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    service_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+class ContactMappingCreate(ContactMappingBase):
+    pass
 
-    tenant: Mapped["Tenant"] = relationship(back_populates="contact_mappings")
+class ContactMappingUpdate(SQLModel):
+    tenant_id: int
+    service_name: str
+    external_id: str
 
+class ContactMappingResponse(ContactMappingBase):
+    id: int
 
+# --- CHAT MESSAGE ---
+class ChatMessageBase(SQLModel):
+    tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
+    chatwoot_account_id: int
+    chatwoot_conversation_id: int
+    message_id: int
+    created_at: datetime = Field(default_factory=datetime.utcnow, sa_column=Column(DateTime(timezone=True)))
 
-class ChatMessage(Base):
+class ChatMessage(ChatMessageBase, table=True):
     __tablename__ = "chat_messages"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    chatwoot_account_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    chatwoot_conversation_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    message_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-
-    tenant: Mapped["Tenant"] = relationship(back_populates="chat_messages")
-
     __table_args__ = (
         UniqueConstraint("tenant_id", "chatwoot_account_id", "chatwoot_conversation_id", name="uq_chat_message_conversation"),
     )
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant: Optional["Tenant"] = Relationship(back_populates="chat_messages")
 
-class Document(Base):
+class ChatMessageCreate(SQLModel):
+    tenant_id: int
+    chatwoot_account_id: int
+    chatwoot_conversation_id: int
+    message_id: int
+
+class ChatMessageResponse(ChatMessageBase):
+    id: int
+
+# --- DOCUMENT ---
+class Document(SQLModel, table=True):
     __tablename__ = "documents"
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
+    parent_id: Optional[uuid.UUID] = Field(default=None, foreign_key="documents.id", ondelete="CASCADE")
+    filename: str = Field(max_length=255)
+    content: str = Field(sa_column=Column(Text, nullable=False))
+    created_at: datetime = Field(default_factory=datetime.utcnow, sa_column=Column(DateTime(timezone=True)))
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True)
-    filename: Mapped[str] = mapped_column(String(255), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    # embedding is handled by pgvector, which SQLAlchemy can handle via custom types if needed,
-    # but for CRUD we might just want to see it exists or skip it.
-    # For now, we skip embedding in CRUD if it's too complex, or use a generic Type.
-    # We won't add embedding here to avoid pgvector dependency in models for now.
-
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-
-    tenant: Mapped["Tenant"] = relationship(back_populates="documents")
-
-class GlobalConfig(Base):
-    __tablename__ = "global_configs"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    settings: Mapped[Optional[dict]] = mapped_column(JSONB)
+    tenant: Optional["Tenant"] = Relationship(back_populates="documents")

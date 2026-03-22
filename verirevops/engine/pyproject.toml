@@ -23,5 +23,6 @@ dependencies = [
     "python-multipart>=0.0.20",
     "sqladmin>=0.20.1",
     "sqlalchemy>=2.0.38",
+    "sqlmodel>=0.0.37",
     "uvicorn>=0.38.0",
 ]
