@@ -27,7 +27,26 @@ class AnalyzeImageUrlRequest(BaseModel):
     prompt: str = "Describe this image in detail."
     provider: str = "gemini"
 
+class ContactMappingCreate(BaseModel):
+    tenant_id: int
+    chatwoot_contact_id: int
+    service_name: str
+    external_id: str
 
+class ContactMappingUpdate(BaseModel):
+    tenant_id: int
+    service_name: str
+    external_id: str
+
+class ContactMappingResponse(BaseModel):
+    id: int
+    tenant_id: int
+    chatwoot_contact_id: int
+    service_name: str
+    external_id: str
+
+    class Config:
+        from_attributes = True
 
 class ChatMessageCreate(BaseModel):
     tenant_id: int

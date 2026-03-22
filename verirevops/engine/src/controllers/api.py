@@ -3,11 +3,11 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from src.core.db import get_session
-from src.core.models import GlobalConfig, ChatMessage, Tenant
+from src.core.models import GlobalConfig, ChatMessage, Tenant, ContactMapping
 from src.core.schemas import (
     RagRequest, RagResponse, LlmRequest, LlmResponse,
     TranscribeUrlRequest, AnalyzeImageUrlRequest,
-    TranscribeUrlRequest, AnalyzeImageUrlRequest,
+    ContactMappingCreate, ContactMappingUpdate, ContactMappingResponse,
     ChatMessageCreate, ChatMessageResponse,
     GlobalConfigCreate, GlobalConfigUpdate, GlobalConfigResponse,
     TenantResponse, TenantFullResponse
@@ -102,6 +102,107 @@ async def api_llm(
     )
     return LlmResponse(answer=answer)
 
+
+# --- Contact Mappings CRUD ---
+
+@router.get("/contact_mappings", response_model=List[ContactMappingResponse])
+async def list_contact_mappings(
+    tenant_id: int = None,
+    chatwoot_contact_id: int = None,
+    service_name: str = None
+):
+    """
+    List contact mappings with optional filtering.
+    """
+    async with get_session() as db:
+        query = select(ContactMapping)
+        if tenant_id:
+            query = query.where(ContactMapping.tenant_id == tenant_id)
+        if chatwoot_contact_id:
+            query = query.where(ContactMapping.chatwoot_contact_id == chatwoot_contact_id)
+        if service_name:
+            query = query.where(ContactMapping.service_name == service_name)
+            
+        result = await db.execute(query)
+        return result.scalars().all()
+
+@router.post("/contact_mappings", response_model=ContactMappingResponse)
+async def create_contact_mapping(
+    mapping_data: ContactMappingCreate
+):
+    """
+    Create a new contact mapping. Returns 409 if it already exists.
+    """
+    async with get_session() as db:
+        query = select(ContactMapping).where(
+            ContactMapping.tenant_id == mapping_data.tenant_id,
+            ContactMapping.chatwoot_contact_id == mapping_data.chatwoot_contact_id,
+            ContactMapping.service_name == mapping_data.service_name
+        )
+        result = await db.execute(query)
+        if result.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Contact mapping already exists")
+
+        mapping = ContactMapping(**mapping_data.model_dump())
+        db.add(mapping)
+
+        await db.commit()
+        await db.refresh(mapping)
+        return mapping
+
+@router.put("/contact_mappings/{chatwoot_contact_id}", response_model=ContactMappingResponse)
+async def update_contact_mapping(
+    chatwoot_contact_id: int,
+    mapping_data: ContactMappingUpdate
+):
+    """
+    Update an existing contact mapping by chatwoot_contact_id, tenant_id, and service_name.
+    """
+    async with get_session() as db:
+        query = select(ContactMapping).where(
+            ContactMapping.tenant_id == mapping_data.tenant_id,
+            ContactMapping.chatwoot_contact_id == chatwoot_contact_id,
+            ContactMapping.service_name == mapping_data.service_name
+        )
+        result = await db.execute(query)
+        mapping = result.scalar_one_or_none()
+
+        if not mapping:
+            raise HTTPException(status_code=404, detail="Contact mapping not found")
+
+        mapping.external_id = mapping_data.external_id
+
+        await db.commit()
+        await db.refresh(mapping)
+        return mapping
+
+@router.delete("/contact_mappings/{chatwoot_contact_id}")
+async def delete_contact_mapping(
+    chatwoot_contact_id: int,
+    tenant_id: int = None,
+    service_name: str = None
+):
+    """
+    Delete contact mappings by chatwoot_contact_id.
+    """
+    async with get_session() as db:
+        query = select(ContactMapping).where(ContactMapping.chatwoot_contact_id == chatwoot_contact_id)
+        if tenant_id:
+            query = query.where(ContactMapping.tenant_id == tenant_id)
+        if service_name:
+            query = query.where(ContactMapping.service_name == service_name)
+            
+        result = await db.execute(query)
+        mappings = result.scalars().all()
+        
+        deleted_count = len(mappings)
+        for mapping in mappings:
+            await db.delete(mapping)
+            
+        if deleted_count > 0:
+            await db.commit()
+            
+        return {"deleted_count": deleted_count}
 
 # --- Chat Messages CRUD ---
 
