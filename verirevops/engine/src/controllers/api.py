@@ -143,16 +143,14 @@ async def update_contact_mapping(
     """
     return await svc_update_contact_mapping(chatwoot_contact_id, mapping_data)
 
-@router.delete("/contact_mappings/{chatwoot_contact_id}")
+@router.delete("/contact_mappings/{mapping_id}")
 async def delete_contact_mapping(
-    chatwoot_contact_id: int,
-    tenant_id: int = None,
-    service_name: str = None
+    mapping_id: int
 ):
     """
-    Delete contact mappings by chatwoot_contact_id.
+    Delete a contact mapping by its database ID.
     """
-    count = await svc_delete_contact_mapping(chatwoot_contact_id, tenant_id, service_name)
+    count = await svc_delete_contact_mapping(mapping_id)
     return {"deleted_count": count}
 
 # --- Chat Messages CRUD ---

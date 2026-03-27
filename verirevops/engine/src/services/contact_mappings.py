@@ -63,25 +63,16 @@ async def svc_update_contact_mapping(
         return mapping
 
 async def svc_delete_contact_mapping(
-    chatwoot_contact_id: int,
-    tenant_id: Optional[int] = None,
-    service_name: Optional[str] = None
+    mapping_id: int
 ) -> int:
     async with get_session() as db:
-        query = select(ContactMapping).where(ContactMapping.chatwoot_contact_id == chatwoot_contact_id)
-        if tenant_id:
-            query = query.where(ContactMapping.tenant_id == tenant_id)
-        if service_name:
-            query = query.where(ContactMapping.service_name == service_name)
-            
+        query = select(ContactMapping).where(ContactMapping.id == mapping_id)
         result = await db.execute(query)
-        mappings = result.scalars().all()
+        mapping = result.scalar_one_or_none()
         
-        deleted_count = len(mappings)
-        for mapping in mappings:
+        if mapping:
             await db.delete(mapping)
-            
-        if deleted_count > 0:
             await db.commit()
+            return 1
             
-        return deleted_count
+        return 0
