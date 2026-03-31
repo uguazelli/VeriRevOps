@@ -1,4 +1,4 @@
-name: ${CONTAINER_NAME:-espocrm}
+name: verirevops
 
 services:
   # ---------------------------------------------------------------------------

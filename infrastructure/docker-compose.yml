@@ -1,0 +1,6 @@
+include:
+  - path: ./cloudflared/docker-compose.yml
+  - path: ./gateway/apisix/docker-compose.yml
+  - path: ./gateway/etcd/docker-compose.yml
+  - path: ./dozzle/docker-compose.yml
+  - path: ./graphana_prometheus/docker-compose.yml

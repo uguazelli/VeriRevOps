@@ -1,4 +1,4 @@
-name: chatwoot
+name: verirevops
 
 services:
   base: &base

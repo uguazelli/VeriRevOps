@@ -1,0 +1,15 @@
+name: legacy-app
+services:
+  app:
+    build: .
+    env_file: .env
+    ports:
+      - "${API_PORT:-4028}:8000"
+    networks:
+      veridata.network:
+        aliases:
+          - veridata.legacyapp
+
+networks:
+  veridata.network:
+    external: true

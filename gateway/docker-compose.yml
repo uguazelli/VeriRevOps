@@ -1,3 +1,0 @@
-include:
-  - path: ./apisix/docker-compose.yml
-  - path: ./etcd/docker-compose.yml

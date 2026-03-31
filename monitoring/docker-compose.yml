@@ -1,3 +1,0 @@
-include:
-  - path: ./dozzle/docker-compose.yml
-  - path: ./graphana_prometheus/docker-compose.yml
