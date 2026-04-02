@@ -5,12 +5,11 @@ import warnings
 import logging as py_logging
 from typing import List, Dict, Any
 
-from llama_index.postprocessor.sbert_rerank import SentenceTransformerRerank
+from llama_index.core.postprocessor import LLMRerank
 from llama_index.core.schema import NodeWithScore, TextNode
 from llama_index.core import QueryBundle
 
 from src.core.llm_factory import get_llm
-from src.core.prompts import RERANK_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -22,17 +21,14 @@ def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5
     if not documents:
         return []
 
-    logger.info(f"Reranking {len(documents)} documents using local BGE Cross-Encoder")
+    logger.info(f"Reranking {len(documents)} documents using API-based LLM ({provider})")
 
     try:
-        # Suppress HF API Token warnings resulting from open-source model downloads
-        py_logging.getLogger("huggingface_hub").setLevel(py_logging.ERROR)
-        warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub.*")
-
-        # Initialize the reranker (downloads the model ~1GB on first run)
-        reranker = SentenceTransformerRerank(
-            top_n=top_k,
-            model="BAAI/bge-reranker-base"
+        # Initialize the API-based reranker
+        llm = get_llm(provider)
+        reranker = LLMRerank(
+            llm=llm,
+            top_n=top_k
         )
 
         # Convert dictionary documents to LlamaIndex Nodes
@@ -66,6 +62,6 @@ def rerank_documents(query: str, documents: List[Dict[str, Any]], top_k: int = 5
         return scored_docs
 
     except Exception as e:
-        logger.error(f"Local Cross-Encoder Reranking failed: {e}. Falling back to original retrieval order.")
+        logger.error(f"API-based Reranking failed: {e}. Falling back to original retrieval order.")
         # If it fails, just return the original documents up to top_k
         return documents[:top_k]
