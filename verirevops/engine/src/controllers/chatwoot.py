@@ -1,6 +1,11 @@
 import json
 from fastapi import APIRouter
-from src.services.chatwoot import process_chatwoot_payload, get_message_kind
+from src.services.chatwoot import (
+    process_chatwoot_payload,
+    get_message_kind,
+    transcribe_audio as transcribe_chatwoot_audio,
+    analyze_image as analyze_chatwoot_image,
+)
 from src.services.tenants import svc_get_tenant_by_slug
 
 
@@ -33,12 +38,19 @@ async def chatwoot_webhook(
     # print(tenant_settings.model_dump_json(indent=2))
 
     # 3 - If audio message, transcribe it
+    transcription = None
     if message_kind == "audio":
         print("🎤 Transcribing audio message...")
-        # transcription = await transcribe_audio_from_payload(payload)
-        # print(f"Transcription result: {transcription}")
+        transcription = await transcribe_chatwoot_audio(payload)
+        print(f"Transcription result: {transcription}")
 
     # 4 - If image message, describe it
+    image_description = None
+    if message_kind == "image":
+        print("🖼️ Describing image message...")
+        image_description = await analyze_chatwoot_image(payload)
+        print(f"Image description: {image_description}")
+
     # 5 - Get message history from Chatwoot API
     # 5 - Classify if it requires RAG, handle to a human or if is just a small talk
     # 6 - If small talk, generate answer with LLM and send to Chatwoot API
@@ -47,5 +59,9 @@ async def chatwoot_webhook(
 
 
 
-    return {"status": "success"}
-
+    return {
+        "status": "success",
+        "message_kind": message_kind,
+        "transcription": transcription,
+        "image_description": image_description
+    }
