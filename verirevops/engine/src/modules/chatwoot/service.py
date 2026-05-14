@@ -2,7 +2,11 @@ import logging
 import json
 import httpx
 from fastapi import HTTPException
-from src.core.prompts import CHATWOOT_CHITCHAT_PROMPT, CHATWOOT_TRAFFIC_CLASSIFIER_PROMPT
+from src.core.prompts import (
+    CHATWOOT_CHITCHAT_PROMPT,
+    CHATWOOT_HANDOFF_PROMPT,
+    CHATWOOT_TRAFFIC_CLASSIFIER_PROMPT,
+)
 from src.services.image_analysis import analyze_image as analyze_image_file
 from src.services.media_downloader import download_file_from_url
 from src.services.chat_messages import svc_list_chat_messages
@@ -45,8 +49,11 @@ async def process_chatwoot_webhook(slug: str, payload: dict):
         if get_classification_category(classification) == "CHITCHAT":
             await respond_to_chitchat(current_message)
 
-        # 7 - If Handle to human, send message to Chatwoot API and update status to open
-        # 8 - If RAG, generate answer with retrieved context and send to Chatwoot API
+        # 8 - If Handle to human, send message to Chatwoot API and update status to open
+        if get_classification_category(classification) == "HANDOFF":
+            await respond_to_handoff(message_history, current_message)
+
+        # 9 - If RAG, generate answer with retrieved context and send to Chatwoot API
     except Exception:
         log_chatwoot_webhook_failure(slug)
 
@@ -247,6 +254,46 @@ async def respond_to_chitchat(current_message, provider: str = "gemini"):
     raw_response = await get_chat_response(prompt, provider=provider)
     response = parse_chitchat_response(raw_response)
     logger.info("Chatwoot chitchat response: %s", response)
+    return response
+
+
+def build_handoff_prompt(message_history, current_message):
+    normalized_history = normalize_chatwoot_history(message_history)
+    history_json = json.dumps(normalized_history, indent=2, default=str)
+    current_message_text = current_message.strip() if current_message else "EMPTY_QUERY"
+
+    return CHATWOOT_HANDOFF_PROMPT.format(
+        message_history=history_json,
+        current_message=current_message_text
+    )
+
+
+def parse_handoff_response(raw_response):
+    response_text = raw_response.strip()
+
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError:
+        start = response_text.find("{")
+        end = response_text.rfind("}")
+
+    if start != -1 and end != -1 and start < end:
+        try:
+            return json.loads(response_text[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    logger.error("Failed to parse Chatwoot handoff JSON: %s", raw_response)
+    return {
+        "data": raw_response.strip()
+    }
+
+
+async def respond_to_handoff(message_history, current_message, provider: str = "gemini"):
+    prompt = build_handoff_prompt(message_history, current_message)
+    raw_response = await get_chat_response(prompt, provider=provider)
+    response = parse_handoff_response(raw_response)
+    logger.info("Chatwoot handoff response: %s", response)
     return response
 
 
