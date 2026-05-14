@@ -1,14 +1,9 @@
 from typing import List
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
-from src.core.db import get_session
+from fastapi import APIRouter, UploadFile, File, Form
 from src.core.models import (
-    GlobalConfig, ChatMessage, Tenant, ContactMapping,
     ContactMappingCreate, ContactMappingUpdate, ContactMappingResponse,
     ChatMessageCreate, ChatMessageResponse,
-    GlobalConfigCreate, GlobalConfigUpdate, GlobalConfigResponse,
-    TenantResponse, TenantFullResponse
+    GlobalConfigCreate, GlobalConfigResponse, TenantFullResponse
 )
 from src.core.schemas import (
     RagRequest, RagResponse, LlmRequest, LlmResponse,

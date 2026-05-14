@@ -59,31 +59,6 @@ async def generate_answer(
         log_error(logger, f"LLM generation failed: {e}")
         answer = "Sorry, I encountered an error generating the answer."
 
-    # 4. Log the search and answer quality
-    try:
-        async with get_session() as session:
-            log_query = """
-                INSERT INTO query_logs (tenant_id, query_text, answer_text, provider, model_name)
-                VALUES (:tid, :q, :ans, :prov, :model)
-            """
-
-            # Extract basic model name string if using LlamaIndex LLM object
-            model_name = getattr(llm, "model", getattr(llm, "model_name", "unknown")) if 'llm' in locals() else "unknown"
-
-            await session.execute(
-                text(log_query),
-                {
-                    "tid": tenant_id,
-                    "q": message,
-                    "ans": answer,
-                    "prov": provider,
-                    "model": model_name
-                }
-            )
-            await session.commit()
-    except Exception as e:
-        log_error(logger, f"Failed to log query quality: {e}")
-
     return answer
 
 def get_embed_model():
@@ -350,5 +325,4 @@ async def search_documents(
         results = rerank_documents(message, results, top_k=limit, provider=provider)
 
     return results
-
 

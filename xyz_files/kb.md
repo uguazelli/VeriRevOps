@@ -1,362 +1,114 @@
-# Veridata Pro — Company Knowledge Base
-
-> This document is the authoritative source for Veridata Pro's services, pricing, methodology, and contact information. Use it to answer client queries accurately.
-
+---
+title: "Veridata Pro RAG Essentials"
+company: "Veridata Pro"
+website: "https://veridatapro.com"
+booking_url: "https://calendly.com/veridata/discovery"
+language: "English"
+version_date: "2026-05-13"
 ---
 
-## Company Overview
+# Veridata Pro — Essential Chatbot Knowledge
 
-**Veridata Pro** is a boutique technical architecture firm that solves complex infrastructure problems for growing companies — from legacy system protection to enterprise data orchestration. We remove architectural complexity entirely from our clients' hands so they can scale without fear.
+## What Veridata Pro Does
 
-- **Website:** veridatapro.com
-- **Founded by:** Ugo Guazelli, Cloud Architect & Founder
-- **Experience:** 15+ years in the industry; 8+ years specializing in MuleSoft
-- **Operations:** 100% remote. North America, LatAm, and Europe.
-- **Model:** Single Tenant — your data never lives on shared infrastructure.
-- **Monitoring:** 24/7 system monitoring on all managed plans.
+Veridata Pro helps small and mid-sized companies, Odoo users, software agencies, and implementation partners connect disconnected business systems.
 
----
+The focus is systems integration, automation, Odoo integration, APIs, data synchronization, workflow reliability, and AI/RAG integrations when useful.
 
-## Founder
+Core idea: when systems do not talk to each other, people become the integration layer. Veridata Pro replaces manual copy-paste, spreadsheet reconciliation, and fragile automations with reliable workflows.
 
-**Ugo Guazelli** — Cloud Architect & Founder
+## Main Services
 
-Ugo spent over a decade designing complex integration solutions for large enterprises. With 15+ years in the industry and 8 years specializing in MuleSoft, he understands the critical importance of data integrity, security, and scalable infrastructure. At Veridata Pro, Ugo applies this rigorous enterprise discipline to SMBs — no black-box solutions, only transparent, robust, and secure architectures that drive real business value.
+Veridata Pro can help with:
 
-Ugo is also the founder of **VeriAcademy** (veriacademy.com), a platform that demystifies technology through courses on AI Literacy, AI for Productivity, and AI for Parents.
+- Odoo integration and automation
+- API integrations between CRMs, ERPs, ecommerce, finance tools, databases, spreadsheets, and internal systems
+- n8n, Make, Zapier, and custom automation workflows
+- Custom APIs, middleware, and backend services
+- Data migration, synchronization, cleanup, validation, and reporting
+- AWS/cloud integration architecture for more critical workflows
+- MuleSoft architecture and enterprise integration support
+- AI integrations, including RAG pipelines and document-based assistants
+- Support for agencies or Odoo partners that need integration help behind the scenes
 
----
+## Ideal Clients
 
-## Core Values & Differentiators
+Veridata Pro is a good fit for:
 
-- **No black-box solutions** — every architecture is transparent and auditable.
-- **Single Tenant** — clients own their infrastructure; no shared multi-tenant risk.
-- **Zero Trust** — security is built into the architecture, not bolted on top.
-- **No code changes required** — legacy systems are wrapped and modernized without touching existing code (Strangler Fig methodology).
-- **Enterprise discipline for SMBs** — Fortune-500-grade architecture at SMB-accessible prices.
-- **Fixed-scope pricing** — no surprise billing; clear deliverables agreed upfront.
+- SMBs with disconnected tools and too much manual work
+- Companies using Odoo but still relying on spreadsheets, exports, or manual processes
+- Odoo partners that need API, sync, migration, or automation capacity
+- Software agencies that need help with integrations behind portals, apps, or websites
+- Ecommerce companies that need order, inventory, customer, payment, invoice, or reporting workflows connected
+- Operations, sales, finance, and RevOps teams with inconsistent data across systems
 
----
+## Common Problems Veridata Pro Solves
 
-## Services
+- People copy and paste data between systems
+- Reports do not match across tools
+- Odoo, CRM, ecommerce, finance, and spreadsheets are not synchronized
+- Automations break silently
+- Manual follow-ups delay operations
+- A business process depends on one person checking or fixing data
+- No-code automations became fragile, undocumented, or expensive
+- AI tools exist but are not connected to real business systems
 
-Veridata Pro offers three service pillars:
+## Architecture Approach
 
-1. **The Shield** — Cybersecurity & Identity Protection
-2. **The Engine** — Systems Integration Architecture
-3. **Veri Rev Ops** — Revenue Operations Infrastructure
+Veridata Pro chooses the tool based on the risk and complexity of the workflow.
 
----
+Use n8n, Make, or Zapier for simple and fast automations.
+Use n8n plus custom code when the workflow needs more control, validation, or API logic.
+Use custom APIs, AWS, or middleware when the workflow is critical, high-volume, security-sensitive, or needs ownership and reliability.
+Use MuleSoft when the client already has enterprise integration requirements or a MuleSoft ecosystem.
 
-## 1. The Shield — Cybersecurity & Identity Protection
+## Pricing Guidance
 
-### What It Does
+Pricing should be presented as starting points, not fixed quotes.
 
-Transforms your infrastructure into audit-ready, contract-safe architecture. Using the modern **Strangler Fig strategy** with APISIX and Zitadel, we wrap legacy systems with enterprise-grade security — without changing a single line of existing code.
+- Integration Assessment + Quick Win: starts at $500 USD
+- Integration & Automation Sprint: starts at $1,500 USD
+- Integration Support Partner: starts at $500 USD/month
+- Larger or more complex work requires a custom quote
 
-### Who It's For
+Final pricing depends on systems involved, API complexity, data volume, security needs, production reliability, and support requirements.
 
-- **B2B companies pursuing enterprise deals** — need to pass vendor security questionnaires and procurement audits from large US or European clients.
-- **Companies expanding to LatAm** — need to meet international compliance requirements.
-- **Startups without a security team** — need a fractional CISO and enterprise protection at a fraction of the in-house cost.
+## Founder / Credibility
 
-### Technology Used
+Veridata Pro is led by Ugo Guazelli, a cloud and integration architect with 15+ years of experience in systems integration, APIs, automation, cloud architecture, MuleSoft, and business process integration.
 
-- **APISIX** — API gateway and traffic control layer
-- **Zitadel** — Identity provider and SSO
-- **EDR (AI Endpoint Detection & Response)** — 24/7 endpoint protection
-- **Managed MFA** — multi-factor authentication across email and cloud systems
-- **Anti-Ransomware Backups** — air-gapped, immutable backups
+The company’s positioning is architect-led integration and automation, not generic task automation.
 
-### Pricing — Monthly Recurring
+## How the Chatbot Should Answer
 
-All plans have a **setup fee based on complexity** (assessed during onboarding call).
+Answer clearly, practically, and in the visitor’s language when possible.
 
-#### Protect (Essential)
+Do not invent client names, certifications, testimonials, guarantees, delivery dates, or exact prices.
 
-> Best for: Small teams needing basic protection and cyber insurance compliance.
+For technical or sensitive projects, recommend a technical fit call before giving detailed implementation advice.
 
-|            |                          |
-| ---------- | ------------------------ |
-| Base price | **$150 / month**         |
-| Per user   | **+ $12 / user / month** |
-| Example    | 10 users → $270/mo       |
+When asked whether Veridata Pro can help, answer based on the service areas above and suggest booking a discovery call when the project depends on details.
 
-**Included:**
+## Common FAQs
 
-- Managed MFA (Email & Cloud)
-- AI Endpoint Protection (24/7)
-- Anti-Ransomware Backups
-- Vulnerability Monitoring
+### Do you only work with Odoo?
+No. Odoo is one focus area, but Veridata Pro also works with CRMs, ERPs, ecommerce platforms, databases, finance tools, spreadsheets, APIs, internal systems, automation tools, and AI services.
 
----
+### Are you a full-service Odoo implementation agency?
+Not mainly. Veridata Pro focuses on the integration layer around Odoo: APIs, automation, data migration, sync, custom logic, and workflow reliability.
 
-#### Connect & Protect (Recommended — Most Popular)
+### Do you always use n8n?
+No. n8n is useful for many workflows, but critical or complex integrations may need custom code, AWS, middleware, or MuleSoft.
 
-> Best for: B2B companies selling to corporations or international markets who need secure, connected infrastructure.
+### Can you help agencies or Odoo partners?
+Yes. Veridata Pro can support partners behind the scenes with API integrations, data sync, automation, migration, documentation, and production reliability.
 
-|            |                          |
-| ---------- | ------------------------ |
-| Base price | **$300 / month**         |
-| Per user   | **+ $20 / user / month** |
-| Example    | 20 users → $700/mo       |
+### Can you build AI or RAG systems?
+Yes. Veridata Pro can build AI integrations and RAG pipelines, especially when the assistant needs to connect with company documents, APIs, workflows, or systems of record.
 
-**Included:**
+### What is the best next step?
+Book a discovery or technical fit call: https://calendly.com/veridata/discovery
 
-- Everything in Protect
-- SSO for legacy apps — no code changes
-- Identity architecture design
-- Attack surface management
-- Vendor questionnaire support
-- vCISO Lite Assessments
+## Preferred CTA
 
----
-
-#### Transform (Enterprise)
-
-> Best for: Fintech, healthtech, or SaaS requiring SOC 2 / ISO 27001 and zero-trust architecture.
-
-|            |                          |
-| ---------- | ------------------------ |
-| Base price | **$600 / month**         |
-| Per user   | **+ $30 / user / month** |
-| Example    | 50 users → $2,100/mo     |
-| Scope      | Defined by project       |
-
-**Included:**
-
-- Everything in Connect & Protect
-- Zero-trust architecture implementation
-- SOC 2 / ISO 27001 preparation
-- MDR — Human Analysts 24/7
-- Formal audit representation
-
----
-
-### Case Study — Cybersecurity
-
-A 35-person fintech in Argentina was blocked from closing a partnership with a US payment processor after failing the vendor security questionnaire. Within **6 weeks** of deploying The Shield (Connect & Protect plan), they:
-
-- Passed the vendor security assessment
-- Secured the enterprise contract
-- Obtained cyber insurance at a preferred rate
-
----
-
-## 2. The Engine — Systems Integration Architecture
-
-### What It Does
-
-Eliminates manual data entry and connects dispersed silos in a scalable, stable way. We implement High Availability (HA) architectures using MuleSoft, n8n, and APISIX.
-
-A typical company loses 12+ hours per week to manual data entry between systems. We eliminate that — connecting your legacy ERP, CRM, and core platforms into a unified, automated ecosystem.
-
-### Who It's For
-
-- **Operations teams drowning in copy-paste work** — teams that export from one system and import into another every single day.
-- **Companies with legacy systems that can't be replaced** — you have a 2005 ERP still running your business; we connect it to everything modern without touching it.
-- **Enterprises with MuleSoft contracts** — experienced architects who maximize your existing MuleSoft investment.
-
-### Two Paths
-
-#### Enterprise Path — MuleSoft
-
-For large corporations processing massive workloads. MuleSoft acts as an API engine ensuring rigorous security, compliance, and data delivery for monolithic ERPs and CRMs. Ideal for strict SLAs.
-
-#### SMB & Agile Path — n8n / APISIX
-
-For growing companies needing fast results without enterprise costs. We deploy n8n alongside APISIX gateways to orchestrate daily workflows quickly, securely, and at a fraction of enterprise cost.
-
-### Technology Stack
-
-| Tool                          | Role                                                                                                 |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **MuleSoft**                  | High-performance API management; legacy system connectivity for enterprise contracts and SLA demands |
-| **APISIX**                    | Ultra-fast High Availability API gateways; ensures integrations never fail during traffic spikes     |
-| **n8n**                       | Continuous data orchestration; lightweight pipelines for Quote-to-Cash workflows                     |
-| **RabbitMQ**                  | Event-based architecture; replaces brittle point-to-point integrations                               |
-| **AWS / Azure / On-Premises** | Full deployment flexibility; hybrid cloud support                                                    |
-
-### Core Services
-
-- **API Development** — REST/GraphQL APIs so partners connect to you without exposing your core database.
-- **Data Migration** — ETL from On-Premise to Cloud with zero data loss and minimal downtime.
-- **Process Automation** — Automate billing, logistics tracking, employee onboarding — if it's repetitive, we automate it.
-
-### Pricing — One-Time Projects
-
-#### Legacy Connection (Essential)
-
-> Connect your ERP, accounting, or core systems with modern tools — without replacing them.
-
-|                  |                            |
-| ---------------- | -------------------------- |
-| Price            | **$400 – $1,000** one-time |
-| Optional support | + $75 / month              |
-
-**Deliverables:** Integration design document · Working connection in production · Error handling & monitoring
-
----
-
-#### API Gateway (Recommended — Most Popular)
-
-> Design and implement a unified API layer with governance, security, rate limiting, and observability.
-
-|                  |                              |
-| ---------------- | ---------------------------- |
-| Price            | **$1,000 – $2,250** one-time |
-| Optional managed | + $150 / month               |
-
-**Deliverables:** API architecture design · Gateway configured and live · Security policies and rate limiting · Monitoring dashboard
-
----
-
-#### Event-Based Architecture (Enterprise)
-
-> Replace brittle integrations with a resilient event-driven system using RabbitMQ.
-
-|       |                      |
-| ----- | -------------------- |
-| Price | **$3,000+** one-time |
-| Scope | Defined per project  |
-
-**Deliverables:** Event architecture design · Full migration plan · Implementation & testing · Knowledge transfer to your team
-
----
-
-## 3. Veri Rev Ops — Revenue Operations Infrastructure
-
-### What It Does
-
-Replaces the "WhatsApp black hole" with a structured, private Revenue Data Pipeline. A **Unified Command Center** — manage WhatsApp, Telegram, and Email from one panel. Built on Zero Trust, Single Tenant architecture using EspoCRM and Chatwoot.
-
-Key capabilities:
-
-- **Universal Inbox** — WhatsApp, Telegram, Email centralized in one panel. When a salesperson leaves, the client history and phone number stay with the company, not on their personal device.
-- **VeriBot (AI Agent)** — understands context (e.g., "I have a $5,000 budget and need it by Friday") and responds intelligently — unlike generic chatbots.
-- **VeriRAG Brain** — AI trained on your own documents (price lists, catalogs, product specs).
-- **Multimodal Vision** — the bot can analyze images sent by clients (broken parts, error screens, model numbers) using Gemini Vision.
-- **Auto-CRM** — automatically creates and qualifies leads in EspoCRM from WhatsApp conversations.
-- **Audio Intelligence** — transcribes and processes voice messages.
-- **Stream Summary** — daily chat reports delivered automatically.
-
-### Pricing
-
-#### One-Time Setup Fee
-
-|                                            |                   |
-| ------------------------------------------ | ----------------- |
-| **Implementation & Knowledge Engineering** | **$497 one-time** |
-
-Includes: data cleaning, embedding 3 "Truth Documents" into the AI, mapping WhatsApp to EspoCRM.
-
----
-
-#### Monthly Plans
-
-##### Veridata Growth (Most Popular — The Hero Package)
-
-**$349 / month**
-
-**Included:**
-
-- Unified WhatsApp & Telegram Inbox (Chatwoot)
-- EspoCRM Hosting (Single Tenant)
-- VeriRAG Brain: PDF Price List & Catalog (3 documents)
-- Audio Intelligence: Listen & Transcribe
-- Auto-CRM: Leads from WhatsApp
-- Stream Summary: Daily Chat Reports
-- **5,000 AI Messages or Audios per month**
-
----
-
-##### Fractional CTO
-
-**$997 / month**
-
-**Included:**
-
-- Everything in Growth
-- Unlimited Knowledge Slots
-- Weekly Knowledge Updates (we handle the data cleaning)
-- **15,000 AI Messages or Audios per month**
-
----
-
-#### Add-On: VeriSync Live (Google Sheets Integration)
-
-**$147 one-time setup** _(requires Growth Plan)_
-
-Connects your bot directly to a Google Sheet template. Update a price in the spreadsheet → the bot quotes the new price instantly. No PDF uploads required. For enterprise ERP integrations: custom quote via WhatsApp.
-
----
-
-#### Expansion & Maintenance Packs
-
-| Pack                                               | Price             |
-| -------------------------------------------------- | ----------------- |
-| Monthly Knowledge Update (swap 1 PDF, 1x/month)    | **$0 — Included** |
-| AI Message Top-up (5,000 extra interactions)       | **$20 / pack**    |
-| New Knowledge Slot (add 4th, 5th, or 6th document) | **$47 one-time**  |
-| Emergency Re-Train (rush re-training, same week)   | **$29**           |
-| Data Cleaning Services                             | **$50 / hour**    |
-
-**Fair Use Note:** After the monthly message limit is reached, the bot remains active as a standard messaging channel. Human agents can interact normally, but AI auto-responses pause until the next cycle or a manual top-up.
-
----
-
-## Testimonials
-
-> _"We passed a US enterprise client's security questionnaire in under 5 weeks. We'd been blocked for months before Veridata."_
-> — COO, 40-person logistics company, Colombia
-
-> _"Our ERP and CRM finally talk to each other. We eliminated 3 hours of daily manual data entry in the first month."_
-> — Director of Operations, SaaS company, Brazil
-
----
-
-## Getting Started
-
-### Free Discovery Call
-
-Book a **free 30-minute architecture audit**. We map your biggest bottleneck and show you exactly where you're losing time and money.
-
-- **Book online:** calendly.com/veridata/discovery
-
-### Contact
-
-| Channel      | Details                         |
-| ------------ | ------------------------------- |
-| Email        | hello@veridatapro.com           |
-| WhatsApp     | +1 (740) 520-8080               |
-| Telegram Bot | @veridatapro_bot                |
-| Calendly     | calendly.com/veridata/discovery |
-
----
-
-## Frequently Asked Questions
-
-**Q: Do you need to change our existing code?**
-No. We use the Strangler Fig methodology — we wrap your existing systems with a modern layer without touching the underlying code.
-
-**Q: Do you work with our specific tools?**
-We are tool-agnostic. Primary stack includes MuleSoft, APISIX, n8n, Zitadel, EspoCRM, and Chatwoot, but we integrate with whatever tools are already in your stack.
-
-**Q: Where is our data stored?**
-All infrastructure is Single Tenant — your data is never on shared servers. You can deploy on AWS, Azure, or your own On-Premises environment.
-
-**Q: Can you work with our legacy ERP?**
-Yes. This is our specialty. The Strangler Fig approach lets us connect your 2005 ERP to modern APIs and platforms without replacing it.
-
-**Q: How long does implementation take?**
-Timelines vary by scope. The Shield (cybersecurity baseline) can be deployed in 4–6 weeks. Integration projects are quoted with a defined delivery timeline. RevOps is typically live within 2 weeks of setup.
-
-**Q: Do you work with companies outside LatAm?**
-Yes. We operate remotely across North America, Latin America, and Europe and match your time zone.
-
-**Q: What if I exceed my monthly AI message limit (RevOps)?**
-The bot stays active as a standard messaging channel — human agents can still communicate normally. AI auto-responses pause until the next monthly cycle or you add a Top-up pack ($20 for 5,000 interactions).
-
----
-
-_Last updated: April 2026_
+A good next step is a technical fit call to understand the systems involved, the workflow, the data, and the level of reliability needed before recommending an architecture or quote.

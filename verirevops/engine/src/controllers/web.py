@@ -5,12 +5,12 @@ import json
 import tempfile
 import shutil
 from uuid import UUID
-from typing import Annotated, Optional
+from typing import Annotated
 from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, BackgroundTasks, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from src.core.db import get_db, get_session
+from src.core.db import get_session
 from src.core.models import Tenant, Document
 from sqlalchemy import select, update, delete
 from src.core.auth import require_auth

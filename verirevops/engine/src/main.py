@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.core.db import init_db, close_pool
 from src.core.admin import setup_admin
-from src.controllers import web, api
+from src.controllers import web, api, chatwoot
 from src.core.logging import setup_logging
 
 # Setup Logging
@@ -31,11 +31,11 @@ class ForceHTTPSMiddleware:
         if scope["type"] in ("http", "websocket"):
             headers = dict(scope.get("headers", []))
             host = headers.get(b"host", b"").decode("latin-1")
-            
+
             # If accessed via a public domain (not local dev), force HTTPS
             if "localhost" not in host and "127.0.0.1" not in host:
                 scope["scheme"] = "https"
-                
+
         await self.app(scope, receive, send)
 
 app.add_middleware(ForceHTTPSMiddleware)
@@ -49,6 +49,9 @@ app.include_router(web.router)
 
 # API (JSON) Router - Mounts at /api
 app.include_router(api.router, prefix="/api")
+
+# API () Chatwoot Router - Mounts at /api
+app.include_router(chatwoot.router, prefix="/api")
 
 # Static files
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
