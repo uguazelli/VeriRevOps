@@ -5,8 +5,9 @@ from fastapi.staticfiles import StaticFiles
 
 from src.core.db import init_db, close_pool
 from src.core.admin import setup_admin
-from src.controllers import web, api, chatwoot
+from src.controllers import web, api
 from src.core.logging import setup_logging
+from src.modules.chatwoot.router import router as chatwoot_router
 
 # Setup Logging
 setup_logging()
@@ -50,8 +51,8 @@ app.include_router(web.router)
 # API (JSON) Router - Mounts at /api
 app.include_router(api.router, prefix="/api")
 
-# API () Chatwoot Router - Mounts at /api
-app.include_router(chatwoot.router, prefix="/api")
+# Chatwoot Router - Mounts at /api
+app.include_router(chatwoot_router, prefix="/api")
 
 # Static files
 app.mount("/static", StaticFiles(directory="src/static"), name="static")

@@ -1,15 +1,16 @@
-import json
 from fastapi import APIRouter
-from src.services.chatwoot import (
-    process_chatwoot_payload,
-    get_message_kind,
-    transcribe_audio as transcribe_chatwoot_audio,
+
+from src.modules.chatwoot.service import (
     analyze_image as analyze_chatwoot_image,
+    get_message_kind,
+    process_chatwoot_payload,
+    transcribe_audio as transcribe_chatwoot_audio,
 )
 from src.services.tenants import svc_get_tenant_by_slug
 
 
 router = APIRouter()
+
 
 @router.post("/chatwoot/webhook/{slug}")
 async def chatwoot_webhook(
@@ -20,11 +21,6 @@ async def chatwoot_webhook(
     Endpoint to receive webhooks from Chatwoot.
     """
 
-    # print(
-    #     f"🛜 Received Chatwoot webhook for tenant '{slug}': "
-    #     f"{json.dumps(payload, indent=2)}"
-    # )
-
     # 1 - Check if bot should respond to this message
     should_respond = process_chatwoot_payload(payload)
     print(f"✅ Processed payload result: {should_respond}")
@@ -33,9 +29,7 @@ async def chatwoot_webhook(
     print(f"🏞️ Message kind: {message_kind}")
 
     # 2 - Get tenant settings
-    tenant_settings = await svc_get_tenant_by_slug(slug)
-    # print(f"Tenant settings for '{slug}':")
-    # print(tenant_settings.model_dump_json(indent=2))
+    _tenant_settings = await svc_get_tenant_by_slug(slug)
 
     # 3 - If audio message, transcribe it
     transcription = None
@@ -56,8 +50,6 @@ async def chatwoot_webhook(
     # 6 - If small talk, generate answer with LLM and send to Chatwoot API
     # 7 - If Handle to human, send message to Chatwoot API and update status to open
     # 8 - If RAG, generate answer with retrieved context and send to Chatwoot API
-
-
 
     return {
         "status": "success",
