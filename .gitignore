@@ -12,6 +12,9 @@ wheels/
 # env
 .env
 *.env
+client_secret*.json
+*client_secret*.json
+
 # OS junk
 .DS_Store
 # venv
