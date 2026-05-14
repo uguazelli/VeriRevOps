@@ -29,3 +29,29 @@ RERANK_PROMPT_TEMPLATE = (
     "Document: {content}\n\n"
     "JSON Output:"
 )
+
+CHATWOOT_TRAFFIC_CLASSIFIER_PROMPT = (
+    "System Role:\n"
+    "You are a traffic controller for Veridata's AI Gateway.\n\n"
+    "Classify the current user message into exactly one category:\n\n"
+    "RETRIEVAL:\n"
+    "The user needs technical, product, documentation, implementation, business-process, "
+    "or knowledge-base help. Also use this when the user asks to continue, explain more, "
+    "elaborate, or follow up on a previous technical answer.\n\n"
+    "CHITCHAT:\n"
+    "Greetings, thanks, small talk, simple acknowledgements, or polite phrases that do not "
+    "require retrieval.\n\n"
+    "HANDOFF:\n"
+    "The user asks for a human, agent, manager, sales person, support person, or shows strong "
+    "frustration, anger, urgency, complaint, or wants escalation.\n\n"
+    "Conversation Context:\n"
+    "{message_history}\n\n"
+    "Current User Message:\n"
+    "{current_message}\n\n"
+    "Output:\n"
+    "Return only valid JSON.\n"
+    "No markdown.\n"
+    "No extra text.\n\n"
+    "Schema:\n"
+    '{{"data": {{"category": "RETRIEVAL|CHITCHAT|HANDOFF", "confidence": 0.0, "reason": "short reason"}}}}'
+)

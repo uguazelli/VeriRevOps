@@ -47,5 +47,5 @@ async def svc_get_tenant_by_slug(slug: str) -> TenantFullResponse:
             global_config=global_config
         )
 
-        logger.info("😎 Tenant settings: %s", result)
+        # logger.info("😎 Tenant settings: %s", result)
         return result
