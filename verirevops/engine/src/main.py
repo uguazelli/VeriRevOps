@@ -8,6 +8,7 @@ from src.core.admin import setup_admin
 from src.controllers import web, api
 from src.core.logging import setup_logging
 from src.modules.chatwoot.router import router as chatwoot_router
+from src.modules.contact_sync.router import router as contact_sync_router
 
 # Setup Logging
 setup_logging()
@@ -53,6 +54,9 @@ app.include_router(api.router, prefix="/api")
 
 # Chatwoot Router - Mounts at /api
 app.include_router(chatwoot_router, prefix="/api")
+
+# Contact Sync Router - Mounts at /api
+app.include_router(contact_sync_router, prefix="/api")
 
 # Static files
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
