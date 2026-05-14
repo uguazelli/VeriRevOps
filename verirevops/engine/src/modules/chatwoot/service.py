@@ -1,8 +1,7 @@
 import logging
-
+import json
 import httpx
 from fastapi import HTTPException
-
 from src.services.image_analysis import analyze_image as analyze_image_file
 from src.services.media_downloader import download_file_from_url
 from src.services.tenants import svc_get_tenant_by_slug
@@ -11,55 +10,39 @@ from src.services.transcription import transcribe_audio as transcribe_audio_file
 
 logger = logging.getLogger(__name__)
 
-CHATWOOT_MESSAGES_URL = (
-    "https://dev-chat.veridatapro.com//api/v1/accounts/1/"
-    "conversations/1/messages?after=1"
-)
-CHATWOOT_API_ACCESS_TOKEN = "DYdAi4Wf9jVXcXRux2Pe5UHJ"
-
 
 async def process_chatwoot_webhook(slug: str, payload: dict):
     try:
         should_respond = process_chatwoot_payload(payload)
-        logger.info("Processed Chatwoot payload: %s", should_respond)
-
         if not should_respond["shouldBotRespond"]:
-            logger.info("Skipping Chatwoot response: %s", should_respond["reason"])
             return
 
         message_kind = get_message_kind(payload)
-        logger.info("Chatwoot message kind: %s", message_kind)
 
         # 2 - Get tenant settings
         _tenant_settings = await svc_get_tenant_by_slug(slug)
 
         # 3 - If audio message, transcribe it
-        transcription = None
         if message_kind == "audio":
-            logger.info("Transcribing Chatwoot audio message ...")
-            transcription = await transcribe_audio(payload)
-            logger.info("Transcription result: %s", transcription)
+            await transcribe_audio(payload)
 
         # 4 - If image message, describe it
-        image_description = None
         if message_kind == "image":
-            logger.info("Describing Chatwoot image message ...")
-            image_description = await analyze_image(payload)
-            logger.info("Image description: %s", image_description)
+            await analyze_image(payload)
 
         # 5 - Get message history from Chatwoot API
-        message_history = await get_last_ten_messages()
-        logger.info(
-            "Fetched %s Chatwoot messages",
-            len(message_history) if isinstance(message_history, list) else "unknown"
-        )
+        await get_last_ten_messages(_tenant_settings)
 
         # 5 - Classify if it requires RAG, handle to a human or if is just a small talk
         # 6 - If small talk, generate answer with LLM and send to Chatwoot API
         # 7 - If Handle to human, send message to Chatwoot API and update status to open
         # 8 - If RAG, generate answer with retrieved context and send to Chatwoot API
     except Exception:
-        logger.exception("Failed to process Chatwoot webhook for tenant slug '%s'", slug)
+        log_chatwoot_webhook_failure(slug)
+
+
+def log_chatwoot_webhook_failure(slug: str):
+    logger.exception("Failed to process Chatwoot webhook for tenant slug '%s'", slug)
 
 
 def process_chatwoot_payload(item):
@@ -88,10 +71,27 @@ def process_chatwoot_payload(item):
     elif event != "message_created":
         reason = f"event {event}"
 
-    return {
+    result = {
         "shouldBotRespond": should_respond,
         "reason": reason
     }
+
+    logger.info("Processed Chatwoot payload: %s", result)
+    if not should_respond:
+        logger.info("Skipping Chatwoot response: %s", reason)
+
+    return result
+
+
+def get_message_contents(messages):
+    if not isinstance(messages, list):
+        return []
+
+    return [
+        message.get("content")
+        for message in messages
+        if isinstance(message, dict) and message.get("content")
+    ]
 
 
 def get_message_kind(item):
@@ -100,9 +100,12 @@ def get_message_kind(item):
     attachments = body.get("attachments") or []
 
     if attachments:
-        return attachments[0].get("file_type", "unknown")
+        message_kind = attachments[0].get("file_type", "unknown")
+    else:
+        message_kind = "text"
 
-    return "text"
+    logger.info("Chatwoot message kind: %s", message_kind)
+    return message_kind
 
 
 def get_first_attachment_url(item):
@@ -122,6 +125,7 @@ def get_first_attachment_url(item):
 
 
 async def transcribe_audio(payload, provider: str = "gemini"):
+    logger.info("Transcribing Chatwoot audio message ...")
     audio_url = get_first_attachment_url(payload)
 
     if not audio_url:
@@ -131,7 +135,9 @@ async def transcribe_audio(payload, provider: str = "gemini"):
         )
 
     audio_bytes, filename = await download_file_from_url(audio_url)
-    return await transcribe_audio_file(audio_bytes, filename, provider)
+    transcription = await transcribe_audio_file(audio_bytes, filename, provider)
+    logger.info("Transcription result: %s", transcription)
+    return transcription
 
 
 async def analyze_image(
@@ -139,6 +145,7 @@ async def analyze_image(
     prompt: str = "Describe this image in detail.",
     provider: str = "gemini"
 ):
+    logger.info("Describing Chatwoot image message ...")
     image_url = get_first_attachment_url(payload)
 
     if not image_url:
@@ -148,14 +155,36 @@ async def analyze_image(
         )
 
     image_bytes, filename = await download_file_from_url(image_url)
-    return await analyze_image_file(image_bytes, filename, prompt, provider)
+    image_description = await analyze_image_file(image_bytes, filename, prompt, provider)
+    logger.info("Image description: %s", image_description)
+    return image_description
 
 
-async def get_last_ten_messages():
+async def get_last_ten_messages(tenant_settings):
+    chatwoot_service = tenant_settings.tenant.services.get("chatwoot")
+
+    if not chatwoot_service:
+        raise HTTPException(
+            status_code=400,
+            detail="Tenant has no chatwoot service configured"
+        )
+
+    if not chatwoot_service.url or not chatwoot_service.api_key or not chatwoot_service.account_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Chatwoot service is missing url, api_key, or account_id"
+        )
+
+    base_url = chatwoot_service.url.rstrip("/")
+    messages_url = (
+        f"{base_url}/api/v1/accounts/{chatwoot_service.account_id}/"
+        "conversations/1/messages?after=1"
+    )
+
     async with httpx.AsyncClient(follow_redirects=True) as client:
         response = await client.get(
-            CHATWOOT_MESSAGES_URL,
-            headers={"api_access_token": CHATWOOT_API_ACCESS_TOKEN},
+            messages_url,
+            headers={"api_access_token": chatwoot_service.api_key},
             timeout=30.0
         )
 
@@ -172,6 +201,13 @@ async def get_last_ten_messages():
     messages = data.get("payload", data)
 
     if isinstance(messages, list):
-        return messages[-10:]
+        last_messages = messages[-10:]
+        logger.info("Fetched %s Chatwoot messages", len(last_messages))
+        logger.info(
+            "Fetched Chatwoot message contents: %s",
+            json.dumps(get_message_contents(last_messages), indent=2, default=str)
+        )
+        return last_messages
 
+    logger.info("Fetched Chatwoot messages response with unexpected shape")
     return messages

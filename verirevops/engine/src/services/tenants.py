@@ -1,3 +1,5 @@
+from asyncio.log import logger
+
 from sqlmodel import select
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
@@ -40,7 +42,10 @@ async def svc_get_tenant_by_slug(slug: str) -> TenantFullResponse:
             configuration=configuration
         )
 
-        return TenantFullResponse(
+        result = TenantFullResponse(
             tenant=tenant_response,
             global_config=global_config
         )
+
+        logger.info("😎 Tenant settings: %s", result)
+        return result
