@@ -11,6 +11,65 @@ from src.services.tenants import svc_get_tenant_by_slug
 
 logger = logging.getLogger(__name__)
 
+async def sync_chatwoot_contact_payload_to_crm(
+    slug: str,
+    payload: Dict[str, Any],
+    service_name: str = "espocrm",
+) -> ContactSyncResult:
+    # 1 - Get tenant settings
+    tenant_settings = await svc_get_tenant_by_slug(slug)
+
+    # 2 - Extract Chatwoot contact from webhook or direct contact payload
+    chatwoot_contact = get_chatwoot_contact_from_payload(payload)
+
+    # 3 - Normalize Chatwoot contact into one internal shape
+    normalized_contact = normalize_chatwoot_contact(chatwoot_contact)
+
+    # 4 - Get CRM provider from tenant services
+    provider = get_crm_provider(tenant_settings, service_name)
+
+    # 5 - Check if this Chatwoot contact already has a CRM mapping
+    existing_mapping = await get_contact_mapping(
+        tenant_settings.tenant.id,
+        normalized_contact.chatwoot_contact_id,
+        service_name,
+    )
+
+    # 6 - If mapping exists, update the existing CRM contact
+    if existing_mapping:
+        external_id = await update_mapped_crm_contact(
+            provider,
+            existing_mapping,
+            normalized_contact,
+        )
+        action = "updated_from_mapping"
+
+    # 7 - If mapping does not exist, find or create the CRM contact
+    else:
+        external_id, action = await find_or_create_crm_contact(
+            provider,
+            normalized_contact,
+        )
+
+        # 8 - Save the Chatwoot <-> CRM mapping
+        await upsert_contact_mapping(
+            tenant_settings.tenant.id,
+            normalized_contact.chatwoot_contact_id,
+            service_name,
+            external_id,
+        )
+
+    # 9 - Return sync result
+    result = build_contact_sync_result(
+        tenant_settings.tenant.id,
+        normalized_contact,
+        service_name,
+        external_id,
+        action,
+    )
+    log_contact_sync_result(result)
+    return result
+
 
 def normalize_chatwoot_contact(chatwoot_contact: Dict[str, Any]) -> NormalizedContact:
     contact_id = chatwoot_contact.get("id")
@@ -37,77 +96,98 @@ def normalize_chatwoot_contact(chatwoot_contact: Dict[str, Any]) -> NormalizedCo
     )
 
 
-async def sync_chatwoot_contact_payload_to_crm(
-    slug: str,
-    payload: Dict[str, Any],
-    service_name: str = "espocrm",
-) -> ContactSyncResult:
-    tenant_settings = await svc_get_tenant_by_slug(slug)
-    body = payload.get("body", payload)
-    chatwoot_contact = body.get("sender") or body.get("contact") or payload
-
-    return await sync_chatwoot_contact_to_crm(
-        tenant_settings,
-        chatwoot_contact,
-        service_name=service_name,
-    )
-
-
 async def sync_chatwoot_contact_to_crm(
     tenant_settings,
     chatwoot_contact: Dict[str, Any],
     service_name: str = "espocrm",
 ) -> ContactSyncResult:
     normalized_contact = normalize_chatwoot_contact(chatwoot_contact)
-    tenant_id = tenant_settings.tenant.id
     provider = get_crm_provider(tenant_settings, service_name)
-
     existing_mapping = await get_contact_mapping(
-        tenant_id,
+        tenant_settings.tenant.id,
         normalized_contact.chatwoot_contact_id,
         service_name,
     )
 
     if existing_mapping:
-        external_contact = await provider.update_contact(
-            existing_mapping.external_id,
+        external_id = await update_mapped_crm_contact(
+            provider,
+            existing_mapping,
             normalized_contact,
         )
-        external_id = external_contact.get("id") or existing_mapping.external_id
         action = "updated_from_mapping"
     else:
-        external_contact = await provider.find_contact(normalized_contact)
-
-        if external_contact:
-            external_id = external_contact["id"]
-            await provider.update_contact(external_id, normalized_contact)
-            action = "linked_existing"
-        else:
-            external_contact = await provider.create_contact(normalized_contact)
-            external_id = external_contact["id"]
-            action = "created"
+        external_id, action = await find_or_create_crm_contact(
+            provider,
+            normalized_contact,
+        )
 
         await upsert_contact_mapping(
-            tenant_id,
+            tenant_settings.tenant.id,
             normalized_contact.chatwoot_contact_id,
             service_name,
             external_id,
         )
 
-    logger.info(
-        "Synced Chatwoot contact %s to %s contact %s with action=%s",
-        normalized_contact.chatwoot_contact_id,
+    result = build_contact_sync_result(
+        tenant_settings.tenant.id,
+        normalized_contact,
         service_name,
         external_id,
         action,
     )
+    log_contact_sync_result(result)
+    return result
 
+
+def get_chatwoot_contact_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    body = payload.get("body", payload)
+    return body.get("sender") or body.get("contact") or payload
+
+
+async def update_mapped_crm_contact(provider, existing_mapping, normalized_contact):
+    external_contact = await provider.update_contact(
+        existing_mapping.external_id,
+        normalized_contact,
+    )
+    return external_contact.get("id") or existing_mapping.external_id
+
+
+async def find_or_create_crm_contact(provider, normalized_contact):
+    external_contact = await provider.find_contact(normalized_contact)
+
+    if external_contact:
+        external_id = external_contact["id"]
+        await provider.update_contact(external_id, normalized_contact)
+        return external_id, "linked_existing"
+
+    external_contact = await provider.create_contact(normalized_contact)
+    return external_contact["id"], "created"
+
+
+def build_contact_sync_result(
+    tenant_id: int,
+    normalized_contact: NormalizedContact,
+    service_name: str,
+    external_id: str,
+    action: str,
+) -> ContactSyncResult:
     return ContactSyncResult(
         tenant_id=tenant_id,
         chatwoot_contact_id=normalized_contact.chatwoot_contact_id,
         service_name=service_name,
         external_id=external_id,
         action=action,
+    )
+
+
+def log_contact_sync_result(result: ContactSyncResult):
+    logger.info(
+        "Synced Chatwoot contact %s to %s contact %s with action=%s",
+        result.chatwoot_contact_id,
+        result.service_name,
+        result.external_id,
+        result.action,
     )
 
 
@@ -145,4 +225,3 @@ def _split_name(name):
     first_name = parts[0]
     last_name = parts[1] if len(parts) > 1 else None
     return first_name, last_name
-
