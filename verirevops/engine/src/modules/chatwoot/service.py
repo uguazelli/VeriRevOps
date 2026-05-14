@@ -11,6 +11,7 @@ from src.services.image_analysis import analyze_image as analyze_image_file
 from src.services.media_downloader import download_file_from_url
 from src.services.chat_messages import svc_list_chat_messages
 from src.services.llm import get_chat_response
+from src.services.rag import generate_answer
 from src.services.tenants import svc_get_tenant_by_slug
 from src.services.transcription import transcribe_audio as transcribe_audio_file
 
@@ -20,40 +21,55 @@ logger = logging.getLogger(__name__)
 
 async def process_chatwoot_webhook(slug: str, payload: dict):
     try:
+        # 1 - Process and validate Chatwoot payload to decide if it requires a response
         should_respond = process_chatwoot_payload(payload)
         if not should_respond["shouldBotRespond"]:
             return
 
+        # 2 - Determine message kind (text, audio, image, etc)
         message_kind = get_message_kind(payload)
 
-        # 2 - Get tenant settings
+        # 3 - Get tenant settings
         _tenant_settings = await svc_get_tenant_by_slug(slug)
 
         current_message = get_text_message_content(payload)
 
-        # 3 - If audio message, transcribe it
+        # 4 - If audio message, transcribe it
         if message_kind == "audio":
             current_message = await transcribe_audio(payload)
 
-        # 4 - If image message, describe it
+        # 5 - If image message, describe it
         if message_kind == "image":
             current_message = await analyze_image(payload)
 
-        # 5 - Get message history from Chatwoot API
+        # 6 - Get message history from Chatwoot API
         message_history = await get_last_ten_messages(_tenant_settings, payload)
 
-        # 6 - Classify if it requires RAG, handle to a human or if is just a small talk
+        # 7 - Classify if it requires RAG, handle to a human or if is just a small talk
         classification = await classify_chatwoot_message(message_history, current_message)
+        category = get_classification_category(classification)
+        response = None
 
-        # 7 - If small talk, generate answer with LLM and send to Chatwoot API
-        if get_classification_category(classification) == "CHITCHAT":
-            await respond_to_chitchat(current_message)
+        # 8 - If small talk, generate answer with LLM and send to Chatwoot API
+        if category == "CHITCHAT":
+            response = await respond_to_chitchat(current_message)
 
-        # 8 - If Handle to human, send message to Chatwoot API and update status to open
-        if get_classification_category(classification) == "HANDOFF":
-            await respond_to_handoff(message_history, current_message)
+        # 9 - If Handle to human, send message to Chatwoot API and update status to open
+        if category == "HANDOFF":
+            response = await respond_to_handoff(message_history, current_message)
 
-        # 9 - If RAG, generate answer with retrieved context and send to Chatwoot API
+        # 10 - If RAG, generate answer with retrieved context and send to Chatwoot API
+        if category == "RETRIEVAL":
+            response = await respond_with_rag(_tenant_settings, current_message)
+
+        # 11 - Send response back to Chatwoot API
+        if response:
+            await send_message_to_chatwoot(_tenant_settings, payload, response)
+
+        # 12 - If handoff, update conversation status to open
+        if category == "HANDOFF":
+            await update_conversation_status_to_open(_tenant_settings, payload)
+
     except Exception:
         log_chatwoot_webhook_failure(slug)
 
@@ -109,6 +125,24 @@ def get_message_contents(messages):
         for message in messages
         if isinstance(message, dict) and message.get("content")
     ]
+
+
+def get_chatwoot_service(tenant_settings):
+    chatwoot_service = tenant_settings.tenant.services.get("chatwoot")
+
+    if not chatwoot_service:
+        raise HTTPException(
+            status_code=400,
+            detail="Tenant has no chatwoot service configured"
+        )
+
+    if not chatwoot_service.url or not chatwoot_service.api_key or not chatwoot_service.account_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Chatwoot service is missing url, api_key, or account_id"
+        )
+
+    return chatwoot_service
 
 
 def get_text_message_content(payload):
@@ -297,6 +331,110 @@ async def respond_to_handoff(message_history, current_message, provider: str = "
     return response
 
 
+async def respond_with_rag(tenant_settings, current_message, provider: str = "gemini"):
+    answer = await generate_answer(
+        tenant_settings.tenant.id,
+        current_message,
+        provider=provider
+    )
+    logger.info("Chatwoot RAG response: %s", answer)
+    return answer
+
+
+def get_response_text(response):
+    if isinstance(response, str):
+        return response.strip()
+
+    if isinstance(response, dict):
+        data = response.get("data")
+        if isinstance(data, str):
+            return data.strip()
+        if data is not None:
+            return json.dumps(data, ensure_ascii=False)
+
+    return str(response).strip()
+
+
+async def send_message_to_chatwoot(tenant_settings, payload, response):
+    content = get_response_text(response)
+
+    if not content:
+        logger.info("Skipping Chatwoot send because response content is empty")
+        return None
+
+    chatwoot_service = get_chatwoot_service(tenant_settings)
+    conversation_id = get_chatwoot_conversation_id(payload)
+    base_url = chatwoot_service.url.rstrip("/")
+    messages_url = (
+        f"{base_url}/api/v1/accounts/{chatwoot_service.account_id}/"
+        f"conversations/{conversation_id}/messages"
+    )
+
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        response = await client.post(
+            messages_url,
+            headers={
+                "api_access_token": chatwoot_service.api_key,
+                "Content-Type": "application/json"
+            },
+            json={
+                "content": content,
+                "message_type": "outgoing",
+                "private": False,
+                "content_type": "text",
+                "content_attributes": {}
+            },
+            timeout=30.0
+        )
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.exception("Failed to send Chatwoot message")
+        raise HTTPException(
+            status_code=exc.response.status_code,
+            detail="Failed to send Chatwoot message"
+        ) from exc
+
+    message = response.json()
+    logger.info("Sent Chatwoot message id=%s", message.get("id"))
+    return message
+
+
+async def update_conversation_status_to_open(tenant_settings, payload):
+    chatwoot_service = get_chatwoot_service(tenant_settings)
+    conversation_id = get_chatwoot_conversation_id(payload)
+    base_url = chatwoot_service.url.rstrip("/")
+    status_url = (
+        f"{base_url}/api/v1/accounts/{chatwoot_service.account_id}/"
+        f"conversations/{conversation_id}/toggle_status"
+    )
+
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        response = await client.post(
+            status_url,
+            headers={
+                "api_access_token": chatwoot_service.api_key,
+                "Content-Type": "application/json"
+            },
+            json={"status": "open"},
+            timeout=30.0
+        )
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.exception("Failed to update Chatwoot conversation status")
+        raise HTTPException(
+            status_code=exc.response.status_code,
+            detail="Failed to update Chatwoot conversation status"
+        ) from exc
+
+    result = response.json()
+    logger.info("Updated Chatwoot conversation %s status to open", conversation_id)
+    return result
+
+
 def get_message_kind(item):
     body = item.get("body", item)
 
@@ -364,20 +502,7 @@ async def analyze_image(
 
 
 async def get_last_ten_messages(tenant_settings, payload):
-    chatwoot_service = tenant_settings.tenant.services.get("chatwoot")
-
-    if not chatwoot_service:
-        raise HTTPException(
-            status_code=400,
-            detail="Tenant has no chatwoot service configured"
-        )
-
-    if not chatwoot_service.url or not chatwoot_service.api_key or not chatwoot_service.account_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Chatwoot service is missing url, api_key, or account_id"
-        )
-
+    chatwoot_service = get_chatwoot_service(tenant_settings)
     tenant_id = tenant_settings.tenant.id
     chatwoot_account_id = int(chatwoot_service.account_id)
     chatwoot_conversation_id = get_chatwoot_conversation_id(payload)
