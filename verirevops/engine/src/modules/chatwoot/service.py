@@ -18,7 +18,7 @@ from src.modules.chatwoot.responders import (
     respond_with_rag,
     transcribe_audio,
 )
-from src.services.tenants import svc_get_tenant_by_slug
+from src.modules.tenants import svc_get_tenant_by_slug
 
 
 logger = logging.getLogger(__name__)

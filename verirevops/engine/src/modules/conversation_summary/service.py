@@ -18,7 +18,7 @@ from src.modules.conversation_summary.payload import (
 )
 from src.modules.conversation_summary.summarizer import summarize_chatwoot_messages
 from src.modules.chatwoot.message_tracking import svc_list_chat_messages, svc_upsert_chat_message
-from src.services.tenants import svc_get_tenant_by_slug
+from src.modules.tenants import svc_get_tenant_by_slug
 
 
 logger = logging.getLogger(__name__)

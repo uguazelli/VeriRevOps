@@ -3,7 +3,7 @@ from fastapi import APIRouter, UploadFile, File, Form
 from src.core.models import (
     ContactMappingCreate, ContactMappingUpdate, ContactMappingResponse,
     ChatMessageCreate, ChatMessageResponse,
-    GlobalConfigCreate, GlobalConfigResponse, TenantFullResponse
+    GlobalConfigCreate, GlobalConfigResponse
 )
 from src.core.schemas import (
     RagRequest, RagResponse, LlmRequest, LlmResponse,
@@ -20,7 +20,6 @@ from src.modules.contact_sync.mappings import (
 )
 from src.modules.chatwoot.message_tracking import svc_upsert_chat_message, svc_list_chat_messages
 from src.services.global_configs import svc_get_global_config, svc_upsert_global_config
-from src.services.tenants import svc_get_tenant_by_slug
 
 router = APIRouter()
 
@@ -187,14 +186,3 @@ async def upsert_global_config(
     Upsert the single global configuration (id=1).
     """
     return await svc_upsert_global_config(config_data)
-
-# --- Tenant CRUD ---
-
-@router.get("/tenants/{slug}", response_model=TenantFullResponse)
-async def get_tenant_by_slug(
-    slug: str
-):
-    """
-    Get all tenant details (subscriptions, services, configurations) and global configs by slug.
-    """
-    return await svc_get_tenant_by_slug(slug)

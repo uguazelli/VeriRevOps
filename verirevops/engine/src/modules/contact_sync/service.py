@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from src.modules.contact_sync.mappings import get_contact_mapping, upsert_contact_mapping
 from src.modules.contact_sync.models import ContactSyncResult, NormalizedContact
 from src.modules.contact_sync.providers.espocrm import EspoCrmProvider
-from src.services.tenants import svc_get_tenant_by_slug
+from src.modules.tenants import svc_get_tenant_by_slug
 
 
 logger = logging.getLogger(__name__)
