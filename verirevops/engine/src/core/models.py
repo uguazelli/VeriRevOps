@@ -13,6 +13,9 @@ class GlobalConfig(GlobalConfigBase, table=True):
     __tablename__ = "global_configs"
     id: Optional[int] = Field(default=None, primary_key=True)
 
+    def __str__(self) -> str:
+        return f"global_config:{self.id}"
+
 class GlobalConfigCreate(GlobalConfigBase):
     pass
 
@@ -39,6 +42,9 @@ class Tenant(TenantBase, table=True):
     chat_messages: List["ChatMessage"] = Relationship(back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     documents: List["Document"] = Relationship(back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
+    def __str__(self) -> str:
+        return f"{self.slug}#{self.id}"
+
 # --- SUBSCRIPTION ---
 class SubscriptionBase(SQLModel):
     tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
@@ -53,6 +59,9 @@ class Subscription(SubscriptionBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant: Optional["Tenant"] = Relationship(back_populates="subscriptions")
 
+    def __str__(self) -> str:
+        return f"subscription:{self.id} tenant:{self.tenant_id} active:{self.is_active}"
+
 class SubscriptionResponse(SubscriptionBase):
     id: int
 
@@ -65,6 +74,9 @@ class Configuration(ConfigurationBase, table=True):
     __tablename__ = "configurations"
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant: Optional["Tenant"] = Relationship(back_populates="configurations")
+
+    def __str__(self) -> str:
+        return f"configuration:{self.id} tenant:{self.tenant_id}"
 
 class ConfigurationResponse(ConfigurationBase):
     id: int
@@ -82,6 +94,10 @@ class Service(ServiceBase, table=True):
     __tablename__ = "services"
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant: Optional["Tenant"] = Relationship(back_populates="services")
+
+    def __str__(self) -> str:
+        account = self.account_id or "-"
+        return f"service:{self.name}#{self.id} tenant:{self.tenant_id} account:{account}"
 
 class ServiceResponse(ServiceBase):
     id: int
@@ -108,6 +124,12 @@ class ContactMapping(ContactMappingBase, table=True):
     __tablename__ = "contact_mappings"
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant: Optional["Tenant"] = Relationship(back_populates="contact_mappings")
+
+    def __str__(self) -> str:
+        return (
+            f"mapping:{self.service_name}#{self.id} "
+            f"chatwoot:{self.chatwoot_contact_id} external:{self.external_id}"
+        )
 
 class ContactMappingCreate(ContactMappingBase):
     pass
@@ -136,6 +158,12 @@ class ChatMessage(ChatMessageBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant: Optional["Tenant"] = Relationship(back_populates="chat_messages")
 
+    def __str__(self) -> str:
+        return (
+            f"chat_message:{self.id} account:{self.chatwoot_account_id} "
+            f"conversation:{self.chatwoot_conversation_id} message:{self.message_id}"
+        )
+
 class ChatMessageCreate(SQLModel):
     tenant_id: int
     chatwoot_account_id: int
@@ -156,3 +184,6 @@ class Document(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, sa_column=Column(DateTime(timezone=True)))
 
     tenant: Optional["Tenant"] = Relationship(back_populates="documents")
+
+    def __str__(self) -> str:
+        return f"document:{self.filename}#{self.id}"
