@@ -15,6 +15,7 @@ from src.modules.chatwoot.responders import (
     analyze_image,
     respond_to_chitchat,
     respond_to_handoff,
+    respond_to_out_of_scope,
     respond_with_rag,
     transcribe_audio,
 )
@@ -63,15 +64,19 @@ async def process_chatwoot_webhook(slug: str, payload: dict):
         if category == "HANDOFF":
             response = await respond_to_handoff(message_history, current_message)
 
-        # 10 - If RAG, generate answer with retrieved context and send to Chatwoot API
+        # 10 - If out of scope, generate a refusal in the client's language
+        if category == "OUT_OF_SCOPE":
+            response = await respond_to_out_of_scope(current_message)
+
+        # 11 - If RAG, generate answer with retrieved context and send to Chatwoot API
         if category == "RETRIEVAL":
             response = await respond_with_rag(_tenant_settings, current_message)
 
-        # 11 - Send response back to Chatwoot API
+        # 12 - Send response back to Chatwoot API
         if response:
             await send_message_to_chatwoot(_tenant_settings, payload, response)
 
-        # 12 - If handoff, update conversation status to open
+        # 13 - If handoff, update conversation status to open
         if category == "HANDOFF":
             await update_conversation_status_to_open(_tenant_settings, payload)
 

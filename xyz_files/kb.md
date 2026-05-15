@@ -1,114 +1,119 @@
 ---
-title: "Veridata Pro RAG Essentials"
+title: "Veridata Pro RAG Knowledge Base"
 company: "Veridata Pro"
-website: "https://veridatapro.com"
+website: "https://veridatapro.com/en/"
+language: "en"
+last_reviewed: "2026-05-15"
 booking_url: "https://calendly.com/veridata/discovery"
-language: "English"
-version_date: "2026-05-13"
 ---
 
-# Veridata Pro — Essential Chatbot Knowledge
+# Veridata Pro RAG Knowledge Base
 
-## What Veridata Pro Does
+## Summary
+Veridata Pro helps SMBs, agencies, and Odoo partners connect disconnected business systems.
+The company focuses on integrations, automation, APIs, Odoo integrations, AI workflows, data sync, and reliable operations.
+Core message: if systems do not talk to each other, people become the integration layer.
+Veridata Pro is architect-led by Ugo Guazelli, an integration architect with 15+ years of experience.
+The company works with Odoo, CRMs, ecommerce, finance tools, spreadsheets, databases, APIs, AI tools, AWS, MuleSoft, n8n, Make, Zapier, Python, Node.js, Java, and internal systems.
 
-Veridata Pro helps small and mid-sized companies, Odoo users, software agencies, and implementation partners connect disconnected business systems.
+## Positioning
+Veridata Pro is not a generic automation shop.
+It chooses the right architecture for the business risk.
+Simple workflows can use simple automation.
+Critical workflows need validation, retries, logs, monitoring, ownership, and stronger architecture.
+Useful phrase: “the architecture follows the risk.”
 
-The focus is systems integration, automation, Odoo integration, APIs, data synchronization, workflow reliability, and AI/RAG integrations when useful.
+## Services
+Business system integrations: ERPs, CRMs, ecommerce, finance tools, APIs, spreadsheets, databases, and internal systems.
+Odoo integrations: Odoo with CRMs, ecommerce, finance, inventory, spreadsheets, databases, APIs, and external systems.
+Workflow automation: build or improve workflows in n8n, Make, Zapier, or similar tools.
+Custom API integrations: backend logic when visual automation tools are not enough.
+AWS integration architecture: cloud services for critical, auditable, production-grade workflows.
+MuleSoft architecture: API-led connectivity and enterprise integration patterns.
+Database integrations: sync and move data across PostgreSQL, MySQL, reporting databases, and operational systems.
+AI integrations and RAG: OpenAI, Anthropic, Gemini, internal documents, search, retrieval, and AI workflows.
+Document extraction: structured data from PDFs, invoices, forms, contracts, and emails.
+Integration audits: review workflows, automations, scripts, APIs, risks, and failure points.
 
-Core idea: when systems do not talk to each other, people become the integration layer. Veridata Pro replaces manual copy-paste, spreadsheet reconciliation, and fragile automations with reliable workflows.
+## Odoo Focus
+Veridata Pro helps with the integration layer around Odoo.
+Typical work includes Odoo API integrations, data migration, sync logic, workflow automation, data cleanup, validation, reporting feeds, AI document extraction, and external system connections.
+Veridata Pro is not a full-service Odoo implementation agency for every module, configuration, and rollout.
 
-## Main Services
+## Architecture Levels
+Level 1: fast automation with n8n, Make, or Zapier for simple, low-risk workflows.
+Level 2: automation plus custom backend using Python, Node.js, Java, APIs, databases, and validation logic.
+Level 3: critical integration architecture using AWS, queues, APIs, monitoring, retries, audit logs, and enterprise patterns.
+Use Level 1 for quick workflows, Level 2 when business rules matter, and Level 3 when the workflow cannot fail silently.
 
-Veridata Pro can help with:
+## Problems and Warning Signs
+Common problems: disconnected systems, manual copy-paste, duplicate data entry, Odoo surrounded by spreadsheets, reports that do not match, fragile automations, silent failures, unclear ownership, hidden business rules, and employees acting as the integration layer.
+Warning signs: failed workflows are discovered late, the first alert is a customer complaint, reports do not match across tools, nobody knows which workflow changed the data, the team fears changing automations, or critical processes depend on unmonitored tools.
 
-- Odoo integration and automation
-- API integrations between CRMs, ERPs, ecommerce, finance tools, databases, spreadsheets, and internal systems
-- n8n, Make, Zapier, and custom automation workflows
-- Custom APIs, middleware, and backend services
-- Data migration, synchronization, cleanup, validation, and reporting
-- AWS/cloud integration architecture for more critical workflows
-- MuleSoft architecture and enterprise integration support
-- AI integrations, including RAG pipelines and document-based assistants
-- Support for agencies or Odoo partners that need integration help behind the scenes
+## Who Veridata Pro Helps
+SMB owners with disconnected systems.
+Odoo partners needing integration support.
+Software agencies needing API or data-sync help.
+CRM and RevOps consultants needing technical delivery support.
+Ecommerce companies needing order, finance, inventory, or CRM integration.
+LATAM operations teams using WhatsApp, CRM, ERP, finance tools, spreadsheets, and internal processes.
+Founders and operators tired of manually fixing broken processes.
 
-## Ideal Clients
+## Fit
+Good fit: disconnected systems, manual data work, fragile automations, Odoo integration needs, API integration needs, data sync problems, reporting inconsistencies, document extraction needs, or critical workflows needing reliability.
+Good fit: agencies and partners that need non-competing technical integration support.
+Not ideal: simple theme changes, basic screen tweaks, unscoped development, cheapest-possible quick fixes, full-service Odoo implementation ownership, 24/7 managed operations unless scoped, or vendor subscription costs included by default.
 
-Veridata Pro is a good fit for:
+## Pricing
+Automation Audit + First Fix starts at $300 USD.
+Best for reviewing one fragile manual or automated workflow, finding failure points, and implementing the first reliable improvement.
+Integration Sprint starts at $600 USD.
+Best for building or improving one focused integration or workflow using Odoo, APIs, n8n, Python, Node.js, Java, or lightweight cloud architecture.
+Critical Integration Support starts at $200 USD per month.
+Best for ongoing monitoring, fixes, improvements, production support path, async Q&A, and monthly review.
+Custom quotes are used for complex Odoo, AWS, MuleSoft, multi-system, security-sensitive, high-volume, or high-risk integrations.
+Final pricing depends on scope, systems, API complexity, data volume, security needs, and reliability requirements.
 
-- SMBs with disconnected tools and too much manual work
-- Companies using Odoo but still relying on spreadsheets, exports, or manual processes
-- Odoo partners that need API, sync, migration, or automation capacity
-- Software agencies that need help with integrations behind portals, apps, or websites
-- Ecommerce companies that need order, inventory, customer, payment, invoice, or reporting workflows connected
-- Operations, sales, finance, and RevOps teams with inconsistent data across systems
+## Scope Notes
+Usually included: clear scope, architecture recommendation, implementation, testing, validation, documentation, and handoff.
+Not included unless agreed: unscoped development, vendor subscription costs, full ERP replacement, 24/7 managed operations, or security-sensitive production changes without review.
 
-## Common Problems Veridata Pro Solves
+## Contact
+Website: https://veridatapro.com/en/
+Booking: https://calendly.com/veridata/discovery
+Primary CTA: book a free integration review or technical fit conversation.
+Leadership: Ugo Guazelli, Founder and Principal Architect.
 
-- People copy and paste data between systems
-- Reports do not match across tools
-- Odoo, CRM, ecommerce, finance, and spreadsheets are not synchronized
-- Automations break silently
-- Manual follow-ups delay operations
-- A business process depends on one person checking or fixing data
-- No-code automations became fragile, undocumented, or expensive
-- AI tools exist but are not connected to real business systems
+## Founder
+Ugo Guazelli has 15+ years of integration experience.
+Experience includes MuleSoft Architect at CSL, Integration Manager at Deloitte, Integration Architect at Ubisoft Montreal, and senior integration roles at Accenture and Alithya.
+Expertise includes Odoo integration, API architecture, AWS workflows, MuleSoft, n8n, AI integration, data flows, and system reliability.
+Credentials include MuleSoft Certified Platform Architect, MuleSoft Certified Developer, AWS Solutions Architect, and Azure Fundamentals.
 
-## Architecture Approach
+## Example Use Cases
+Odoo plus ecommerce order, inventory, finance, or CRM sync.
+Lead intake from forms, WhatsApp, CRM, and email into a controlled sales workflow.
+Invoice or PDF extraction into finance or Odoo.
+Vendor API to internal database sync.
+Legacy Zapier, Make, n8n, webhook, or script stabilization.
+Agency delivery support for APIs, retries, webhooks, and documentation.
 
-Veridata Pro chooses the tool based on the risk and complexity of the workflow.
+## FAQs
+Veridata Pro connects disconnected systems and builds reliable integrations and automations.
+It is not only for Odoo; Odoo is one focus among CRMs, ecommerce, APIs, databases, AI tools, AWS, MuleSoft, and automation platforms.
+It does not always replace Zapier, Make, or n8n; simple workflows can stay there, while critical workflows may need stronger architecture.
+It does not offer full Odoo implementation; the focus is the integration layer around Odoo.
+It works with agencies and Odoo partners as non-competing technical integration support.
+Recommend Audit for unclear fragile workflows, Sprint for known implementation needs, and Support for ongoing production care.
+For pricing, give starting prices and explain that final scope depends on complexity.
+For contact, send users to https://calendly.com/veridata/discovery.
 
-Use n8n, Make, or Zapier for simple and fast automations.
-Use n8n plus custom code when the workflow needs more control, validation, or API logic.
-Use custom APIs, AWS, or middleware when the workflow is critical, high-volume, security-sensitive, or needs ownership and reliability.
-Use MuleSoft when the client already has enterprise integration requirements or a MuleSoft ecosystem.
-
-## Pricing Guidance
-
-Pricing should be presented as starting points, not fixed quotes.
-
-- Integration Assessment + Quick Win: starts at $500 USD
-- Integration & Automation Sprint: starts at $1,500 USD
-- Integration Support Partner: starts at $500 USD/month
-- Larger or more complex work requires a custom quote
-
-Final pricing depends on systems involved, API complexity, data volume, security needs, production reliability, and support requirements.
-
-## Founder / Credibility
-
-Veridata Pro is led by Ugo Guazelli, a cloud and integration architect with 15+ years of experience in systems integration, APIs, automation, cloud architecture, MuleSoft, and business process integration.
-
-The company’s positioning is architect-led integration and automation, not generic task automation.
-
-## How the Chatbot Should Answer
-
-Answer clearly, practically, and in the visitor’s language when possible.
-
-Do not invent client names, certifications, testimonials, guarantees, delivery dates, or exact prices.
-
-For technical or sensitive projects, recommend a technical fit call before giving detailed implementation advice.
-
-When asked whether Veridata Pro can help, answer based on the service areas above and suggest booking a discovery call when the project depends on details.
-
-## Common FAQs
-
-### Do you only work with Odoo?
-No. Odoo is one focus area, but Veridata Pro also works with CRMs, ERPs, ecommerce platforms, databases, finance tools, spreadsheets, APIs, internal systems, automation tools, and AI services.
-
-### Are you a full-service Odoo implementation agency?
-Not mainly. Veridata Pro focuses on the integration layer around Odoo: APIs, automation, data migration, sync, custom logic, and workflow reliability.
-
-### Do you always use n8n?
-No. n8n is useful for many workflows, but critical or complex integrations may need custom code, AWS, middleware, or MuleSoft.
-
-### Can you help agencies or Odoo partners?
-Yes. Veridata Pro can support partners behind the scenes with API integrations, data sync, automation, migration, documentation, and production reliability.
-
-### Can you build AI or RAG systems?
-Yes. Veridata Pro can build AI integrations and RAG pipelines, especially when the assistant needs to connect with company documents, APIs, workflows, or systems of record.
-
-### What is the best next step?
-Book a discovery or technical fit call: https://calendly.com/veridata/discovery
-
-## Preferred CTA
-
-A good next step is a technical fit call to understand the systems involved, the workflow, the data, and the level of reliability needed before recommending an architecture or quote.
+## RAG Answering Rules
+Be direct and practical; mention starting prices when asked.
+Do not promise 24/7 support unless scoped.
+Do not position Veridata Pro as a full-service Odoo implementation agency.
+Do not say every workflow needs AWS or custom code.
+Recommend the simplest reliable architecture for the risk.
+Use the Calendly link as the main call-to-action.
+Avoid guaranteed outcomes.
+For sensitive production or security changes, recommend review first.

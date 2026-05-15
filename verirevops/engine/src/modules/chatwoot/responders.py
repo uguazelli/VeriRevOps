@@ -3,7 +3,11 @@ import logging
 
 from fastapi import HTTPException
 
-from src.core.prompts import CHATWOOT_CHITCHAT_PROMPT, CHATWOOT_HANDOFF_PROMPT
+from src.core.prompts import (
+    CHATWOOT_CHITCHAT_PROMPT,
+    CHATWOOT_HANDOFF_PROMPT,
+    CHATWOOT_OUT_OF_SCOPE_PROMPT,
+)
 from src.modules.ai.text import get_chat_response
 from src.modules.ai.transcription import transcribe_audio as transcribe_audio_file
 from src.modules.ai.vision import analyze_image as analyze_image_file
@@ -97,6 +101,40 @@ async def respond_with_rag(tenant_settings, current_message, provider: str = "ge
     )
     logger.info("Chatwoot RAG response: %s", answer)
     return answer
+
+
+def build_out_of_scope_prompt(current_message):
+    current_message_text = current_message.strip() if current_message else "EMPTY_QUERY"
+    return CHATWOOT_OUT_OF_SCOPE_PROMPT.format(current_message=current_message_text)
+
+
+def parse_out_of_scope_response(raw_response):
+    response_text = raw_response.strip()
+
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError:
+        start = response_text.find("{")
+        end = response_text.rfind("}")
+
+    if start != -1 and end != -1 and start < end:
+        try:
+            return json.loads(response_text[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    logger.error("Failed to parse Chatwoot out-of-scope JSON: %s", raw_response)
+    return {
+        "data": raw_response.strip()
+    }
+
+
+async def respond_to_out_of_scope(current_message, provider: str = "gemini"):
+    prompt = build_out_of_scope_prompt(current_message)
+    raw_response = await get_chat_response(prompt, provider=provider)
+    response = parse_out_of_scope_response(raw_response)
+    logger.info("Chatwoot out-of-scope response: %s", response)
+    return response
 
 
 async def transcribe_audio(payload, provider: str = "gemini"):

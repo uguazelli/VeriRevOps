@@ -8,6 +8,8 @@ from src.modules.ai.text import get_chat_response
 
 logger = logging.getLogger(__name__)
 
+VALID_CHATWOOT_CATEGORIES = {"RETRIEVAL", "CHITCHAT", "HANDOFF", "OUT_OF_SCOPE"}
+
 
 def build_chatwoot_classification_prompt(message_history, current_message):
     normalized_history = normalize_chatwoot_history(message_history)
@@ -38,7 +40,7 @@ def parse_chatwoot_classification(raw_response):
     logger.error("Failed to parse Chatwoot classification JSON: %s", raw_response)
     return {
         "data": {
-            "category": "HANDOFF",
+            "category": "OUT_OF_SCOPE",
             "confidence": 0.0,
             "reason": "classifier returned invalid JSON"
         }
@@ -47,16 +49,16 @@ def parse_chatwoot_classification(raw_response):
 
 def get_classification_category(classification):
     if not isinstance(classification, dict):
-        return "HANDOFF"
+        return "OUT_OF_SCOPE"
 
     category = classification.get("data", {}).get("category")
 
     if isinstance(category, str):
         normalized_category = category.upper()
-        if normalized_category in {"RETRIEVAL", "CHITCHAT", "HANDOFF"}:
+        if normalized_category in VALID_CHATWOOT_CATEGORIES:
             return normalized_category
 
-    return "HANDOFF"
+    return "OUT_OF_SCOPE"
 
 
 async def classify_chatwoot_message(message_history, current_message, provider: str = "gemini"):

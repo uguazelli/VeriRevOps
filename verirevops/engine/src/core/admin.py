@@ -1,4 +1,4 @@
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import RedirectResponse
 from sqladmin import Admin, ModelView, BaseView, expose
 from src.core.models import Tenant, Subscription, Configuration, Service, ContactMapping, ChatMessage, Document, GlobalConfig
 from src.core.db import get_engine
@@ -11,10 +11,9 @@ class DashboardView(BaseView):
     icon = "fa-solid fa-house"
     identity = "dashboard"
 
-    @expose("/", methods=["GET"])
+    @expose("/dashboard", methods=["GET"], identity="dashboard")
     async def index(self, request):
-        # Using JS redirect to ensure we break out of SQLAdmin's AJAX content area
-        return HTMLResponse("<script>window.location.href='/';</script>")
+        return RedirectResponse(url="/")
 
 class TenantAdmin(ModelView, model=Tenant):
     column_list = [Tenant.id, Tenant.slug, Tenant.created_at]
