@@ -134,18 +134,12 @@ async def update_conversation_status_to_open(tenant_settings, payload):
     return result
 
 
-async def get_last_ten_messages(tenant_settings, payload):
+async def fetch_conversation_messages_after(
+    tenant_settings,
+    chatwoot_conversation_id: int,
+    after_message_id: int = 0,
+):
     chatwoot_service = get_chatwoot_service(tenant_settings)
-    tenant_id = tenant_settings.tenant.id
-    chatwoot_account_id = int(chatwoot_service.account_id)
-    chatwoot_conversation_id = get_chatwoot_conversation_id(payload)
-    tracked_messages = await svc_list_chat_messages(
-        tenant_id,
-        chatwoot_account_id,
-        chatwoot_conversation_id
-    )
-    after_message_id = get_last_tracked_message_id(tracked_messages)
-
     base_url = chatwoot_service.url.rstrip("/")
     messages_url = (
         f"{base_url}/api/v1/accounts/{chatwoot_service.account_id}/"
@@ -153,7 +147,7 @@ async def get_last_ten_messages(tenant_settings, payload):
     )
     logger.info(
         "Fetching Chatwoot messages for account=%s conversation=%s after=%s",
-        chatwoot_account_id,
+        chatwoot_service.account_id,
         chatwoot_conversation_id,
         after_message_id
     )
@@ -176,6 +170,32 @@ async def get_last_ten_messages(tenant_settings, payload):
 
     data = response.json()
     messages = data.get("payload", data) if isinstance(data, dict) else data
+
+    if isinstance(messages, list):
+        logger.info("Fetched %s Chatwoot messages", len(messages))
+        return messages
+
+    logger.info("Fetched Chatwoot messages response with unexpected shape")
+    return messages
+
+
+async def get_last_ten_messages(tenant_settings, payload):
+    chatwoot_service = get_chatwoot_service(tenant_settings)
+    tenant_id = tenant_settings.tenant.id
+    chatwoot_account_id = int(chatwoot_service.account_id)
+    chatwoot_conversation_id = get_chatwoot_conversation_id(payload)
+    tracked_messages = await svc_list_chat_messages(
+        tenant_id,
+        chatwoot_account_id,
+        chatwoot_conversation_id
+    )
+    after_message_id = get_last_tracked_message_id(tracked_messages)
+
+    messages = await fetch_conversation_messages_after(
+        tenant_settings,
+        chatwoot_conversation_id,
+        after_message_id,
+    )
 
     if isinstance(messages, list):
         last_messages = messages[-10:]

@@ -70,6 +70,9 @@ def get_chatwoot_conversation_id(payload):
     conversation = body.get("conversation") or {}
     conversation_id = conversation.get("id") or body.get("conversation_id")
 
+    if not conversation_id and is_chatwoot_conversation_payload(body):
+        conversation_id = body.get("id")
+
     if not conversation_id:
         raise HTTPException(
             status_code=400,
@@ -77,6 +80,29 @@ def get_chatwoot_conversation_id(payload):
         )
 
     return int(conversation_id)
+
+
+def is_chatwoot_conversation_payload(body):
+    event = body.get("event")
+
+    if event in {
+        "conversation_status_changed",
+        "conversation_updated",
+        "conversation_created",
+    }:
+        return True
+
+    return (
+        body.get("id") is not None
+        and body.get("message_type") is None
+        and body.get("status") is not None
+        and (
+            body.get("account_id") is not None
+            or body.get("inbox_id") is not None
+            or body.get("meta") is not None
+            or body.get("contact_inbox") is not None
+        )
+    )
 
 
 def normalize_chatwoot_history(messages):

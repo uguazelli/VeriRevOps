@@ -26,6 +26,50 @@ class EspoCrmProvider(CrmContactProvider):
         self.api_key = service_config.api_key
 
     async def find_contact(self, contact: NormalizedContact) -> Optional[Dict[str, Any]]:
+        return await self._find_person_record("Contact", contact)
+
+    async def find_lead(self, contact: NormalizedContact) -> Optional[Dict[str, Any]]:
+        return await self._find_person_record("Lead", contact)
+
+    async def get_record(self, entity_type: str, external_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            return await self._request(
+                "GET",
+                f"{entity_type}/{external_id}",
+            )
+        except HTTPException as exc:
+            if exc.status_code in {403, 404}:
+                logger.info(
+                    "EspoCRM %s record %s not readable or not found",
+                    entity_type,
+                    external_id,
+                )
+                return None
+
+            raise
+
+    async def create_stream_note(
+        self,
+        parent_type: str,
+        parent_id: str,
+        post: str,
+    ) -> Dict[str, Any]:
+        return await self._request(
+            "POST",
+            "Note",
+            json_data={
+                "type": "Post",
+                "parentType": parent_type,
+                "parentId": parent_id,
+                "post": post,
+            },
+        )
+
+    async def _find_person_record(
+        self,
+        entity_type: str,
+        contact: NormalizedContact,
+    ) -> Optional[Dict[str, Any]]:
         where = self._build_search_where(contact)
 
         if not where:
@@ -33,7 +77,7 @@ class EspoCrmProvider(CrmContactProvider):
 
         response = await self._request(
             "GET",
-            "Contact",
+            entity_type,
             params={
                 "searchParams": json.dumps({
                     "select": ["id", "name", "firstName", "lastName", "emailAddress", "phoneNumber"],
@@ -88,10 +132,19 @@ class EspoCrmProvider(CrmContactProvider):
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            logger.exception("EspoCRM request failed: %s %s", method, path)
+            status_reason = response.headers.get("x-status-reason")
+            error_text = response.text[:500] if response.text else ""
+            logger.exception(
+                "EspoCRM request failed: %s %s status=%s reason=%s response=%s",
+                method,
+                path,
+                response.status_code,
+                status_reason,
+                error_text,
+            )
             raise HTTPException(
                 status_code=exc.response.status_code,
-                detail="EspoCRM contact sync request failed",
+                detail=status_reason or "EspoCRM contact sync request failed",
             ) from exc
 
         if not response.content:
@@ -142,4 +195,3 @@ class EspoCrmProvider(CrmContactProvider):
             payload["phoneNumber"] = contact.phone
 
         return payload
-

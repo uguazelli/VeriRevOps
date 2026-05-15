@@ -142,7 +142,21 @@ async def sync_chatwoot_contact_to_crm(
 
 def get_chatwoot_contact_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     body = payload.get("body", payload)
-    return body.get("sender") or body.get("contact") or payload
+    conversation = body.get("conversation") or {}
+    body_meta = body.get("meta") or {}
+    conversation_meta = conversation.get("meta") or {}
+
+    return (
+        body.get("sender")
+        or body.get("contact")
+        or conversation.get("sender")
+        or conversation.get("contact")
+        or body_meta.get("sender")
+        or body_meta.get("contact")
+        or conversation_meta.get("sender")
+        or conversation_meta.get("contact")
+        or payload
+    )
 
 
 async def update_mapped_crm_contact(provider, existing_mapping, normalized_contact):

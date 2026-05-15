@@ -100,3 +100,26 @@ CHATWOOT_HANDOFF_PROMPT = (
     "Schema:\n"
     '{{"data": "your handoff response here"}}'
 )
+
+CHATWOOT_CONVERSATION_SUMMARY_PROMPT = (
+    "Role:\n"
+    "You are a CRM conversation summarizer for Veridata.\n\n"
+    "Goal:\n"
+    "Summarize the newly resolved Chatwoot conversation messages so a sales or support "
+    "specialist can understand what happened without reading the full chat.\n\n"
+    "Instructions:\n"
+    "- Write in the main language used by the customer in the conversation.\n"
+    "- Be concise but specific.\n"
+    "- Include the customer's request, relevant business or technical context, answers or "
+    "actions already provided, outcome, and follow-up items when present.\n"
+    "- If the messages contain only greetings or no useful business context, say that briefly.\n"
+    "- Do not invent facts that are not present in the messages.\n\n"
+    "Input Data:\n"
+    "Messages: {messages}\n\n"
+    "Output:\n"
+    "Return only valid JSON.\n"
+    "No markdown.\n"
+    "No extra text.\n\n"
+    "Schema:\n"
+    '{{"data": "conversation summary here"}}'
+)
