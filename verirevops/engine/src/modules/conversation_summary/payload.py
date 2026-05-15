@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
@@ -70,9 +71,44 @@ def format_messages_for_summary(messages: List[Dict[str, Any]]) -> List[Dict[str
             "role": get_message_role(message),
             "content": content.strip(),
             "created_at": message.get("created_at"),
+            "created_at_iso": convert_chatwoot_timestamp_to_iso(message.get("created_at")),
         })
 
     return formatted_messages
+
+
+def convert_chatwoot_timestamp_to_iso(value) -> Optional[str]:
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+
+        if value.isdigit():
+            value = int(value)
+        else:
+            return normalize_iso_timestamp(value)
+
+    if isinstance(value, (int, float)):
+        timestamp = value / 1000 if value > 10_000_000_000 else value
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+
+    return None
+
+
+def normalize_iso_timestamp(value: str) -> Optional[str]:
+    try:
+        normalized_value = value.replace("Z", "+00:00")
+        parsed_datetime = datetime.fromisoformat(normalized_value)
+    except ValueError:
+        return value
+
+    if parsed_datetime.tzinfo is None:
+        parsed_datetime = parsed_datetime.replace(tzinfo=timezone.utc)
+
+    return parsed_datetime.astimezone(timezone.utc).isoformat()
 
 
 def get_message_role(message: Dict[str, Any]) -> str:
@@ -82,4 +118,3 @@ def get_message_role(message: Dict[str, Any]) -> str:
         return "assistant"
 
     return "user"
-
