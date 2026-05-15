@@ -1,5 +1,4 @@
 include:
   - path: ./engine/docker-compose.yml
-  - path: ./n8n/docker-compose.yml
   - path: ./chatwoot/docker-compose.yml
   - path: ./espocrm/crm/docker-compose.yaml
