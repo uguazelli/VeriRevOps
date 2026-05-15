@@ -5,8 +5,9 @@ from fastapi.staticfiles import StaticFiles
 
 from src.core.db import init_db, close_pool
 from src.core.admin import setup_admin
-from src.controllers import web, api
+from src.controllers import api
 from src.core.logging import setup_logging
+from src.modules.admin_ui.router import router as admin_ui_router
 from src.modules.chatwoot.router import router as chatwoot_router
 from src.modules.conversation_summary.router import router as conversation_summary_router
 from src.modules.contact_sync.router import router as contact_sync_router
@@ -48,8 +49,8 @@ app.add_middleware(ForceHTTPSMiddleware)
 setup_admin(app)
 
 # Include Routers
-# Web (HTML) Router - Mounts at root
-app.include_router(web.router)
+# Admin UI Router - Mounts at root
+app.include_router(admin_ui_router)
 
 # API (JSON) Router - Mounts at /api
 app.include_router(api.router, prefix="/api")
