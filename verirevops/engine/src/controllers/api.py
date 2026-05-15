@@ -9,7 +9,7 @@ from src.core.schemas import (
     RagRequest, RagResponse, LlmRequest, LlmResponse,
     TranscribeUrlRequest, AnalyzeImageUrlRequest
 )
-from src.services.rag import generate_answer
+from src.modules.rag import generate_answer
 from src.services.transcription import transcribe_audio
 from src.services.llm import get_chat_response
 from src.services.image_analysis import analyze_image

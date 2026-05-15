@@ -14,7 +14,7 @@ from src.core.db import get_session
 from src.core.models import Tenant, Document
 from sqlalchemy import select, update, delete
 from src.core.auth import require_auth
-from src.services.rag import ingest_document, generate_answer
+from src.modules.rag import ingest_document, generate_answer
 
 logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="src/templates")

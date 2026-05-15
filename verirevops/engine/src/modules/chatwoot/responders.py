@@ -8,7 +8,7 @@ from src.modules.chatwoot.payload import get_first_attachment_url, normalize_cha
 from src.services.image_analysis import analyze_image as analyze_image_file
 from src.services.llm import get_chat_response
 from src.services.media_downloader import download_file_from_url
-from src.services.rag import generate_answer
+from src.modules.rag import generate_answer
 from src.services.transcription import transcribe_audio as transcribe_audio_file
 
 

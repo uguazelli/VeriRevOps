@@ -37,6 +37,7 @@ async def summarize_resolved_chatwoot_conversation(
     provider: str = "gemini",
     crm_service_name: str = "espocrm",
 ) -> ConversationSummaryResult:
+
     # 1 - Validate this is a resolved Chatwoot conversation notification
     if not should_summarize_chatwoot_payload(payload):
         return ConversationSummaryResult(
