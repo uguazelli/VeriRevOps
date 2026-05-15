@@ -1,8 +1,8 @@
 import logging
 
-from src.core.llm_factory import get_llm
 from src.core.logging import log_error, log_start
 from src.core.prompts import RAG_SYSTEM_PROMPT
+from src.modules.ai.factory import get_llm
 from src.modules.rag.retrieval import search_documents
 
 
@@ -43,4 +43,3 @@ async def generate_answer(
     except Exception as exc:
         log_error(logger, f"LLM generation failed: {exc}")
         return "Sorry, I encountered an error generating the answer."
-

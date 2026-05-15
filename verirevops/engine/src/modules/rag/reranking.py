@@ -5,7 +5,7 @@ from llama_index.core import QueryBundle
 from llama_index.core.postprocessor import LLMRerank
 from llama_index.core.schema import NodeWithScore, TextNode
 
-from src.core.llm_factory import get_llm
+from src.modules.ai.factory import get_llm
 
 
 logger = logging.getLogger(__name__)
@@ -68,4 +68,3 @@ def rerank_documents(
             exc,
         )
         return documents[:top_k]
-

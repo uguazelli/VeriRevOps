@@ -9,10 +9,10 @@ from src.core.schemas import (
     RagRequest, RagResponse, LlmRequest, LlmResponse,
     TranscribeUrlRequest, AnalyzeImageUrlRequest
 )
+from src.modules.ai.text import get_chat_response
+from src.modules.ai.transcription import transcribe_audio
+from src.modules.ai.vision import analyze_image
 from src.modules.rag import generate_answer
-from src.services.transcription import transcribe_audio
-from src.services.llm import get_chat_response
-from src.services.image_analysis import analyze_image
 from src.services.media_downloader import download_file_from_url
 from src.modules.contact_sync.mappings import (
     svc_list_contact_mappings, svc_create_contact_mapping,

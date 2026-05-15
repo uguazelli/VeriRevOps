@@ -3,8 +3,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from src.core.prompts import CHATWOOT_CONVERSATION_SUMMARY_PROMPT
+from src.modules.ai.text import get_chat_response
 from src.modules.conversation_summary.payload import format_messages_for_summary
-from src.services.llm import get_chat_response
 
 
 logger = logging.getLogger(__name__)

@@ -3,7 +3,7 @@ import logging
 
 from src.core.prompts import CHATWOOT_TRAFFIC_CLASSIFIER_PROMPT
 from src.modules.chatwoot.payload import normalize_chatwoot_history
-from src.services.llm import get_chat_response
+from src.modules.ai.text import get_chat_response
 
 
 logger = logging.getLogger(__name__)

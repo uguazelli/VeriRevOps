@@ -9,10 +9,10 @@ from llama_index.core.node_parser import SemanticSplitterNodeParser
 from sqlalchemy import text
 
 from src.core.db import get_session
-from src.core.llm_factory import get_llm
 from src.core.queries import INSERT_PARENT_DOCUMENT_QUERY
+from src.modules.ai.factory import get_llm
+from src.modules.ai.vision import describe_image
 from src.modules.rag.embeddings import get_embed_model
-from src.services.vlm import describe_image
 
 
 logger = logging.getLogger(__name__)
@@ -144,4 +144,3 @@ async def ingest_document(
         await session.commit()
 
     logger.info("Successfully ingested %s", filename)
-

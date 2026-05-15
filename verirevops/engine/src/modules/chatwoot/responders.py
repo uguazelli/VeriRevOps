@@ -4,12 +4,12 @@ import logging
 from fastapi import HTTPException
 
 from src.core.prompts import CHATWOOT_CHITCHAT_PROMPT, CHATWOOT_HANDOFF_PROMPT
+from src.modules.ai.text import get_chat_response
+from src.modules.ai.transcription import transcribe_audio as transcribe_audio_file
+from src.modules.ai.vision import analyze_image as analyze_image_file
 from src.modules.chatwoot.payload import get_first_attachment_url, normalize_chatwoot_history
-from src.services.image_analysis import analyze_image as analyze_image_file
-from src.services.llm import get_chat_response
 from src.services.media_downloader import download_file_from_url
 from src.modules.rag import generate_answer
-from src.services.transcription import transcribe_audio as transcribe_audio_file
 
 
 logger = logging.getLogger(__name__)
