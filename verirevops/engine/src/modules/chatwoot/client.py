@@ -5,7 +5,7 @@ import httpx
 from fastapi import HTTPException
 
 from src.modules.chatwoot.payload import get_chatwoot_conversation_id, get_message_contents
-from src.services.chat_messages import svc_list_chat_messages
+from src.modules.chatwoot.message_tracking import svc_list_chat_messages
 
 
 logger = logging.getLogger(__name__)

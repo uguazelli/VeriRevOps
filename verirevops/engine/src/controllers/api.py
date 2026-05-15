@@ -14,11 +14,11 @@ from src.services.transcription import transcribe_audio
 from src.services.llm import get_chat_response
 from src.services.image_analysis import analyze_image
 from src.services.media_downloader import download_file_from_url
-from src.services.contact_mappings import (
+from src.modules.contact_sync.mappings import (
     svc_list_contact_mappings, svc_create_contact_mapping,
     svc_update_contact_mapping, svc_delete_contact_mapping
 )
-from src.services.chat_messages import svc_upsert_chat_message, svc_list_chat_messages
+from src.modules.chatwoot.message_tracking import svc_upsert_chat_message, svc_list_chat_messages
 from src.services.global_configs import svc_get_global_config, svc_upsert_global_config
 from src.services.tenants import svc_get_tenant_by_slug
 

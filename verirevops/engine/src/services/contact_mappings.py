@@ -1,78 +1,24 @@
-from sqlmodel import select
-from fastapi import HTTPException
-from typing import List, Optional
-from src.core.db import get_session
-from src.core.models import ContactMapping, ContactMappingCreate, ContactMappingUpdate
+"""
+Compatibility wrapper for contact sync mappings.
 
-async def svc_list_contact_mappings(
-    tenant_id: Optional[int] = None,
-    chatwoot_contact_id: Optional[int] = None,
-    service_name: Optional[str] = None
-) -> List[ContactMapping]:
-    async with get_session() as db:
-        query = select(ContactMapping)
-        if tenant_id:
-            query = query.where(ContactMapping.tenant_id == tenant_id)
-        if chatwoot_contact_id:
-            query = query.where(ContactMapping.chatwoot_contact_id == chatwoot_contact_id)
-        if service_name:
-            query = query.where(ContactMapping.service_name == service_name)
-            
-        result = await db.execute(query)
-        return result.scalars().all()
+New code should import from src.modules.contact_sync.mappings.
+"""
 
-async def svc_create_contact_mapping(
-    mapping_data: ContactMappingCreate
-) -> ContactMapping:
-    async with get_session() as db:
-        query = select(ContactMapping).where(
-            ContactMapping.tenant_id == mapping_data.tenant_id,
-            ContactMapping.chatwoot_contact_id == mapping_data.chatwoot_contact_id,
-            ContactMapping.service_name == mapping_data.service_name
-        )
-        result = await db.execute(query)
-        if result.scalar_one_or_none():
-            raise HTTPException(status_code=409, detail="Contact mapping already exists")
+from src.modules.contact_sync.mappings import (
+    get_contact_mapping,
+    svc_create_contact_mapping,
+    svc_delete_contact_mapping,
+    svc_list_contact_mappings,
+    svc_update_contact_mapping,
+    upsert_contact_mapping,
+)
 
-        mapping = ContactMapping(**mapping_data.model_dump())
-        db.add(mapping)
-        await db.commit()
-        await db.refresh(mapping)
-        return mapping
+__all__ = [
+    "get_contact_mapping",
+    "svc_create_contact_mapping",
+    "svc_delete_contact_mapping",
+    "svc_list_contact_mappings",
+    "svc_update_contact_mapping",
+    "upsert_contact_mapping",
+]
 
-async def svc_update_contact_mapping(
-    chatwoot_contact_id: int,
-    mapping_data: ContactMappingUpdate
-) -> ContactMapping:
-    async with get_session() as db:
-        query = select(ContactMapping).where(
-            ContactMapping.tenant_id == mapping_data.tenant_id,
-            ContactMapping.chatwoot_contact_id == chatwoot_contact_id,
-            ContactMapping.service_name == mapping_data.service_name
-        )
-        result = await db.execute(query)
-        mapping = result.scalar_one_or_none()
-
-        if not mapping:
-            raise HTTPException(status_code=404, detail="Contact mapping not found")
-
-        mapping.external_id = mapping_data.external_id
-
-        await db.commit()
-        await db.refresh(mapping)
-        return mapping
-
-async def svc_delete_contact_mapping(
-    mapping_id: int
-) -> int:
-    async with get_session() as db:
-        query = select(ContactMapping).where(ContactMapping.id == mapping_id)
-        result = await db.execute(query)
-        mapping = result.scalar_one_or_none()
-        
-        if mapping:
-            await db.delete(mapping)
-            await db.commit()
-            return 1
-            
-        return 0
