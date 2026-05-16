@@ -64,7 +64,9 @@ def setup_admin(app):
         get_engine(),
         base_url="/crud",
         title="VeriRag CRUD",
-        logo_url="/static/logo.png"
+        logo_url="/static/logo.png",
+        favicon_url="/static/favicon.ico",
+        templates_dir="src/templates",
     )
 
     # Dashboard Link at the top - MUST use add_base_view for BaseView

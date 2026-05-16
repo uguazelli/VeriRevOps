@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -23,7 +24,10 @@ async def search_documents(
     """
     embed_model = get_embed_model()
     try:
-        query_embedding = embed_model.get_query_embedding(message)
+        query_embedding = await asyncio.to_thread(
+            embed_model.get_query_embedding,
+            message,
+        )
     except Exception as exc:
         logger.error("Query embedding failed: %s", exc)
         return []
@@ -110,7 +114,12 @@ async def search_documents(
 
     if use_rerank and results:
         logger.info("Reranking results with %s", provider)
-        results = rerank_documents(message, results, top_k=limit, provider=provider)
+        results = await asyncio.to_thread(
+            rerank_documents,
+            message,
+            results,
+            top_k=limit,
+            provider=provider,
+        )
 
     return results
-

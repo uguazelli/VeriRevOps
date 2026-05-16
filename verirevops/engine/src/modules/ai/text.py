@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from src.core.logging import log_error, log_start, log_success
@@ -15,7 +16,7 @@ async def get_chat_response(message: str, provider: str = "gemini") -> str:
 
     try:
         llm = get_llm(provider)
-        response = llm.complete(message)
+        response = await asyncio.to_thread(llm.complete, message)
         answer = response.text
         log_success(logger, "Direct completion successful")
         return answer

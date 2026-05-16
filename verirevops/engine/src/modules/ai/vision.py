@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import logging
@@ -104,13 +105,16 @@ async def analyze_image_gemini(file_bytes: bytes, mime_type: str, prompt: str) -
     model = genai.GenerativeModel(normalize_gemini_model_name())
 
     try:
-        response = model.generate_content([
-            prompt,
-            {
-                "mime_type": mime_type,
-                "data": file_bytes,
-            },
-        ])
+        response = await asyncio.to_thread(
+            model.generate_content,
+            [
+                prompt,
+                {
+                    "mime_type": mime_type,
+                    "data": file_bytes,
+                },
+            ],
+        )
         return response.text
     except Exception as exc:
         logger.error("Gemini image analysis failed: %s", exc)

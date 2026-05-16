@@ -1,21 +1,21 @@
 [project]
 name = "verirag-core"
 version = "0.1.0"
-description = "Add your description here"
+description = "Core RAG API for VeriRAG"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "docx2txt>=0.9",
     "fastapi>=0.124.0",
-    "google-generativeai>=0.8.3",
+    "google-genai>=1.0.0",
     "httpx>=0.28.1",
     "jinja2>=3.1.6",
     "llama-index-cli>=0.5.3",
     "llama-index-core>=0.14.10",
-    "llama-index-llms-gemini>=0.6.1",
+    "llama-index-llms-google-genai>=0.6.2",
     "llama-index-llms-openai>=0.6.10",
-    "llama-index-multi-modal-llms-gemini>=0.6.1",
     "llama-index-readers-file>=0.5.6",
+    "llama-index-vector-stores-postgres>=0.5.0",
     "psycopg[binary,pool]>=3.3.2",
     "python-dotenv>=1.2.1",
     "python-multipart>=0.0.20",
@@ -24,3 +24,11 @@ dependencies = [
     "sqlmodel>=0.0.37",
     "uvicorn>=0.38.0",
 ]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

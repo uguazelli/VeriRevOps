@@ -1,0 +1,50 @@
+{% extends "sqladmin/base.html" %}
+{% from 'sqladmin/_macros.html' import display_menu %}
+{% block body %}
+<div class="wrapper verirag-admin-shell">
+  <aside class="verirag-sidebar">
+    <div class="verirag-sidebar-brand">
+      <a href="/" aria-label="VeriRag dashboard">
+        <img src="/static/logo.png" alt="VeriRag logo">
+        <span>VeriRag</span>
+      </a>
+    </div>
+
+    <nav class="verirag-sidebar-nav" aria-label="Admin navigation">
+      {{ display_menu(admin._menu, request) }}
+    </nav>
+
+    <div class="verirag-sidebar-user">
+      <div class="verirag-sidebar-user-main">
+        <div class="verirag-sidebar-avatar">A</div>
+        <div class="verirag-sidebar-username">admin</div>
+      </div>
+      <a href="/logout" class="verirag-sidebar-logout" title="Logout" aria-label="Logout">
+        <i class="fa fa-sign-out"></i>
+      </a>
+    </div>
+  </aside>
+
+  <div class="page-wrapper verirag-admin-page">
+    <div class="container-fluid">
+      <div class="page-header d-print-none">
+        {% block content_header %}
+        <div class="row align-items-center">
+          <div class="col">
+            <h2 class="page-title">{{ title }}</h2>
+            <div class="page-pretitle">{{ subtitle }}</div>
+          </div>
+        </div>
+        {% endblock %}
+      </div>
+    </div>
+    <div class="page-body flex-grow-1">
+      <div class="container-fluid">
+        <div class="row row-deck row-cards">
+          {% block content %} {% endblock %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

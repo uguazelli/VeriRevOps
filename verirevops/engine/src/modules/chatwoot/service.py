@@ -1,6 +1,11 @@
+import asyncio
 import logging
+import os
 
-from src.modules.chatwoot.classifier import classify_chatwoot_message, get_classification_category
+from src.modules.chatwoot.classifier import (
+    classify_chatwoot_message,
+    get_classification_category,
+)
 from src.modules.chatwoot.client import (
     get_last_ten_messages,
     send_message_to_chatwoot,
@@ -19,69 +24,164 @@ from src.modules.chatwoot.responders import (
     respond_with_rag,
     transcribe_audio,
 )
-from src.modules.tenants import svc_get_tenant_by_slug
-
+from src.modules.tenants import (
+    svc_get_tenant_by_slug,
+    svc_has_available_subscription_usage,
+    svc_increment_subscription_usage,
+)
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_BOT_PROCESSING_TIMEOUT_SECONDS = 75
+
 
 async def process_chatwoot_webhook(slug: str, payload: dict):
+    tenant_settings = None
+    should_count_usage = False
+
     try:
         # 1 - Process and validate Chatwoot payload to decide if it requires a response
         should_respond = process_chatwoot_payload(payload)
         if not should_respond["shouldBotRespond"]:
             return
 
-        # 2 - Determine message kind (text, audio, image, etc)
-        message_kind = get_message_kind(payload)
+        # 2 - Get tenant settings
+        tenant_settings = await svc_get_tenant_by_slug(slug)
 
-        # 3 - Get tenant settings
-        _tenant_settings = await svc_get_tenant_by_slug(slug)
+        # 3 - Check subscription quota before running bot work
+        has_quota = await svc_has_available_subscription_usage(tenant_settings.tenant.id)
+        if not has_quota:
+            return
 
-        current_message = get_text_message_content(payload)
+        should_count_usage = True
+        await asyncio.wait_for(
+            process_chatwoot_bot_message(tenant_settings, payload),
+            timeout=get_bot_processing_timeout_seconds(),
+        )
 
-        # 4 - If audio message, transcribe it
-        if message_kind == "audio":
-            current_message = await transcribe_audio(payload)
-
-        # 5 - If image message, describe it
-        if message_kind == "image":
-            current_message = await analyze_image(payload)
-
-        # 6 - Get message history from Chatwoot API
-        message_history = await get_last_ten_messages(_tenant_settings, payload)
-
-        # 7 - Classify if it requires RAG, handle to a human or if is just a small talk
-        classification = await classify_chatwoot_message(message_history, current_message)
-        category = get_classification_category(classification)
-        response = None
-
-        # 8 - If small talk, generate answer with LLM and send to Chatwoot API
-        if category == "CHITCHAT":
-            response = await respond_to_chitchat(current_message)
-
-        # 9 - If Handle to human, send message to Chatwoot API and update status to open
-        if category == "HANDOFF":
-            response = await respond_to_handoff(message_history, current_message)
-
-        # 10 - If out of scope, generate a refusal in the client's language
-        if category == "OUT_OF_SCOPE":
-            response = await respond_to_out_of_scope(current_message)
-
-        # 11 - If RAG, generate answer with retrieved context and send to Chatwoot API
-        if category == "RETRIEVAL":
-            response = await respond_with_rag(_tenant_settings, current_message)
-
-        # 12 - Send response back to Chatwoot API
-        if response:
-            await send_message_to_chatwoot(_tenant_settings, payload, response)
-
-        # 13 - If handoff, update conversation status to open
-        if category == "HANDOFF":
-            await update_conversation_status_to_open(_tenant_settings, payload)
-
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Chatwoot bot processing timed out for tenant slug '%s' after %s seconds",
+            slug,
+            get_bot_processing_timeout_seconds(),
+        )
+        await open_chatwoot_conversation_after_failure(
+            tenant_settings,
+            payload,
+            slug,
+            "timeout",
+        )
     except Exception:
+        await open_chatwoot_conversation_after_failure(
+            tenant_settings,
+            payload,
+            slug,
+            "failure",
+        )
         log_chatwoot_webhook_failure(slug)
+    finally:
+        if should_count_usage and tenant_settings:
+            await increment_subscription_usage_after_processing(tenant_settings, slug)
+
+
+async def process_chatwoot_bot_message(tenant_settings, payload: dict):
+    # 4 - Determine message kind (text, audio, image, etc)
+    message_kind = get_message_kind(payload)
+
+    current_message = get_text_message_content(payload)
+
+    # 5 - If audio message, transcribe it
+    if message_kind == "audio":
+        current_message = await transcribe_audio(payload)
+
+    # 6 - If image message, describe it
+    if message_kind == "image":
+        current_message = await analyze_image(payload)
+
+    # 7 - Get message history from Chatwoot API
+    message_history = await get_last_ten_messages(tenant_settings, payload)
+
+    # 8 - Classify if it requires RAG, handle to a human or if is just a small talk
+    classification = await classify_chatwoot_message(message_history, current_message)
+    category = get_classification_category(classification)
+    response = None
+
+    # 9 - If small talk, generate answer with LLM and send to Chatwoot API
+    if category == "CHITCHAT":
+        response = await respond_to_chitchat(current_message)
+
+    # 10 - If Handle to human, send message to Chatwoot API and update status to open
+    if category == "HANDOFF":
+        response = await respond_to_handoff(message_history, current_message)
+
+    # 11 - If out of scope, generate a refusal in the client's language
+    if category == "OUT_OF_SCOPE":
+        response = await respond_to_out_of_scope(current_message)
+
+    # 12 - If RAG, generate answer with retrieved context and send to Chatwoot API
+    if category == "RETRIEVAL":
+        response = await respond_with_rag(tenant_settings, current_message)
+
+    # 13 - Send response back to Chatwoot API
+    if response:
+        await send_message_to_chatwoot(tenant_settings, payload, response)
+
+    # 14 - If handoff, update conversation status to open
+    if category == "HANDOFF":
+        await update_conversation_status_to_open(tenant_settings, payload)
+
+
+def get_bot_processing_timeout_seconds() -> int:
+    raw_timeout = os.getenv("CHATWOOT_BOT_TIMEOUT_SECONDS", 60)
+
+    if not raw_timeout:
+        return DEFAULT_BOT_PROCESSING_TIMEOUT_SECONDS
+
+    try:
+        timeout = int(raw_timeout)
+    except ValueError:
+        logger.warning(
+            "Invalid CHATWOOT_BOT_TIMEOUT_SECONDS value '%s'; using default %s",
+            raw_timeout,
+            DEFAULT_BOT_PROCESSING_TIMEOUT_SECONDS,
+        )
+        return DEFAULT_BOT_PROCESSING_TIMEOUT_SECONDS
+
+    return max(1, timeout)
+
+
+async def open_chatwoot_conversation_after_failure(
+    tenant_settings,
+    payload: dict,
+    slug: str,
+    reason: str,
+):
+    if not tenant_settings:
+        return
+
+    try:
+        await update_conversation_status_to_open(tenant_settings, payload)
+        logger.info(
+            "Opened Chatwoot conversation for tenant slug '%s' after bot %s",
+            slug,
+            reason,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to open Chatwoot conversation for tenant slug '%s' after bot %s",
+            slug,
+            reason,
+        )
+
+
+async def increment_subscription_usage_after_processing(tenant_settings, slug: str):
+    try:
+        await svc_increment_subscription_usage(tenant_settings.tenant.id)
+    except Exception:
+        logger.exception(
+            "Failed to increment subscription usage for tenant slug '%s'",
+            slug,
+        )
 
 
 def log_chatwoot_webhook_failure(slug: str):

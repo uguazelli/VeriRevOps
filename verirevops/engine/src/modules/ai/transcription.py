@@ -1,3 +1,4 @@
+import asyncio
 import io
 import logging
 import os
@@ -49,13 +50,16 @@ async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> 
     model = genai.GenerativeModel(normalize_gemini_model_name())
 
     try:
-        response = model.generate_content([
-            "Transcribe this audio file exactly as spoken.",
-            {
-                "mime_type": mime_type,
-                "data": file_bytes,
-            },
-        ])
+        response = await asyncio.to_thread(
+            model.generate_content,
+            [
+                "Transcribe this audio file exactly as spoken.",
+                {
+                    "mime_type": mime_type,
+                    "data": file_bytes,
+                },
+            ],
+        )
         return response.text
     except Exception as exc:
         logger.error("Gemini transcription failed: %s", exc)
