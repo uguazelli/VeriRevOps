@@ -4,6 +4,7 @@ import os
 
 from src.modules.chatwoot.classifier import (
     classify_chatwoot_message,
+    get_classification_data,
     get_classification_category,
 )
 from src.modules.chatwoot.client import (
@@ -20,10 +21,12 @@ from src.modules.chatwoot.responders import (
     analyze_image,
     respond_to_chitchat,
     respond_to_handoff,
-    respond_to_out_of_scope,
     respond_with_rag,
     transcribe_audio,
 )
+from src.modules.contact_sync.service import sync_chatwoot_contact_payload_to_crm
+from src.modules.conversation_summary.crm import get_conversation_summary_crm_handler
+from src.modules.conversation_summary.summarizer import summarize_chatwoot_messages
 from src.modules.tenants import (
     svc_get_tenant_by_slug,
     svc_has_available_subscription_usage,
@@ -55,7 +58,7 @@ async def process_chatwoot_webhook(slug: str, payload: dict):
 
         should_count_usage = True
         await asyncio.wait_for(
-            process_chatwoot_bot_message(tenant_settings, payload),
+            process_chatwoot_bot_message(slug, tenant_settings, payload),
             timeout=get_bot_processing_timeout_seconds(),
         )
 
@@ -84,7 +87,7 @@ async def process_chatwoot_webhook(slug: str, payload: dict):
             await increment_subscription_usage_after_processing(tenant_settings, slug)
 
 
-async def process_chatwoot_bot_message(tenant_settings, payload: dict):
+async def process_chatwoot_bot_message(slug: str, tenant_settings, payload: dict):
     # 4 - Determine message kind (text, audio, image, etc)
     message_kind = get_message_kind(payload)
 
@@ -103,7 +106,9 @@ async def process_chatwoot_bot_message(tenant_settings, payload: dict):
 
     # 8 - Classify if it requires RAG, handle to a human or if is just a small talk
     classification = await classify_chatwoot_message(message_history, current_message)
+    classification_data = get_classification_data(classification)
     category = get_classification_category(classification)
+    handoff_reason = classification_data.get("reason")
     response = None
 
     # 9 - If small talk, generate answer with LLM and send to Chatwoot API
@@ -112,15 +117,31 @@ async def process_chatwoot_bot_message(tenant_settings, payload: dict):
 
     # 10 - If Handle to human, send message to Chatwoot API and update status to open
     if category == "HANDOFF":
-        response = await respond_to_handoff(message_history, current_message)
+        response = await respond_to_handoff(
+            message_history,
+            current_message,
+            handoff_reason=handoff_reason,
+        )
 
-    # 11 - If out of scope, generate a refusal in the client's language
+    # 11 - Out-of-scope requests are not answered by the bot; hand off to a human
     if category == "OUT_OF_SCOPE":
-        response = await respond_to_out_of_scope(current_message)
+        category = "HANDOFF"
+        response = await respond_to_handoff(
+            message_history,
+            current_message,
+            handoff_reason=handoff_reason or "Request is outside basic approved business answers.",
+        )
 
     # 12 - If RAG, generate answer with retrieved context and send to Chatwoot API
     if category == "RETRIEVAL":
         response = await respond_with_rag(tenant_settings, current_message)
+        if isinstance(response, dict) and response.get("handoff_required") is True:
+            category = "HANDOFF"
+            response = await respond_to_handoff(
+                message_history,
+                current_message,
+                handoff_reason=response.get("reason"),
+            )
 
     # 13 - Send response back to Chatwoot API
     if response:
@@ -129,10 +150,12 @@ async def process_chatwoot_bot_message(tenant_settings, payload: dict):
     # 14 - If handoff, update conversation status to open
     if category == "HANDOFF":
         await update_conversation_status_to_open(tenant_settings, payload)
+        await sync_crm_contact_after_handoff(slug, payload)
+        await add_crm_handoff_summary(tenant_settings, payload, message_history)
 
 
 def get_bot_processing_timeout_seconds() -> int:
-    raw_timeout = os.getenv("CHATWOOT_BOT_TIMEOUT_SECONDS", 60)
+    raw_timeout = os.getenv("CHATWOOT_BOT_TIMEOUT_SECONDS")
 
     if not raw_timeout:
         return DEFAULT_BOT_PROCESSING_TIMEOUT_SECONDS
@@ -182,6 +205,29 @@ async def increment_subscription_usage_after_processing(tenant_settings, slug: s
             "Failed to increment subscription usage for tenant slug '%s'",
             slug,
         )
+
+
+async def sync_crm_contact_after_handoff(slug: str, payload: dict):
+    try:
+        await sync_chatwoot_contact_payload_to_crm(slug, payload)
+    except Exception:
+        logger.exception(
+            "Failed to create or update CRM contact during Chatwoot handoff for tenant slug '%s'",
+            slug,
+        )
+
+
+async def add_crm_handoff_summary(tenant_settings, payload: dict, message_history):
+    try:
+        summary = await summarize_chatwoot_messages(message_history)
+        if not summary:
+            return
+
+        crm_handler = get_conversation_summary_crm_handler(tenant_settings)
+        crm_target = await crm_handler.resolve_summary_target(payload)
+        await crm_handler.send_summary(crm_target, summary)
+    except Exception:
+        logger.exception("Failed to add Chatwoot handoff summary to CRM")
 
 
 def log_chatwoot_webhook_failure(slug: str):

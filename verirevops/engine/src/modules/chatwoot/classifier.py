@@ -9,6 +9,7 @@ from src.modules.ai.text import get_chat_response
 logger = logging.getLogger(__name__)
 
 VALID_CHATWOOT_CATEGORIES = {"RETRIEVAL", "CHITCHAT", "HANDOFF", "OUT_OF_SCOPE"}
+MIN_CHATWOOT_CLASSIFICATION_CONFIDENCE = 0.75
 
 
 def build_chatwoot_classification_prompt(message_history, current_message):
@@ -40,25 +41,74 @@ def parse_chatwoot_classification(raw_response):
     logger.error("Failed to parse Chatwoot classification JSON: %s", raw_response)
     return {
         "data": {
-            "category": "OUT_OF_SCOPE",
+            "category": "HANDOFF",
             "confidence": 0.0,
-            "reason": "classifier returned invalid JSON"
+            "allowed_to_answer": False,
+            "handoff_required": True,
+            "reason": "classifier returned invalid JSON",
         }
     }
 
 
 def get_classification_category(classification):
-    if not isinstance(classification, dict):
-        return "OUT_OF_SCOPE"
+    data = get_classification_data(classification)
 
-    category = classification.get("data", {}).get("category")
+    if classification_requires_handoff(classification):
+        return "HANDOFF"
+
+    category = data.get("category")
 
     if isinstance(category, str):
         normalized_category = category.upper()
         if normalized_category in VALID_CHATWOOT_CATEGORIES:
             return normalized_category
 
-    return "OUT_OF_SCOPE"
+    return "HANDOFF"
+
+
+def get_classification_data(classification):
+    if not isinstance(classification, dict):
+        return {}
+
+    data = classification.get("data")
+    if not isinstance(data, dict):
+        return {}
+
+    return data
+
+
+def classification_requires_handoff(classification):
+    data = get_classification_data(classification)
+
+    category = data.get("category")
+    normalized_category = category.upper() if isinstance(category, str) else "HANDOFF"
+
+    if normalized_category not in VALID_CHATWOOT_CATEGORIES:
+        return True
+
+    if normalized_category == "HANDOFF":
+        return True
+
+    if normalized_category == "OUT_OF_SCOPE":
+        return True
+
+    if get_classification_confidence(data) < MIN_CHATWOOT_CLASSIFICATION_CONFIDENCE:
+        return True
+
+    if data.get("allowed_to_answer") is not True:
+        return True
+
+    if data.get("handoff_required") is True:
+        return True
+
+    return False
+
+
+def get_classification_confidence(data):
+    try:
+        return float(data.get("confidence", 0.0))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 async def classify_chatwoot_message(message_history, current_message, provider: str = "gemini"):

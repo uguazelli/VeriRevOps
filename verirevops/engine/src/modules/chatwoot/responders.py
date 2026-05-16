@@ -13,7 +13,7 @@ from src.modules.ai.transcription import transcribe_audio as transcribe_audio_fi
 from src.modules.ai.vision import analyze_image as analyze_image_file
 from src.modules.chatwoot.payload import get_first_attachment_url, normalize_chatwoot_history
 from src.modules.media import download_file_from_url
-from src.modules.rag import generate_answer
+from src.modules.rag import generate_chatwoot_answer_decision
 
 
 logger = logging.getLogger(__name__)
@@ -53,12 +53,14 @@ async def respond_to_chitchat(current_message, provider: str = "gemini"):
     return response
 
 
-def build_handoff_prompt(message_history, current_message):
+def build_handoff_prompt(message_history, current_message, handoff_reason=None):
     normalized_history = normalize_chatwoot_history(message_history)
     history_json = json.dumps(normalized_history, indent=2, default=str)
     current_message_text = current_message.strip() if current_message else "EMPTY_QUERY"
+    reason_text = handoff_reason.strip() if isinstance(handoff_reason, str) and handoff_reason.strip() else "Requires human review."
 
     return CHATWOOT_HANDOFF_PROMPT.format(
+        handoff_reason=reason_text,
         message_history=history_json,
         current_message=current_message_text
     )
@@ -85,8 +87,13 @@ def parse_handoff_response(raw_response):
     }
 
 
-async def respond_to_handoff(message_history, current_message, provider: str = "gemini"):
-    prompt = build_handoff_prompt(message_history, current_message)
+async def respond_to_handoff(
+    message_history,
+    current_message,
+    provider: str = "gemini",
+    handoff_reason=None,
+):
+    prompt = build_handoff_prompt(message_history, current_message, handoff_reason)
     raw_response = await get_chat_response(prompt, provider=provider)
     response = parse_handoff_response(raw_response)
     logger.info("Chatwoot handoff response: %s", response)
@@ -94,13 +101,27 @@ async def respond_to_handoff(message_history, current_message, provider: str = "
 
 
 async def respond_with_rag(tenant_settings, current_message, provider: str = "gemini"):
-    answer = await generate_answer(
+    decision = await generate_chatwoot_answer_decision(
         tenant_settings.tenant.id,
         current_message,
         provider=provider
     )
-    logger.info("Chatwoot RAG response: %s", answer)
-    return answer
+    logger.info("Chatwoot guarded RAG decision: %s", decision)
+
+    data = decision.get("data", {}) if isinstance(decision, dict) else {}
+    if data.get("handoff_required") is True:
+        return {
+            "data": "I don’t have enough confirmed information to answer that accurately. I’ll pass this to someone from the team.",
+            "handoff_required": True,
+            "reason": data.get("reason") or "RAG answer requires human review.",
+        }
+
+    return {
+        "data": data.get("answer", ""),
+        "handoff_required": False,
+        "confidence": data.get("confidence"),
+        "sources": data.get("sources", []),
+    }
 
 
 def build_out_of_scope_prompt(current_message):
