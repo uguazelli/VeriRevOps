@@ -35,18 +35,25 @@ async def sync_chatwoot_contact_payload_to_crm(
         service_name,
     )
 
-    # 6 - If mapping exists, update the existing CRM contact
+    # 6 - If mapping exists, update the mapped CRM Contact or Lead
     if existing_mapping:
-        external_id = await update_mapped_crm_contact(
+        external_id, action = await update_mapped_crm_record(
             provider,
             existing_mapping,
             normalized_contact,
         )
-        action = "updated_from_mapping"
 
-    # 7 - If mapping does not exist, find or create the CRM contact
+        if external_id != existing_mapping.external_id:
+            await upsert_contact_mapping(
+                tenant_settings.tenant.id,
+                normalized_contact.chatwoot_contact_id,
+                service_name,
+                external_id,
+            )
+
+    # 7 - If mapping does not exist, update existing Contact or create/update Lead
     else:
-        external_id, action = await find_or_create_crm_contact(
+        external_id, action = await find_or_create_crm_record(
             provider,
             normalized_contact,
         )
@@ -84,7 +91,7 @@ def normalize_chatwoot_contact(chatwoot_contact: Dict[str, Any]) -> NormalizedCo
     name = _clean_text(chatwoot_contact.get("name"))
     first_name, last_name = _split_name(name)
 
-    return NormalizedContact(
+    normalized_contact = NormalizedContact(
         chatwoot_contact_id=int(contact_id),
         name=name,
         first_name=first_name,
@@ -93,6 +100,19 @@ def normalize_chatwoot_contact(chatwoot_contact: Dict[str, Any]) -> NormalizedCo
         phone=_clean_text(chatwoot_contact.get("phone_number")),
         company_name=_clean_text(additional_attributes.get("company_name")),
         source_payload=chatwoot_contact,
+    )
+
+    validate_contact_has_email_or_phone(normalized_contact)
+    return normalized_contact
+
+
+def validate_contact_has_email_or_phone(normalized_contact: NormalizedContact):
+    if normalized_contact.email or normalized_contact.phone:
+        return
+
+    raise HTTPException(
+        status_code=400,
+        detail="Chatwoot contact must have email or phone number before CRM sync",
     )
 
 
@@ -110,14 +130,21 @@ async def sync_chatwoot_contact_to_crm(
     )
 
     if existing_mapping:
-        external_id = await update_mapped_crm_contact(
+        external_id, action = await update_mapped_crm_record(
             provider,
             existing_mapping,
             normalized_contact,
         )
-        action = "updated_from_mapping"
+
+        if external_id != existing_mapping.external_id:
+            await upsert_contact_mapping(
+                tenant_settings.tenant.id,
+                normalized_contact.chatwoot_contact_id,
+                service_name,
+                external_id,
+            )
     else:
-        external_id, action = await find_or_create_crm_contact(
+        external_id, action = await find_or_create_crm_record(
             provider,
             normalized_contact,
         )
@@ -159,24 +186,50 @@ def get_chatwoot_contact_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]
     )
 
 
-async def update_mapped_crm_contact(provider, existing_mapping, normalized_contact):
-    external_contact = await provider.update_contact(
-        existing_mapping.external_id,
-        normalized_contact,
-    )
-    return external_contact.get("id") or existing_mapping.external_id
+async def update_mapped_crm_record(provider, existing_mapping, normalized_contact):
+    if hasattr(provider, "get_record"):
+        contact = await provider.get_record("Contact", existing_mapping.external_id)
+        if contact:
+            updated_contact = await provider.update_contact(
+                existing_mapping.external_id,
+                normalized_contact,
+            )
+            return (
+                updated_contact.get("id") or existing_mapping.external_id,
+                "updated_mapped_contact",
+            )
+
+        lead = await provider.get_record("Lead", existing_mapping.external_id)
+        if lead:
+            updated_lead = await provider.update_lead(
+                existing_mapping.external_id,
+                normalized_contact,
+            )
+            return (
+                updated_lead.get("id") or existing_mapping.external_id,
+                "updated_mapped_lead",
+            )
+
+    return await find_or_create_crm_record(provider, normalized_contact)
 
 
-async def find_or_create_crm_contact(provider, normalized_contact):
-    external_contact = await provider.find_contact(normalized_contact)
+async def find_or_create_crm_record(provider, normalized_contact):
+    existing_contact = await provider.find_contact(normalized_contact)
 
-    if external_contact:
-        external_id = external_contact["id"]
+    if existing_contact:
+        external_id = existing_contact["id"]
         await provider.update_contact(external_id, normalized_contact)
-        return external_id, "linked_existing"
+        return external_id, "updated_existing_contact"
 
-    external_contact = await provider.create_contact(normalized_contact)
-    return external_contact["id"], "created"
+    existing_lead = await provider.find_lead(normalized_contact)
+
+    if existing_lead:
+        external_id = existing_lead["id"]
+        await provider.update_lead(external_id, normalized_contact)
+        return external_id, "updated_existing_lead"
+
+    new_lead = await provider.create_lead(normalized_contact)
+    return new_lead["id"], "created_lead"
 
 
 def build_contact_sync_result(
@@ -197,7 +250,7 @@ def build_contact_sync_result(
 
 def log_contact_sync_result(result: ContactSyncResult):
     logger.info(
-        "Synced Chatwoot contact %s to %s contact %s with action=%s",
+        "Synced Chatwoot contact %s to %s record %s with action=%s",
         result.chatwoot_contact_id,
         result.service_name,
         result.external_id,

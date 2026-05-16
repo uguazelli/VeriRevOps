@@ -36,6 +36,7 @@ class EspoCrmProvider(CrmContactProvider):
             return await self._request(
                 "GET",
                 f"{entity_type}/{external_id}",
+                log_not_found_as_error=False,
             )
         except HTTPException as exc:
             if exc.status_code in {403, 404}:
@@ -97,14 +98,28 @@ class EspoCrmProvider(CrmContactProvider):
         return await self._request(
             "POST",
             "Contact",
-            json_data=self._build_contact_payload(contact),
+            json_data=self._build_person_payload(contact),
+        )
+
+    async def create_lead(self, contact: NormalizedContact) -> Dict[str, Any]:
+        return await self._request(
+            "POST",
+            "Lead",
+            json_data=self._build_lead_payload(contact),
         )
 
     async def update_contact(self, external_id: str, contact: NormalizedContact) -> Dict[str, Any]:
         return await self._request(
             "PUT",
             f"Contact/{external_id}",
-            json_data=self._build_contact_payload(contact),
+            json_data=self._build_person_payload(contact),
+        )
+
+    async def update_lead(self, external_id: str, contact: NormalizedContact) -> Dict[str, Any]:
+        return await self._request(
+            "PUT",
+            f"Lead/{external_id}",
+            json_data=self._build_lead_payload(contact),
         )
 
     async def _request(
@@ -113,6 +128,7 @@ class EspoCrmProvider(CrmContactProvider):
         path: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
+        log_not_found_as_error: bool = True,
     ) -> Dict[str, Any]:
         url = f"{self.base_url}/{path.lstrip('/')}"
 
@@ -134,14 +150,22 @@ class EspoCrmProvider(CrmContactProvider):
         except httpx.HTTPStatusError as exc:
             status_reason = response.headers.get("x-status-reason")
             error_text = response.text[:500] if response.text else ""
-            logger.exception(
-                "EspoCRM request failed: %s %s status=%s reason=%s response=%s",
-                method,
-                path,
-                response.status_code,
-                status_reason,
-                error_text,
-            )
+            if response.status_code == 404 and not log_not_found_as_error:
+                logger.info(
+                    "EspoCRM request returned not found: %s %s reason=%s",
+                    method,
+                    path,
+                    status_reason,
+                )
+            else:
+                logger.exception(
+                    "EspoCRM request failed: %s %s status=%s reason=%s response=%s",
+                    method,
+                    path,
+                    response.status_code,
+                    status_reason,
+                    error_text,
+                )
             raise HTTPException(
                 status_code=exc.response.status_code,
                 detail=status_reason or "EspoCRM contact sync request failed",
@@ -174,7 +198,7 @@ class EspoCrmProvider(CrmContactProvider):
 
         return conditions
 
-    def _build_contact_payload(self, contact: NormalizedContact) -> Dict[str, Any]:
+    def _build_person_payload(self, contact: NormalizedContact) -> Dict[str, Any]:
         payload = {}
 
         if contact.first_name:
@@ -193,5 +217,13 @@ class EspoCrmProvider(CrmContactProvider):
 
         if contact.phone:
             payload["phoneNumber"] = contact.phone
+
+        return payload
+
+    def _build_lead_payload(self, contact: NormalizedContact) -> Dict[str, Any]:
+        payload = self._build_person_payload(contact)
+
+        if contact.company_name:
+            payload["accountName"] = contact.company_name
 
         return payload

@@ -12,10 +12,21 @@ class CrmContactProvider(ABC):
         pass
 
     @abstractmethod
+    async def find_lead(self, contact: NormalizedContact) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
     async def create_contact(self, contact: NormalizedContact) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    async def create_lead(self, contact: NormalizedContact) -> Dict[str, Any]:
         pass
 
     @abstractmethod
     async def update_contact(self, external_id: str, contact: NormalizedContact) -> Dict[str, Any]:
         pass
 
+    @abstractmethod
+    async def update_lead(self, external_id: str, contact: NormalizedContact) -> Dict[str, Any]:
+        pass
