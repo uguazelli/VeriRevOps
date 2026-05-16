@@ -28,8 +28,17 @@ jobs:
             git fetch origin main
             git reset --hard ${{ github.sha }}
 
-            cd "$PROJECT_ROOT/verirevops"
-            docker compose up --build -d --remove-orphans
+            echo "Rebuilding engine"
+            cd "$PROJECT_ROOT/verirevops/engine"
+            docker compose up --build -d
+
+            echo "Rebuilding Chatwoot"
+            cd "$PROJECT_ROOT/verirevops/chatwoot"
+            docker compose up --build -d
+
+            echo "Rebuilding EspoCRM"
+            cd "$PROJECT_ROOT/verirevops/espocrm/crm"
+            docker compose up --build -d
 
             docker image prune -f
 
