@@ -6,11 +6,7 @@ from src.modules.chatwoot.client import (
     get_chatwoot_service,
 )
 from src.modules.chatwoot.payload import get_chatwoot_conversation_id
-from src.modules.contact_sync.service import get_crm_provider
-from src.modules.conversation_summary.crm import (
-    resolve_crm_summary_target,
-    send_summary_to_crm,
-)
+from src.modules.conversation_summary.crm import get_conversation_summary_crm_handler
 from src.modules.conversation_summary.models import ConversationSummaryResult
 from src.modules.conversation_summary.payload import (
     get_latest_message_id,
@@ -24,11 +20,23 @@ from src.modules.tenants import svc_get_tenant_by_slug
 logger = logging.getLogger(__name__)
 
 
-async def process_conversation_summary_webhook(slug: str, payload: dict):
+async def process_conversation_summary_webhook(
+    slug: str,
+    payload: dict,
+    crm_service_name: str = "espocrm",
+):
     try:
-        await summarize_resolved_chatwoot_conversation(slug, payload)
+        await summarize_resolved_chatwoot_conversation(
+            slug,
+            payload,
+            crm_service_name=crm_service_name,
+        )
     except Exception:
-        logger.exception("Failed to summarize resolved Chatwoot conversation for tenant '%s'", slug)
+        logger.exception(
+            "Failed to summarize resolved Chatwoot conversation for tenant '%s' service '%s'",
+            slug,
+            crm_service_name,
+        )
 
 
 async def summarize_resolved_chatwoot_conversation(
@@ -101,16 +109,15 @@ async def summarize_resolved_chatwoot_conversation(
             action="skipped_empty_summary",
         )
 
-    # 6 - Resolve CRM target: Contact first, Lead second
-    crm_target = await resolve_crm_summary_target(
+    # 6 - Resolve CRM target using the selected CRM behavior
+    crm_handler = get_conversation_summary_crm_handler(
         tenant_settings,
-        payload,
         service_name=crm_service_name,
     )
-    crm_provider = get_crm_provider(tenant_settings, crm_service_name)
+    crm_target = await crm_handler.resolve_summary_target(payload)
 
-    # 7 - Create CRM stream note
-    await send_summary_to_crm(crm_provider, crm_target, summary)
+    # 7 - Create CRM summary note/activity
+    await crm_handler.send_summary(crm_target, summary)
 
     # 8 - Update chat_messages marker only after CRM note succeeds
     await update_summary_message_marker(
