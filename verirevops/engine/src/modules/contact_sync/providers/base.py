@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
-from src.modules.contact_sync.models import NormalizedContact
+from src.modules.contact_sync.schemas import NormalizedContact
 
 
 class CrmContactProvider(ABC):

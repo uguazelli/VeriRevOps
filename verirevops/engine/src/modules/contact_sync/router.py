@@ -13,7 +13,7 @@ from src.modules.contact_sync.mappings import (
     svc_list_contact_mappings,
     svc_update_contact_mapping,
 )
-from src.modules.contact_sync.models import ContactSyncResult
+from src.modules.contact_sync.schemas import ContactSyncResult
 from src.modules.contact_sync.service import sync_chatwoot_contact_payload_to_crm
 
 

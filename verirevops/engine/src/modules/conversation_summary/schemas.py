@@ -18,4 +18,3 @@ class ConversationSummaryResult(BaseModel):
     crm_entity_type: Optional[str] = None
     crm_external_id: Optional[str] = None
     action: str
-

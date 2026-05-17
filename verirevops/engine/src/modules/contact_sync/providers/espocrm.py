@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 import httpx
 from fastapi import HTTPException
 
-from src.modules.contact_sync.models import NormalizedContact
+from src.modules.contact_sync.schemas import NormalizedContact
 from src.modules.contact_sync.providers.base import CrmContactProvider
 
 

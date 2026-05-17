@@ -8,7 +8,7 @@ from src.modules.contact_sync.service import (
     normalize_chatwoot_contact,
 )
 from src.modules.conversation_summary.crm.base import ConversationSummaryCrmHandler
-from src.modules.conversation_summary.models import CrmSummaryTarget
+from src.modules.conversation_summary.schemas import CrmSummaryTarget
 
 
 logger = logging.getLogger(__name__)

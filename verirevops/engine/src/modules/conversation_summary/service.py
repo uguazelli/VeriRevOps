@@ -7,7 +7,7 @@ from src.modules.chatwoot.client import (
 )
 from src.modules.chatwoot.payload import get_chatwoot_conversation_id
 from src.modules.conversation_summary.crm import get_conversation_summary_crm_handler
-from src.modules.conversation_summary.models import ConversationSummaryResult
+from src.modules.conversation_summary.schemas import ConversationSummaryResult
 from src.modules.conversation_summary.payload import (
     get_latest_message_id,
     should_summarize_chatwoot_payload,

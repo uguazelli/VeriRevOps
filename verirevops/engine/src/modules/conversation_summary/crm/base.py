@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from src.modules.conversation_summary.models import CrmSummaryTarget
+from src.modules.conversation_summary.schemas import CrmSummaryTarget
 
 
 class ConversationSummaryCrmHandler(ABC):
