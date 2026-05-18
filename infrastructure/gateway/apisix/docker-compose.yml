@@ -4,7 +4,7 @@ services:
   apisix:
     image: apache/apisix:latest
     container_name: apisix.gateway
-    restart: always
+    restart: unless-stopped
     ports:
       - "9080:9080" # Standard HTTP Traffic
       - "9180:9180" # Admin API (X-API-KEY required)
@@ -22,7 +22,7 @@ services:
   dashboard:
     image: apache/apisix-dashboard:latest
     container_name: apisix.dashboard
-    restart: always
+    restart: unless-stopped
     ports:
       - "9000:9000"
     volumes:
@@ -36,6 +36,7 @@ services:
   ai-mock:
     image: kennethreitz/httpbin
     container_name: apisix.ai.mock
+    restart: unless-stopped
     ports:
       - "8080:80"
     networks:
