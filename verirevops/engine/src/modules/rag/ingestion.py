@@ -9,8 +9,8 @@ from llama_index.core.node_parser import SemanticSplitterNodeParser
 from sqlalchemy import text
 
 from src.core.db import get_session
-from src.core.queries import INSERT_PARENT_DOCUMENT_QUERY
-from src.modules.ai.factory import get_llm
+from src.core.queries import INSERT_CHILD_DOCUMENT_QUERY, INSERT_PARENT_DOCUMENT_QUERY
+from src.modules.ai.factory import get_text_llm
 from src.modules.ai.vision import describe_image
 from src.modules.rag.embeddings import get_embed_model
 
@@ -78,7 +78,7 @@ async def ingest_document(
         logger.warning("No documents were loaded from %s", filename)
         return
 
-    llm = get_llm("gemini")
+    llm = get_text_llm("gemini")
     embed_model = get_embed_model()
 
     pipeline = IngestionPipeline(
@@ -127,11 +127,7 @@ async def ingest_document(
         for node, embedding in zip(nodes, embeddings):
             metadata_json = json.dumps(node.metadata)
             await session.execute(
-                text(
-                    "INSERT INTO documents "
-                    "(tenant_id, filename, content, embedding, metadata_, parent_id) "
-                    "VALUES (:tenant, :file, :content, :emb, :meta, :pid)"
-                ),
+                text(INSERT_CHILD_DOCUMENT_QUERY),
                 {
                     "tenant": tenant_id,
                     "file": filename,

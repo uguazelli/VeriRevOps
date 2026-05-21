@@ -1,17 +1,16 @@
-from typing import List, Optional
-
 from fastapi import HTTPException
 from sqlmodel import select
 
 from src.core.db import get_session
-from src.core.models import ContactMapping, ContactMappingCreate, ContactMappingUpdate
+from src.core.models import ContactMapping, ContactMappingBase
+from src.modules.contact_sync.schemas import ContactMappingUpdate
 
 
 async def svc_list_contact_mappings(
-    tenant_id: Optional[int] = None,
-    chatwoot_contact_id: Optional[int] = None,
-    service_name: Optional[str] = None,
-) -> List[ContactMapping]:
+    tenant_id: int | None = None,
+    chatwoot_contact_id: int | None = None,
+    service_name: str | None = None,
+) -> list[ContactMapping]:
     async with get_session() as db:
         query = select(ContactMapping)
         if tenant_id:
@@ -26,7 +25,7 @@ async def svc_list_contact_mappings(
 
 
 async def svc_create_contact_mapping(
-    mapping_data: ContactMappingCreate,
+    mapping_data: ContactMappingBase,
 ) -> ContactMapping:
     async with get_session() as db:
         query = select(ContactMapping).where(
@@ -88,7 +87,7 @@ async def get_contact_mapping(
     tenant_id: int,
     chatwoot_contact_id: int,
     service_name: str,
-) -> Optional[ContactMapping]:
+) -> ContactMapping | None:
     mappings = await svc_list_contact_mappings(
         tenant_id=tenant_id,
         chatwoot_contact_id=chatwoot_contact_id,
@@ -115,7 +114,7 @@ async def upsert_contact_mapping(
 
     if not existing_mapping:
         return await svc_create_contact_mapping(
-            ContactMappingCreate(
+            ContactMappingBase(
                 tenant_id=tenant_id,
                 chatwoot_contact_id=chatwoot_contact_id,
                 service_name=service_name,
@@ -134,4 +133,3 @@ async def upsert_contact_mapping(
             external_id=external_id,
         ),
     )
-

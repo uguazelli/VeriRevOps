@@ -1,6 +1,6 @@
 import os
 import secrets
-from typing import Annotated, Optional
+from typing import Annotated
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import APIKeyCookie
 
@@ -30,7 +30,7 @@ def get_current_username(request: Request):
 
     return "admin"
 
-def require_auth(request: Request, username: Annotated[Optional[str], Depends(get_current_username)]):
+def require_auth(request: Request, username: Annotated[str | None, Depends(get_current_username)]):
     if not username:
         # Check if it's an API request or expects JSON
         if request.url.path.startswith("/api") or "application/json" in request.headers.get("accept", "").lower():

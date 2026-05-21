@@ -1,12 +1,8 @@
 import asyncio
 import io
 import logging
-import os
 
-import google.generativeai as genai
-from openai import AsyncOpenAI
-
-from src.modules.ai.factory import normalize_gemini_model_name
+from src.modules.ai.factory import get_gemini_model, get_openai_async_client
 
 
 logger = logging.getLogger(__name__)
@@ -16,12 +12,7 @@ async def transcribe_openai(file_bytes: bytes, filename: str = "audio.mp3") -> s
     """
     Transcribe audio using OpenAI Whisper.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not set")
-
-    client = AsyncOpenAI(api_key=api_key)
+    client = get_openai_async_client()
 
     file_obj = io.BytesIO(file_bytes)
     file_obj.name = filename
@@ -41,13 +32,7 @@ async def transcribe_gemini(file_bytes: bytes, mime_type: str = "audio/mp3") -> 
     """
     Transcribe audio using Google Gemini.
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
-
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY not set")
-
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(normalize_gemini_model_name())
+    model = get_gemini_model()
 
     try:
         response = await asyncio.to_thread(

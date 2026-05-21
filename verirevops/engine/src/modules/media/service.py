@@ -1,5 +1,4 @@
 import logging
-from typing import Tuple
 
 import httpx
 from fastapi import HTTPException
@@ -8,7 +7,7 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 
-async def download_file_from_url(url: str) -> Tuple[bytes, str]:
+async def download_file_from_url(url: str) -> tuple[bytes, str]:
     """
     Download a file from a URL and return bytes plus a best-effort filename.
     """

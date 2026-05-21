@@ -1,9 +1,10 @@
 import json
 import logging
 
+from src.core.json_utils import parse_json_object
 from src.core.prompts import CHATWOOT_TRAFFIC_CLASSIFIER_PROMPT
-from src.modules.chatwoot.payload import normalize_chatwoot_history
 from src.modules.ai.text import get_chat_response
+from src.modules.chatwoot.payload import normalize_chatwoot_history
 
 
 logger = logging.getLogger(__name__)
@@ -24,21 +25,15 @@ def build_chatwoot_classification_prompt(message_history, current_message):
 
 
 def parse_chatwoot_classification(raw_response):
-    response_text = raw_response.strip()
+    return parse_json_object(
+        raw_response,
+        fallback=build_default_chatwoot_classification,
+        logger=logger,
+        error_message="Failed to parse Chatwoot classification JSON",
+    )
 
-    try:
-        return json.loads(response_text)
-    except json.JSONDecodeError:
-        start = response_text.find("{")
-        end = response_text.rfind("}")
 
-    if start != -1 and end != -1 and start < end:
-        try:
-            return json.loads(response_text[start:end + 1])
-        except json.JSONDecodeError:
-            pass
-
-    logger.error("Failed to parse Chatwoot classification JSON: %s", raw_response)
+def build_default_chatwoot_classification():
     return {
         "data": {
             "category": "HANDOFF",

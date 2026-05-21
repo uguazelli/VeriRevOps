@@ -6,7 +6,8 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
 from src.core.db import get_session
-from src.core.models import GlobalConfig, Subscription, Tenant, TenantFullResponse, TenantResponse
+from src.core.models import GlobalConfig, Subscription, Tenant
+from src.modules.tenants.schemas import TenantFullResponse, TenantResponse
 
 
 logger = logging.getLogger(__name__)

@@ -27,3 +27,10 @@ logs/
 .ruff_cache/
 */kestra
 */windmill
+
+engine-nestjs/
+node_modules/
+dist/
+logs/
+
+engine-spring-boot/

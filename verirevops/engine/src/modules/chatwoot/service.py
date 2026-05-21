@@ -17,12 +17,14 @@ from src.modules.chatwoot.payload import (
     get_text_message_content,
     process_chatwoot_payload,
 )
-from src.modules.chatwoot.responders import (
-    analyze_image,
+from src.modules.chatwoot.media import (
+    analyze_chatwoot_image,
+    transcribe_chatwoot_audio,
+)
+from src.modules.chatwoot.responses import (
     respond_to_chitchat,
     respond_to_handoff,
     respond_with_rag,
-    transcribe_audio,
 )
 from src.modules.contact_sync.service import sync_chatwoot_contact_payload_to_crm
 from src.modules.conversation_summary.crm import get_conversation_summary_crm_handler
@@ -45,7 +47,7 @@ async def process_chatwoot_webhook(slug: str, payload: dict):
     try:
         # 1 - Process and validate Chatwoot payload to decide if it requires a response
         should_respond = process_chatwoot_payload(payload)
-        if not should_respond["shouldBotRespond"]:
+        if not should_respond["should_respond"]:
             return
 
         # 2 - Get tenant settings
@@ -88,70 +90,85 @@ async def process_chatwoot_webhook(slug: str, payload: dict):
 
 
 async def process_chatwoot_bot_message(slug: str, tenant_settings, payload: dict):
-    # 4 - Determine message kind (text, audio, image, etc)
-    message_kind = get_message_kind(payload)
-
-    current_message = get_text_message_content(payload)
-
-    # 5 - If audio message, transcribe it
-    if message_kind == "audio":
-        current_message = await transcribe_audio(payload)
-
-    # 6 - If image message, describe it
-    if message_kind == "image":
-        current_message = await analyze_image(payload)
-
-    # 7 - Get message history from Chatwoot API
+    current_message = await get_current_chatwoot_message(payload)
     message_history = await get_last_ten_messages(tenant_settings, payload)
-
-    # 8 - Classify if it requires RAG, handle to a human or if is just a small talk
     classification = await classify_chatwoot_message(message_history, current_message)
-    classification_data = get_classification_data(classification)
-    category = get_classification_category(classification)
-    handoff_reason = classification_data.get("reason")
-    response = None
+    response, category = await build_chatwoot_response_for_classification(
+        tenant_settings,
+        message_history,
+        current_message,
+        classification,
+    )
 
-    # 9 - If small talk, generate answer with LLM and send to Chatwoot API
-    if category == "CHITCHAT":
-        response = await respond_to_chitchat(current_message)
-
-    # 10 - If Handle to human, send message to Chatwoot API and update status to open
-    if category == "HANDOFF":
-        response = await respond_to_handoff(
-            message_history,
-            current_message,
-            handoff_reason=handoff_reason,
-        )
-
-    # 11 - Out-of-scope requests are not answered by the bot; hand off to a human
-    if category == "OUT_OF_SCOPE":
-        category = "HANDOFF"
-        response = await respond_to_handoff(
-            message_history,
-            current_message,
-            handoff_reason=handoff_reason or "Request is outside basic approved business answers.",
-        )
-
-    # 12 - If RAG, generate answer with retrieved context and send to Chatwoot API
-    if category == "RETRIEVAL":
-        response = await respond_with_rag(tenant_settings, current_message)
-        if isinstance(response, dict) and response.get("handoff_required") is True:
-            category = "HANDOFF"
-            response = await respond_to_handoff(
-                message_history,
-                current_message,
-                handoff_reason=response.get("reason"),
-            )
-
-    # 13 - Send response back to Chatwoot API
     if response:
         await send_message_to_chatwoot(tenant_settings, payload, response)
 
-    # 14 - If handoff, update conversation status to open
     if category == "HANDOFF":
-        await update_conversation_status_to_open(tenant_settings, payload)
-        await sync_crm_contact_after_handoff(slug, payload)
-        await add_crm_handoff_summary(tenant_settings, payload, message_history)
+        await handle_chatwoot_handoff(slug, tenant_settings, payload, message_history)
+
+
+async def get_current_chatwoot_message(payload: dict) -> str:
+    message_kind = get_message_kind(payload)
+
+    if message_kind == "audio":
+        return await transcribe_chatwoot_audio(payload)
+
+    if message_kind == "image":
+        return await analyze_chatwoot_image(payload)
+
+    return get_text_message_content(payload)
+
+
+async def build_chatwoot_response_for_classification(
+    tenant_settings,
+    message_history,
+    current_message: str,
+    classification: dict,
+):
+    category = get_classification_category(classification)
+    handoff_reason = get_classification_data(classification).get("reason")
+
+    if category == "CHITCHAT":
+        return await respond_to_chitchat(current_message), category
+
+    if category == "RETRIEVAL":
+        return await build_chatwoot_rag_response(
+            tenant_settings,
+            message_history,
+            current_message,
+        )
+
+    if category == "OUT_OF_SCOPE":
+        handoff_reason = handoff_reason or "Request is outside basic approved business answers."
+
+    return await respond_to_handoff(
+        message_history,
+        current_message,
+        handoff_reason=handoff_reason,
+    ), "HANDOFF"
+
+
+async def build_chatwoot_rag_response(
+    tenant_settings,
+    message_history,
+    current_message: str,
+):
+    response = await respond_with_rag(tenant_settings, current_message)
+
+    if isinstance(response, dict) and response.get("handoff_required") is True:
+        return await respond_to_handoff(
+            message_history,
+            current_message,
+            handoff_reason=response.get("reason"),
+        ), "HANDOFF"
+
+    return response, "RETRIEVAL"
+
+
+async def handle_chatwoot_handoff(slug: str, tenant_settings, payload: dict, message_history):
+    await update_conversation_status_to_open(tenant_settings, payload)
+    await sync_crm_contact_after_handoff(slug, payload)
+    await add_crm_handoff_summary(tenant_settings, payload, message_history)
 
 
 def get_bot_processing_timeout_seconds() -> int:

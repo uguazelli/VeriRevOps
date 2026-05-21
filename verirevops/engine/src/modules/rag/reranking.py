@@ -1,11 +1,11 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from llama_index.core import QueryBundle
 from llama_index.core.postprocessor import LLMRerank
 from llama_index.core.schema import NodeWithScore, TextNode
 
-from src.modules.ai.factory import get_llm
+from src.modules.ai.factory import get_text_llm
 
 
 logger = logging.getLogger(__name__)
@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 def rerank_documents(
     query: str,
-    documents: List[Dict[str, Any]],
+    documents: list[dict[str, Any]],
     top_k: int = 5,
     provider: str = "gemini",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Reranks documents based on semantic relevance to the query using an LLM.
     """
@@ -26,7 +26,7 @@ def rerank_documents(
     logger.info("Reranking %s documents using API-based LLM (%s)", len(documents), provider)
 
     try:
-        llm = get_llm(provider)
+        llm = get_text_llm(provider)
         reranker = LLMRerank(
             llm=llm,
             top_n=top_k,

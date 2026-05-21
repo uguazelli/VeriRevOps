@@ -1,9 +1,8 @@
-from typing import List, Optional
-
 from sqlmodel import select
 
 from src.core.db import get_session
-from src.core.models import ChatMessage, ChatMessageCreate
+from src.core.models import ChatMessage
+from src.modules.chatwoot.schemas import ChatMessageCreate
 
 
 async def svc_upsert_chat_message(
@@ -30,10 +29,10 @@ async def svc_upsert_chat_message(
 
 
 async def svc_list_chat_messages(
-    tenant_id: Optional[int] = None,
-    chatwoot_account_id: Optional[int] = None,
-    chatwoot_conversation_id: Optional[int] = None,
-) -> List[ChatMessage]:
+    tenant_id: int | None = None,
+    chatwoot_account_id: int | None = None,
+    chatwoot_conversation_id: int | None = None,
+) -> list[ChatMessage]:
     async with get_session() as db:
         query = select(ChatMessage)
         if tenant_id:
@@ -47,4 +46,3 @@ async def svc_list_chat_messages(
 
         result = await db.execute(query)
         return result.scalars().all()
-

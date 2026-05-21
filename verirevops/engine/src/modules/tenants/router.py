@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from src.core.models import TenantFullResponse
 from src.modules.tenants.service import svc_get_tenant_by_slug
+from src.modules.tenants.schemas import TenantFullResponse
 
 
 router = APIRouter()

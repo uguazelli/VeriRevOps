@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from src.core.schemas import RagRequest, RagResponse
+from src.modules.rag.schemas import RagRequest, RagResponse
 from src.modules.rag.service import generate_answer
 
 

@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import dataclass
 
 import httpx
 from fastapi import HTTPException
@@ -9,6 +10,32 @@ from src.modules.chatwoot.message_tracking import svc_list_chat_messages
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ChatwootApiContext:
+    base_url: str
+    account_id: str
+    api_key: str
+
+    @property
+    def headers(self):
+        return {
+            "api_access_token": self.api_key,
+            "Content-Type": "application/json",
+        }
+
+    @property
+    def auth_headers(self):
+        return {"api_access_token": self.api_key}
+
+    def conversation_url(self, conversation_id: int, path: str = "") -> str:
+        url = f"{self.base_url}/api/v1/accounts/{self.account_id}/conversations/{conversation_id}"
+
+        if path:
+            return f"{url}/{path.lstrip('/')}"
+
+        return url
 
 
 def get_chatwoot_service(tenant_settings):
@@ -29,6 +56,15 @@ def get_chatwoot_service(tenant_settings):
     return chatwoot_service
 
 
+def get_chatwoot_api_context(tenant_settings) -> ChatwootApiContext:
+    chatwoot_service = get_chatwoot_service(tenant_settings)
+    return ChatwootApiContext(
+        base_url=chatwoot_service.url.rstrip("/"),
+        account_id=chatwoot_service.account_id,
+        api_key=chatwoot_service.api_key,
+    )
+
+
 def get_last_tracked_message_id(chat_messages):
     if not chat_messages:
         return 0
@@ -41,17 +77,15 @@ def get_last_tracked_message_id(chat_messages):
 
 
 def get_response_text(response):
-    if isinstance(response, str):
-        return response.strip()
+    data = response.get("data") if isinstance(response, dict) else response
 
-    if isinstance(response, dict):
-        data = response.get("data")
-        if isinstance(data, str):
-            return data.strip()
-        if data is not None:
-            return json.dumps(data, ensure_ascii=False)
+    if isinstance(data, str):
+        return data.strip()
 
-    return str(response).strip()
+    if data is not None:
+        return json.dumps(data, ensure_ascii=False)
+
+    return ""
 
 
 async def send_message_to_chatwoot(tenant_settings, payload, response):
@@ -61,21 +95,14 @@ async def send_message_to_chatwoot(tenant_settings, payload, response):
         logger.info("Skipping Chatwoot send because response content is empty")
         return None
 
-    chatwoot_service = get_chatwoot_service(tenant_settings)
+    chatwoot_api = get_chatwoot_api_context(tenant_settings)
     conversation_id = get_chatwoot_conversation_id(payload)
-    base_url = chatwoot_service.url.rstrip("/")
-    messages_url = (
-        f"{base_url}/api/v1/accounts/{chatwoot_service.account_id}/"
-        f"conversations/{conversation_id}/messages"
-    )
+    messages_url = chatwoot_api.conversation_url(conversation_id, "messages")
 
     async with httpx.AsyncClient(follow_redirects=True) as client:
         response = await client.post(
             messages_url,
-            headers={
-                "api_access_token": chatwoot_service.api_key,
-                "Content-Type": "application/json"
-            },
+            headers=chatwoot_api.headers,
             json={
                 "content": content,
                 "message_type": "outgoing",
@@ -101,21 +128,14 @@ async def send_message_to_chatwoot(tenant_settings, payload, response):
 
 
 async def update_conversation_status_to_open(tenant_settings, payload):
-    chatwoot_service = get_chatwoot_service(tenant_settings)
+    chatwoot_api = get_chatwoot_api_context(tenant_settings)
     conversation_id = get_chatwoot_conversation_id(payload)
-    base_url = chatwoot_service.url.rstrip("/")
-    status_url = (
-        f"{base_url}/api/v1/accounts/{chatwoot_service.account_id}/"
-        f"conversations/{conversation_id}/toggle_status"
-    )
+    status_url = chatwoot_api.conversation_url(conversation_id, "toggle_status")
 
     async with httpx.AsyncClient(follow_redirects=True) as client:
         response = await client.post(
             status_url,
-            headers={
-                "api_access_token": chatwoot_service.api_key,
-                "Content-Type": "application/json"
-            },
+            headers=chatwoot_api.headers,
             json={"status": "open"},
             timeout=30.0
         )
@@ -139,15 +159,14 @@ async def fetch_conversation_messages_after(
     chatwoot_conversation_id: int,
     after_message_id: int = 0,
 ):
-    chatwoot_service = get_chatwoot_service(tenant_settings)
-    base_url = chatwoot_service.url.rstrip("/")
+    chatwoot_api = get_chatwoot_api_context(tenant_settings)
     messages_url = (
-        f"{base_url}/api/v1/accounts/{chatwoot_service.account_id}/"
-        f"conversations/{chatwoot_conversation_id}/messages?after={after_message_id}"
+        f"{chatwoot_api.conversation_url(chatwoot_conversation_id, 'messages')}"
+        f"?after={after_message_id}"
     )
     logger.info(
         "Fetching Chatwoot messages for account=%s conversation=%s after=%s",
-        chatwoot_service.account_id,
+        chatwoot_api.account_id,
         chatwoot_conversation_id,
         after_message_id
     )
@@ -155,7 +174,7 @@ async def fetch_conversation_messages_after(
     async with httpx.AsyncClient(follow_redirects=True) as client:
         response = await client.get(
             messages_url,
-            headers={"api_access_token": chatwoot_service.api_key},
+            headers=chatwoot_api.auth_headers,
             timeout=30.0
         )
 
@@ -180,9 +199,9 @@ async def fetch_conversation_messages_after(
 
 
 async def get_last_ten_messages(tenant_settings, payload):
-    chatwoot_service = get_chatwoot_service(tenant_settings)
+    chatwoot_api = get_chatwoot_api_context(tenant_settings)
     tenant_id = tenant_settings.tenant.id
-    chatwoot_account_id = int(chatwoot_service.account_id)
+    chatwoot_account_id = int(chatwoot_api.account_id)
     chatwoot_conversation_id = get_chatwoot_conversation_id(payload)
     tracked_messages = await svc_list_chat_messages(
         tenant_id,

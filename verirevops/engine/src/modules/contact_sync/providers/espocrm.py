@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 from fastapi import HTTPException
@@ -25,13 +25,13 @@ class EspoCrmProvider(CrmContactProvider):
         self.base_url = service_config.url.rstrip("/") + "/api/v1"
         self.api_key = service_config.api_key
 
-    async def find_contact(self, contact: NormalizedContact) -> Optional[Dict[str, Any]]:
+    async def find_contact(self, contact: NormalizedContact) -> dict[str, Any] | None:
         return await self._find_person_record("Contact", contact)
 
-    async def find_lead(self, contact: NormalizedContact) -> Optional[Dict[str, Any]]:
+    async def find_lead(self, contact: NormalizedContact) -> dict[str, Any] | None:
         return await self._find_person_record("Lead", contact)
 
-    async def get_record(self, entity_type: str, external_id: str) -> Optional[Dict[str, Any]]:
+    async def get_record(self, entity_type: str, external_id: str) -> dict[str, Any] | None:
         try:
             return await self._request(
                 "GET",
@@ -54,7 +54,7 @@ class EspoCrmProvider(CrmContactProvider):
         parent_type: str,
         parent_id: str,
         post: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return await self._request(
             "POST",
             "Note",
@@ -70,7 +70,7 @@ class EspoCrmProvider(CrmContactProvider):
         self,
         entity_type: str,
         contact: NormalizedContact,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         where = self._build_search_where(contact)
 
         if not where:
@@ -94,28 +94,28 @@ class EspoCrmProvider(CrmContactProvider):
 
         return records[0]
 
-    async def create_contact(self, contact: NormalizedContact) -> Dict[str, Any]:
+    async def create_contact(self, contact: NormalizedContact) -> dict[str, Any]:
         return await self._request(
             "POST",
             "Contact",
             json_data=self._build_person_payload(contact),
         )
 
-    async def create_lead(self, contact: NormalizedContact) -> Dict[str, Any]:
+    async def create_lead(self, contact: NormalizedContact) -> dict[str, Any]:
         return await self._request(
             "POST",
             "Lead",
             json_data=self._build_lead_payload(contact),
         )
 
-    async def update_contact(self, external_id: str, contact: NormalizedContact) -> Dict[str, Any]:
+    async def update_contact(self, external_id: str, contact: NormalizedContact) -> dict[str, Any]:
         return await self._request(
             "PUT",
             f"Contact/{external_id}",
             json_data=self._build_person_payload(contact),
         )
 
-    async def update_lead(self, external_id: str, contact: NormalizedContact) -> Dict[str, Any]:
+    async def update_lead(self, external_id: str, contact: NormalizedContact) -> dict[str, Any]:
         return await self._request(
             "PUT",
             f"Lead/{external_id}",
@@ -126,10 +126,10 @@ class EspoCrmProvider(CrmContactProvider):
         self,
         method: str,
         path: str,
-        params: Optional[Dict[str, Any]] = None,
-        json_data: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
         log_not_found_as_error: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         url = f"{self.base_url}/{path.lstrip('/')}"
 
         async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -198,7 +198,7 @@ class EspoCrmProvider(CrmContactProvider):
 
         return conditions
 
-    def _build_person_payload(self, contact: NormalizedContact) -> Dict[str, Any]:
+    def _build_person_payload(self, contact: NormalizedContact) -> dict[str, Any]:
         payload = {}
 
         if contact.first_name:
@@ -220,7 +220,7 @@ class EspoCrmProvider(CrmContactProvider):
 
         return payload
 
-    def _build_lead_payload(self, contact: NormalizedContact) -> Dict[str, Any]:
+    def _build_lead_payload(self, contact: NormalizedContact) -> dict[str, Any]:
         payload = self._build_person_payload(contact)
 
         if contact.company_name:

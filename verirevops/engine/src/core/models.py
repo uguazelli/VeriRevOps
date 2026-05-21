@@ -1,65 +1,60 @@
-import uuid
-from datetime import datetime
-from typing import Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any
+from uuid import UUID, uuid4
 
 from sqlalchemy import BigInteger, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Column, Field, Relationship, SQLModel, UniqueConstraint
 
 
+JSONDict = dict[str, Any]
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 # --- GLOBAL CONFIG ---
 class GlobalConfigBase(SQLModel):
-    settings: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+    settings: JSONDict | None = Field(default=None, sa_column=Column(JSONB))
 
 
 class GlobalConfig(GlobalConfigBase, table=True):
     __tablename__ = "global_configs"
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
 
     def __str__(self) -> str:
         return f"global_config:{self.id}"
-
-
-class GlobalConfigCreate(GlobalConfigBase):
-    pass
-
-
-class GlobalConfigUpdate(GlobalConfigBase):
-    pass
-
-
-class GlobalConfigResponse(GlobalConfigBase):
-    id: int
 
 
 # --- TENANT ---
 class TenantBase(SQLModel):
     slug: str = Field(sa_column=Column(String(255), nullable=False, unique=True))
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, sa_column=Column(DateTime(timezone=True))
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
 
 
 class Tenant(TenantBase, table=True):
     __tablename__ = "tenants"
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
 
-    subscriptions: List["Subscription"] = Relationship(
+    subscriptions: list["Subscription"] = Relationship(
         back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
-    configurations: List["Configuration"] = Relationship(
+    configurations: list["Configuration"] = Relationship(
         back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
-    services: List["Service"] = Relationship(
+    services: list["Service"] = Relationship(
         back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
-    contact_mappings: List["ContactMapping"] = Relationship(
+    contact_mappings: list["ContactMapping"] = Relationship(
         back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
-    chat_messages: List["ChatMessage"] = Relationship(
+    chat_messages: list["ChatMessage"] = Relationship(
         back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
-    documents: List["Document"] = Relationship(
+    documents: list["Document"] = Relationship(
         back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
 
@@ -79,71 +74,46 @@ class SubscriptionBase(SQLModel):
 
 class Subscription(SubscriptionBase, table=True):
     __tablename__ = "subscriptions"
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant: Optional["Tenant"] = Relationship(back_populates="subscriptions")
+    id: int | None = Field(default=None, primary_key=True)
+    tenant: Tenant | None = Relationship(back_populates="subscriptions")
 
     def __str__(self) -> str:
         return f"subscription:{self.id} tenant:{self.tenant_id} active:{self.is_active}"
 
 
-class SubscriptionResponse(SubscriptionBase):
-    id: int
-
-
 # --- CONFIGURATION ---
 class ConfigurationBase(SQLModel):
     tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
-    settings: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+    settings: JSONDict | None = Field(default=None, sa_column=Column(JSONB))
 
 
 class Configuration(ConfigurationBase, table=True):
     __tablename__ = "configurations"
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant: Optional["Tenant"] = Relationship(back_populates="configurations")
+    id: int | None = Field(default=None, primary_key=True)
+    tenant: Tenant | None = Relationship(back_populates="configurations")
 
     def __str__(self) -> str:
         return f"configuration:{self.id} tenant:{self.tenant_id}"
-
-
-class ConfigurationResponse(ConfigurationBase):
-    id: int
 
 
 # --- SERVICE ---
 class ServiceBase(SQLModel):
     tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
     name: str = Field(max_length=255)
-    url: Optional[str] = Field(default=None, max_length=255)
-    api_key: Optional[str] = Field(default=None, max_length=255)
-    account_id: Optional[str] = Field(default=None, max_length=255)
-    settings: Optional[dict] = Field(default=None, sa_column=Column(JSONB))
+    url: str | None = Field(default=None, max_length=255)
+    api_key: str | None = Field(default=None, max_length=255)
+    account_id: str | None = Field(default=None, max_length=255)
+    settings: JSONDict | None = Field(default=None, sa_column=Column(JSONB))
 
 
 class Service(ServiceBase, table=True):
     __tablename__ = "services"
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant: Optional["Tenant"] = Relationship(back_populates="services")
+    id: int | None = Field(default=None, primary_key=True)
+    tenant: Tenant | None = Relationship(back_populates="services")
 
     def __str__(self) -> str:
         account = self.account_id or "-"
         return f"service:{self.name}#{self.id} tenant:{self.tenant_id} account:{account}"
-
-
-class ServiceResponse(ServiceBase):
-    id: int
-
-
-# --- TENANT RESPONSES ---
-class TenantResponse(TenantBase):
-    id: int
-    services: Dict[str, ServiceResponse] = {}
-    subscription: Optional[SubscriptionResponse] = None
-    configuration: Optional[ConfigurationResponse] = None
-
-
-class TenantFullResponse(SQLModel):
-    tenant: TenantResponse
-    global_config: Optional[GlobalConfigResponse] = None
 
 
 # --- CONTACT MAPPING ---
@@ -156,28 +126,14 @@ class ContactMappingBase(SQLModel):
 
 class ContactMapping(ContactMappingBase, table=True):
     __tablename__ = "contact_mappings"
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant: Optional["Tenant"] = Relationship(back_populates="contact_mappings")
+    id: int | None = Field(default=None, primary_key=True)
+    tenant: Tenant | None = Relationship(back_populates="contact_mappings")
 
     def __str__(self) -> str:
         return (
             f"mapping:{self.service_name}#{self.id} "
             f"chatwoot:{self.chatwoot_contact_id} external:{self.external_id}"
         )
-
-
-class ContactMappingCreate(ContactMappingBase):
-    pass
-
-
-class ContactMappingUpdate(SQLModel):
-    tenant_id: int
-    service_name: str
-    external_id: str
-
-
-class ContactMappingResponse(ContactMappingBase):
-    id: int
 
 
 # --- CHAT MESSAGE ---
@@ -187,7 +143,7 @@ class ChatMessageBase(SQLModel):
     chatwoot_conversation_id: int
     message_id: int
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, sa_column=Column(DateTime(timezone=True))
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
 
 
@@ -201,8 +157,8 @@ class ChatMessage(ChatMessageBase, table=True):
             name="uq_chat_message_conversation",
         ),
     )
-    id: Optional[int] = Field(default=None, primary_key=True)
-    tenant: Optional["Tenant"] = Relationship(back_populates="chat_messages")
+    id: int | None = Field(default=None, primary_key=True)
+    tenant: Tenant | None = Relationship(back_populates="chat_messages")
 
     def __str__(self) -> str:
         return (
@@ -211,32 +167,22 @@ class ChatMessage(ChatMessageBase, table=True):
         )
 
 
-class ChatMessageCreate(SQLModel):
-    tenant_id: int
-    chatwoot_account_id: int
-    chatwoot_conversation_id: int
-    message_id: int
-
-
-class ChatMessageResponse(ChatMessageBase):
-    id: int
-
-
 # --- DOCUMENT ---
 class Document(SQLModel, table=True):
     __tablename__ = "documents"
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
     tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
-    parent_id: Optional[uuid.UUID] = Field(
+    parent_id: UUID | None = Field(
         default=None, foreign_key="documents.id", ondelete="CASCADE"
     )
     filename: str = Field(max_length=255)
     content: str = Field(sa_column=Column(Text, nullable=False))
+    metadata_: JSONDict | None = Field(default=None, sa_column=Column(JSONB))
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, sa_column=Column(DateTime(timezone=True))
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
 
-    tenant: Optional["Tenant"] = Relationship(back_populates="documents")
+    tenant: Tenant | None = Relationship(back_populates="documents")
 
     def __str__(self) -> str:
         return f"document:{self.filename}#{self.id}"

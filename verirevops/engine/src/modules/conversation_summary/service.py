@@ -1,10 +1,10 @@
 import logging
 
-from src.core.models import ChatMessageCreate
 from src.modules.chatwoot.client import (
     fetch_conversation_messages_after,
     get_chatwoot_service,
 )
+from src.modules.chatwoot.schemas import ChatMessageCreate
 from src.modules.chatwoot.payload import get_chatwoot_conversation_id
 from src.modules.conversation_summary.crm import get_conversation_summary_crm_handler
 from src.modules.conversation_summary.schemas import ConversationSummaryResult

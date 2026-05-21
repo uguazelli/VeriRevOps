@@ -4,33 +4,16 @@ import io
 import logging
 import os
 
-import google.generativeai as genai
-from llama_index.multi_modal_llms.gemini import GeminiMultiModal
-from openai import AsyncOpenAI
 from PIL import Image
 
 from src.core.prompts import VLM_IMAGE_DESCRIPTION_PROMPT
-from src.modules.ai.factory import normalize_gemini_model_name
+from src.modules.ai.factory import (
+    get_gemini_model,
+    get_openai_async_client,
+)
 
 
 logger = logging.getLogger(__name__)
-
-_vlm = None
-
-
-def get_vlm():
-    """
-    Return a cached Gemini multi-modal model.
-    """
-    global _vlm
-
-    if _vlm is None:
-        _vlm = GeminiMultiModal(
-            model_name=normalize_gemini_model_name(),
-            api_key=os.getenv("GOOGLE_API_KEY"),
-        )
-
-    return _vlm
 
 
 def describe_image(image_bytes: bytes, filename: str) -> str:
@@ -40,10 +23,7 @@ def describe_image(image_bytes: bytes, filename: str) -> str:
     try:
         logger.info("Generating caption for image: %s", filename)
 
-        api_key = os.getenv("GOOGLE_API_KEY")
-        genai.configure(api_key=api_key)
-
-        model = genai.GenerativeModel(normalize_gemini_model_name())
+        model = get_gemini_model()
         image = Image.open(io.BytesIO(image_bytes))
 
         response = model.generate_content([VLM_IMAGE_DESCRIPTION_PROMPT, image])
@@ -60,12 +40,7 @@ async def analyze_image_openai(file_bytes: bytes, mime_type: str, prompt: str) -
     """
     Analyze an image using OpenAI.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not set")
-
-    client = AsyncOpenAI(api_key=api_key)
+    client = get_openai_async_client()
     base64_image = base64.b64encode(file_bytes).decode("utf-8")
     image_url = f"data:{mime_type};base64,{base64_image}"
 
@@ -96,13 +71,7 @@ async def analyze_image_gemini(file_bytes: bytes, mime_type: str, prompt: str) -
     """
     Analyze an image using Gemini.
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
-
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY not set")
-
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(normalize_gemini_model_name())
+    model = get_gemini_model()
 
     try:
         response = await asyncio.to_thread(

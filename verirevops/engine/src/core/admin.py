@@ -1,10 +1,21 @@
-from fastapi.responses import RedirectResponse
-from sqladmin import Admin, ModelView, BaseView, expose
-from src.core.models import Tenant, Subscription, Configuration, Service, ContactMapping, ChatMessage, Document, GlobalConfig
-from src.core.db import get_engine
 import logging
 
+from fastapi.responses import RedirectResponse
+from src.core.db import get_engine
+from src.core.models import (
+    ChatMessage,
+    Configuration,
+    ContactMapping,
+    Document,
+    GlobalConfig,
+    Service,
+    Subscription,
+    Tenant,
+)
+from sqladmin import Admin, BaseView, ModelView, expose
+
 logger = logging.getLogger(__name__)
+
 
 class DashboardView(BaseView):
     name = "RAG Dashboard"
@@ -15,21 +26,32 @@ class DashboardView(BaseView):
     async def index(self, request):
         return RedirectResponse(url="/")
 
+
 class TenantAdmin(ModelView, model=Tenant):
     column_list = [Tenant.id, Tenant.slug, Tenant.created_at]
     column_searchable_list = [Tenant.slug]
     name_plural = "Tenants"
     icon = "fa-solid fa-users"
 
+
 class SubscriptionAdmin(ModelView, model=Subscription):
-    column_list = [Subscription.id, Subscription.tenant_id, Subscription.is_active, Subscription.quota_limit, Subscription.usage_count, Subscription.end_date]
+    column_list = [
+        Subscription.id,
+        Subscription.tenant_id,
+        Subscription.is_active,
+        Subscription.quota_limit,
+        Subscription.usage_count,
+        Subscription.end_date,
+    ]
     name_plural = "Subscriptions"
     icon = "fa-solid fa-credit-card"
+
 
 class ConfigurationAdmin(ModelView, model=Configuration):
     column_list = [Configuration.id, Configuration.tenant_id]
     name_plural = "Configurations"
     icon = "fa-solid fa-gear"
+
 
 class ServiceAdmin(ModelView, model=Service):
     column_list = [Service.id, Service.tenant_id, Service.name, Service.url]
@@ -37,15 +59,28 @@ class ServiceAdmin(ModelView, model=Service):
     name_plural = "Services"
     icon = "fa-solid fa-server"
 
+
 class ContactMappingAdmin(ModelView, model=ContactMapping):
-    column_list = [ContactMapping.id, ContactMapping.tenant_id, ContactMapping.chatwoot_contact_id, ContactMapping.service_name]
+    column_list = [
+        ContactMapping.id,
+        ContactMapping.tenant_id,
+        ContactMapping.chatwoot_contact_id,
+        ContactMapping.service_name,
+    ]
     name_plural = "Contact Mappings"
     icon = "fa-solid fa-address-book"
 
+
 class ChatMessageAdmin(ModelView, model=ChatMessage):
-    column_list = [ChatMessage.id, ChatMessage.tenant_id, ChatMessage.chatwoot_conversation_id, ChatMessage.message_id]
+    column_list = [
+        ChatMessage.id,
+        ChatMessage.tenant_id,
+        ChatMessage.chatwoot_conversation_id,
+        ChatMessage.message_id,
+    ]
     name_plural = "Chat Messages"
     icon = "fa-solid fa-comments"
+
 
 class DocumentAdmin(ModelView, model=Document):
     column_list = [Document.id, Document.tenant_id, Document.filename, Document.created_at]
@@ -53,10 +88,12 @@ class DocumentAdmin(ModelView, model=Document):
     name_plural = "Documents"
     icon = "fa-solid fa-file-lines"
 
+
 class GlobalConfigAdmin(ModelView, model=GlobalConfig):
     column_list = [GlobalConfig.id]
     name_plural = "Global Configs"
     icon = "fa-solid fa-globe"
+
 
 def setup_admin(app):
     admin = Admin(

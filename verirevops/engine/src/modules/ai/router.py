@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, Form, UploadFile
 
-from src.core.schemas import (
+from src.modules.ai.schemas import (
     AnalyzeImageUrlRequest,
     LlmRequest,
     LlmResponse,

@@ -1,5 +1,3 @@
-from typing import Optional
-
 from pydantic import BaseModel
 
 
@@ -14,7 +12,7 @@ class ConversationSummaryResult(BaseModel):
     chatwoot_account_id: int
     chatwoot_conversation_id: int
     after_message_id: int
-    latest_message_id: Optional[int] = None
-    crm_entity_type: Optional[str] = None
-    crm_external_id: Optional[str] = None
+    latest_message_id: int | None = None
+    crm_entity_type: str | None = None
+    crm_external_id: str | None = None
     action: str

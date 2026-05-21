@@ -6,8 +6,15 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 
+def get_chatwoot_body(payload):
+    if isinstance(payload, dict):
+        return payload.get("body", payload)
+
+    return {}
+
+
 def process_chatwoot_payload(item):
-    body = item.get("body", item)
+    body = get_chatwoot_body(item)
 
     status = body.get("conversation", {}).get("status")
     message_type = body.get("message_type")
@@ -33,7 +40,7 @@ def process_chatwoot_payload(item):
         reason = f"event {event}"
 
     result = {
-        "shouldBotRespond": should_respond,
+        "should_respond": should_respond,
         "reason": reason
     }
 
@@ -56,7 +63,7 @@ def get_message_contents(messages):
 
 
 def get_text_message_content(payload):
-    body = payload.get("body", payload)
+    body = get_chatwoot_body(payload)
     content = body.get("content")
 
     if isinstance(content, str) and content.strip():
@@ -66,7 +73,7 @@ def get_text_message_content(payload):
 
 
 def get_chatwoot_conversation_id(payload):
-    body = payload.get("body", payload)
+    body = get_chatwoot_body(payload)
     conversation = body.get("conversation") or {}
     conversation_id = conversation.get("id") or body.get("conversation_id")
 
@@ -130,7 +137,7 @@ def normalize_chatwoot_history(messages):
 
 
 def get_message_kind(item):
-    body = item.get("body", item)
+    body = get_chatwoot_body(item)
 
     attachments = body.get("attachments") or []
 
@@ -144,7 +151,7 @@ def get_message_kind(item):
 
 
 def get_first_attachment_url(item):
-    body = item.get("body", item)
+    body = get_chatwoot_body(item)
     attachments = body.get("attachments") or []
 
     if not attachments:

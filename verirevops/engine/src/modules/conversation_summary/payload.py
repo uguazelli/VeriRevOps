@@ -1,12 +1,12 @@
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 logger = logging.getLogger(__name__)
 
 
-def should_summarize_chatwoot_payload(payload: Dict[str, Any]) -> bool:
+def should_summarize_chatwoot_payload(payload: dict[str, Any]) -> bool:
     body = payload.get("body", payload)
     status = get_chatwoot_status(payload)
 
@@ -19,7 +19,7 @@ def should_summarize_chatwoot_payload(payload: Dict[str, Any]) -> bool:
     return True
 
 
-def get_chatwoot_status(payload: Dict[str, Any]) -> Optional[str]:
+def get_chatwoot_status(payload: dict[str, Any]) -> str | None:
     body = payload.get("body", payload)
     conversation = body.get("conversation") or {}
 
@@ -36,7 +36,7 @@ def get_chatwoot_status(payload: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def get_latest_message_id(messages: List[Dict[str, Any]]) -> Optional[int]:
+def get_latest_message_id(messages: list[dict[str, Any]]) -> int | None:
     message_ids = []
 
     for message in messages:
@@ -55,7 +55,7 @@ def get_latest_message_id(messages: List[Dict[str, Any]]) -> Optional[int]:
     return max(message_ids)
 
 
-def format_messages_for_summary(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def format_messages_for_summary(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     formatted_messages = []
 
     for message in messages:
@@ -77,7 +77,7 @@ def format_messages_for_summary(messages: List[Dict[str, Any]]) -> List[Dict[str
     return formatted_messages
 
 
-def convert_chatwoot_timestamp_to_iso(value) -> Optional[str]:
+def convert_chatwoot_timestamp_to_iso(value) -> str | None:
     if value is None:
         return None
 
@@ -98,7 +98,7 @@ def convert_chatwoot_timestamp_to_iso(value) -> Optional[str]:
     return None
 
 
-def normalize_iso_timestamp(value: str) -> Optional[str]:
+def normalize_iso_timestamp(value: str) -> str | None:
     try:
         normalized_value = value.replace("Z", "+00:00")
         parsed_datetime = datetime.fromisoformat(normalized_value)
@@ -111,7 +111,7 @@ def normalize_iso_timestamp(value: str) -> Optional[str]:
     return parsed_datetime.astimezone(timezone.utc).isoformat()
 
 
-def get_message_role(message: Dict[str, Any]) -> str:
+def get_message_role(message: dict[str, Any]) -> str:
     message_type = message.get("message_type")
 
     if message_type == 1 or message_type == "outgoing":

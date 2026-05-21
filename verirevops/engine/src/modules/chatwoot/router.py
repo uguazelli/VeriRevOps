@@ -1,12 +1,10 @@
-from typing import List
-
 from fastapi import APIRouter, BackgroundTasks
 
-from src.core.models import ChatMessageCreate, ChatMessageResponse
 from src.modules.chatwoot.message_tracking import (
     svc_list_chat_messages,
     svc_upsert_chat_message,
 )
+from src.modules.chatwoot.schemas import ChatMessageCreate, ChatMessageResponse
 from src.modules.chatwoot.service import process_chatwoot_webhook
 
 router = APIRouter()
@@ -33,7 +31,7 @@ async def upsert_chat_message(message_data: ChatMessageCreate):
     return await svc_upsert_chat_message(message_data)
 
 
-@router.get("/chat_messages", response_model=List[ChatMessageResponse])
+@router.get("/chat_messages", response_model=list[ChatMessageResponse])
 async def list_chat_messages(
     tenant_id: int = None,
     chatwoot_account_id: int = None,

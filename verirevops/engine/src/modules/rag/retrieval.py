@@ -1,10 +1,11 @@
 import asyncio
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from sqlalchemy import text
 
 from src.core.db import get_session
+from src.core.queries import HYBRID_DOCUMENT_SEARCH_QUERY
 from src.modules.rag.embeddings import get_embed_model
 from src.modules.rag.reranking import rerank_documents
 
@@ -18,7 +19,7 @@ async def search_documents(
     limit: int = 5,
     use_rerank: bool = True,
     provider: str = "gemini",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Performs hybrid search: vector similarity plus keyword search.
     """
@@ -54,49 +55,7 @@ async def search_documents(
 
             filter_clause = " AND " + " AND ".join(filter_parts)
 
-        raw_query = f"""
-                WITH vector_search AS (
-                    SELECT id, parent_id, filename, content,
-                           (embedding <=> CAST(:emb AS vector)) as distance,
-                           ROW_NUMBER() OVER(ORDER BY (embedding <=> CAST(:emb AS vector)) ASC) as rank
-                    FROM documents
-                    WHERE tenant_id = :tid AND embedding IS NOT NULL {filter_clause}
-                    ORDER BY distance ASC
-                    LIMIT :lim
-                ),
-                keyword_search AS (
-                    SELECT id, parent_id, filename, content,
-                           ts_rank(fts, websearch_to_tsquery('english', :msg)) as rank_score,
-                           ROW_NUMBER() OVER(ORDER BY ts_rank(fts, websearch_to_tsquery('english', :msg)) DESC) as rank
-                    FROM documents
-                    WHERE tenant_id = :tid AND embedding IS NOT NULL {filter_clause}
-                      AND fts @@ websearch_to_tsquery('english', :msg)
-                    ORDER BY rank_score DESC
-                    LIMIT :lim
-                ),
-                combined_chunks AS (
-                    SELECT
-                        COALESCE(v.parent_id, k.parent_id, v.id, k.id) as target_doc_id,
-                        COALESCE(1.0 / (60 + v.rank), 0.0) +
-                        COALESCE(1.0 / (60 + k.rank), 0.0) as rrf_score
-                    FROM vector_search v
-                    FULL OUTER JOIN keyword_search k ON v.id = k.id
-                ),
-                ranked_parents AS (
-                    SELECT target_doc_id, MAX(rrf_score) as best_score
-                    FROM combined_chunks
-                    GROUP BY target_doc_id
-                    ORDER BY best_score DESC
-                    LIMIT :lim
-                )
-                SELECT
-                    p.id,
-                    p.filename,
-                    p.content,
-                    rp.best_score as rrf_score
-                FROM ranked_parents rp
-                JOIN documents p ON rp.target_doc_id = p.id;
-        """
+        raw_query = HYBRID_DOCUMENT_SEARCH_QUERY.format(filter_clause=filter_clause)
 
         cursor = await session.execute(
             text(raw_query),

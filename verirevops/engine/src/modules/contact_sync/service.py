@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 async def sync_chatwoot_contact_payload_to_crm(
     slug: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     service_name: str = "espocrm",
 ) -> ContactSyncResult:
     # 1 - Get tenant settings
@@ -78,7 +78,7 @@ async def sync_chatwoot_contact_payload_to_crm(
     return result
 
 
-def normalize_chatwoot_contact(chatwoot_contact: Dict[str, Any]) -> NormalizedContact:
+def normalize_chatwoot_contact(chatwoot_contact: dict[str, Any]) -> NormalizedContact:
     contact_id = chatwoot_contact.get("id")
 
     if not contact_id:
@@ -118,7 +118,7 @@ def validate_contact_has_email_or_phone(normalized_contact: NormalizedContact):
 
 async def sync_chatwoot_contact_to_crm(
     tenant_settings,
-    chatwoot_contact: Dict[str, Any],
+    chatwoot_contact: dict[str, Any],
     service_name: str = "espocrm",
 ) -> ContactSyncResult:
     normalized_contact = normalize_chatwoot_contact(chatwoot_contact)
@@ -167,7 +167,7 @@ async def sync_chatwoot_contact_to_crm(
     return result
 
 
-def get_chatwoot_contact_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+def get_chatwoot_contact_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     body = payload.get("body", payload)
     conversation = body.get("conversation") or {}
     body_meta = body.get("meta") or {}

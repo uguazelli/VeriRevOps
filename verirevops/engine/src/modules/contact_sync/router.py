@@ -1,19 +1,17 @@
-from typing import List
-
 from fastapi import APIRouter
 
-from src.core.models import (
-    ContactMappingCreate,
-    ContactMappingResponse,
-    ContactMappingUpdate,
-)
 from src.modules.contact_sync.mappings import (
     svc_create_contact_mapping,
     svc_delete_contact_mapping,
     svc_list_contact_mappings,
     svc_update_contact_mapping,
 )
-from src.modules.contact_sync.schemas import ContactSyncResult
+from src.modules.contact_sync.schemas import (
+    ContactMappingResponse,
+    ContactMappingUpdate,
+    ContactSyncResult,
+)
+from src.core.models import ContactMappingBase
 from src.modules.contact_sync.service import sync_chatwoot_contact_payload_to_crm
 
 
@@ -36,7 +34,7 @@ async def sync_chatwoot_contact(
     )
 
 
-@router.get("/contact_mappings", response_model=List[ContactMappingResponse])
+@router.get("/contact_mappings", response_model=list[ContactMappingResponse])
 async def list_contact_mappings(
     tenant_id: int = None,
     chatwoot_contact_id: int = None,
@@ -53,7 +51,7 @@ async def list_contact_mappings(
 
 
 @router.post("/contact_mappings", response_model=ContactMappingResponse)
-async def create_contact_mapping(mapping_data: ContactMappingCreate):
+async def create_contact_mapping(mapping_data: ContactMappingBase):
     """
     Create a new contact mapping.
     """

@@ -1,9 +1,9 @@
-import json
 import logging
 
+from src.core.json_utils import parse_json_object
 from src.core.logging import log_error, log_start
 from src.core.prompts import CHATWOOT_RAG_RESPONSE_PROMPT, RAG_SYSTEM_PROMPT
-from src.modules.ai.factory import get_llm
+from src.modules.ai.factory import get_text_llm
 from src.modules.rag.retrieval import search_documents
 
 
@@ -40,7 +40,7 @@ async def generate_answer(
     prompt = RAG_SYSTEM_PROMPT.format(context_str=context_str, message=message)
 
     try:
-        llm = get_llm(provider)
+        llm = get_text_llm(provider)
         response = await llm.acomplete(prompt)
         return response.text
     except Exception as exc:
@@ -89,7 +89,7 @@ async def generate_chatwoot_answer_decision(
     )
 
     try:
-        llm = get_llm(provider)
+        llm = get_text_llm(provider)
         response = await llm.acomplete(prompt)
         decision = parse_chatwoot_answer_decision(response.text)
     except Exception as exc:
@@ -115,22 +115,14 @@ def has_clear_rag_context(results) -> bool:
 
 
 def parse_chatwoot_answer_decision(raw_response: str) -> dict:
-    response_text = raw_response.strip()
-
-    try:
-        return json.loads(response_text)
-    except json.JSONDecodeError:
-        start = response_text.find("{")
-        end = response_text.rfind("}")
-
-    if start != -1 and end != -1 and start < end:
-        try:
-            return json.loads(response_text[start:end + 1])
-        except json.JSONDecodeError:
-            pass
-
-    logger.error("Failed to parse guarded Chatwoot answer JSON: %s", raw_response)
-    return build_chatwoot_handoff_decision("The assistant could not parse a safe answer decision.")
+    return parse_json_object(
+        raw_response,
+        fallback=lambda: build_chatwoot_handoff_decision(
+            "The assistant could not parse a safe answer decision."
+        ),
+        logger=logger,
+        error_message="Failed to parse guarded Chatwoot answer JSON",
+    )
 
 
 def should_handoff_chatwoot_answer(decision: dict) -> bool:

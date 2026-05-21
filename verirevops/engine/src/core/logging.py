@@ -3,7 +3,6 @@ import logging.config
 import sys
 import json
 import os
-from datetime import datetime
 
 # Emojis for Visual Grepping
 EMOJI_PAYLOAD = "📦"

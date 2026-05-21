@@ -1,7 +1,8 @@
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+from src.core.json_utils import parse_json_object
 from src.core.prompts import CHATWOOT_CONVERSATION_SUMMARY_PROMPT
 from src.modules.ai.text import get_chat_response
 from src.modules.conversation_summary.payload import format_messages_for_summary
@@ -10,7 +11,7 @@ from src.modules.conversation_summary.payload import format_messages_for_summary
 logger = logging.getLogger(__name__)
 
 
-def build_conversation_summary_prompt(messages: List[Dict[str, Any]]) -> Optional[str]:
+def build_conversation_summary_prompt(messages: list[dict[str, Any]]) -> str | None:
     formatted_messages = format_messages_for_summary(messages)
 
     if not formatted_messages:
@@ -21,26 +22,14 @@ def build_conversation_summary_prompt(messages: List[Dict[str, Any]]) -> Optiona
     )
 
 
-def parse_conversation_summary_response(raw_response: str) -> Optional[str]:
-    response_text = raw_response.strip()
-
-    try:
-        parsed_response = json.loads(response_text)
-    except json.JSONDecodeError:
-        start = response_text.find("{")
-        end = response_text.rfind("}")
-
-        if start == -1 or end == -1 or start >= end:
-            logger.error("Failed to parse conversation summary JSON")
-            return None
-
-        try:
-            parsed_response = json.loads(response_text[start:end + 1])
-        except json.JSONDecodeError:
-            logger.error("Failed to parse conversation summary JSON")
-            return None
-
-    data = parsed_response.get("data") if isinstance(parsed_response, dict) else None
+def parse_conversation_summary_response(raw_response: str) -> str | None:
+    parsed_response = parse_json_object(
+        raw_response,
+        fallback=dict,
+        logger=logger,
+        error_message="Failed to parse conversation summary JSON",
+    )
+    data = parsed_response.get("data")
 
     if isinstance(data, str) and data.strip():
         return data.strip()
@@ -52,9 +41,9 @@ def parse_conversation_summary_response(raw_response: str) -> Optional[str]:
 
 
 async def summarize_chatwoot_messages(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     provider: str = "gemini",
-) -> Optional[str]:
+) -> str | None:
     prompt = build_conversation_summary_prompt(messages)
 
     if not prompt:

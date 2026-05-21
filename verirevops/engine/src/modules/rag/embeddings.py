@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, List, Optional
+from typing import Any
 
 import google.generativeai as genai
 from llama_index.core.bridge.pydantic import PrivateAttr
@@ -22,7 +22,7 @@ class CustomGeminiEmbedding(BaseEmbedding):
     def __init__(
         self,
         model_name: str = "models/gemini-embedding-001",
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -31,22 +31,22 @@ class CustomGeminiEmbedding(BaseEmbedding):
         if api_key:
             genai.configure(api_key=api_key)
 
-    def _get_query_embedding(self, query: str) -> List[float]:
+    def _get_query_embedding(self, query: str) -> list[float]:
         return self._get_embedding(query)
 
-    def _get_text_embedding(self, text: str) -> List[float]:
+    def _get_text_embedding(self, text: str) -> list[float]:
         return self._get_embedding(text)
 
-    def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def _get_text_embeddings(self, texts: list[str]) -> list[list[float]]:
         return [self._get_embedding(text) for text in texts]
 
-    async def _aget_query_embedding(self, query: str) -> List[float]:
+    async def _aget_query_embedding(self, query: str) -> list[float]:
         return self._get_query_embedding(query)
 
-    async def _aget_text_embedding(self, text: str) -> List[float]:
+    async def _aget_text_embedding(self, text: str) -> list[float]:
         return self._get_text_embedding(text)
 
-    def _get_embedding(self, text: str) -> List[float]:
+    def _get_embedding(self, text: str) -> list[float]:
         result = genai.embed_content(
             model=self._model_name,
             content=text,
@@ -71,4 +71,3 @@ def get_embed_model():
         )
 
     return _embed_model
-
