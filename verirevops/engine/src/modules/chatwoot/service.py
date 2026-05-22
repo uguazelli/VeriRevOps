@@ -1,25 +1,24 @@
 import asyncio
 import logging
 import os
+from dataclasses import dataclass, field
+from typing import Any
 
 from src.modules.chatwoot.classifier import (
     classify_chatwoot_message,
-    get_classification_data,
     get_classification_category,
+    get_classification_data,
 )
 from src.modules.chatwoot.client import (
     get_last_ten_messages,
     send_message_to_chatwoot,
     update_conversation_status_to_open,
 )
+from src.modules.chatwoot.media import analyze_chatwoot_image, transcribe_chatwoot_audio
 from src.modules.chatwoot.payload import (
     get_message_kind,
     get_text_message_content,
     process_chatwoot_payload,
-)
-from src.modules.chatwoot.media import (
-    analyze_chatwoot_image,
-    transcribe_chatwoot_audio,
 )
 from src.modules.chatwoot.responses import (
     respond_to_chitchat,
@@ -35,140 +34,176 @@ from src.modules.tenants import (
     svc_increment_subscription_usage,
 )
 
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_BOT_PROCESSING_TIMEOUT_SECONDS = 75
 
 
+@dataclass
+class ChatwootFlowContext:
+    slug: str
+    payload: dict
+    tenant_settings: Any = None
+    should_respond: bool = False
+    should_count_usage: bool = False
+    current_message: str = ""
+    message_history: Any = field(default_factory=list)
+    classification: dict = field(default_factory=dict)
+    category: str | None = None
+    response: Any = None
+    response_sent: bool = False
+    handoff_required: bool = False
+    handoff_reason: str | None = None
+
+
 async def process_chatwoot_webhook(slug: str, payload: dict):
-    tenant_settings = None
-    should_count_usage = False
+    ctx = ChatwootFlowContext(slug=slug, payload=payload)
 
     try:
-        # 1 - Process and validate Chatwoot payload to decide if it requires a response
-        should_respond = process_chatwoot_payload(payload)
-        if not should_respond["should_respond"]:
+        check_payload_should_respond(ctx)
+        if not ctx.should_respond:
             return
 
-        # 2 - Get tenant settings
-        tenant_settings = await svc_get_tenant_by_slug(slug)
-
-        # 3 - Check subscription quota before running bot work
-        has_quota = await svc_has_available_subscription_usage(tenant_settings.tenant.id)
-        if not has_quota:
+        await load_tenant_settings(ctx)
+        await check_subscription_quota(ctx)
+        if not ctx.should_count_usage:
             return
 
-        should_count_usage = True
         await asyncio.wait_for(
-            process_chatwoot_bot_message(slug, tenant_settings, payload),
+            run_chatwoot_message_flow(ctx),
             timeout=get_bot_processing_timeout_seconds(),
         )
 
     except asyncio.TimeoutError:
         logger.warning(
             "Chatwoot bot processing timed out for tenant slug '%s' after %s seconds",
-            slug,
+            ctx.slug,
             get_bot_processing_timeout_seconds(),
         )
-        await open_chatwoot_conversation_after_failure(
-            tenant_settings,
-            payload,
-            slug,
-            "timeout",
-        )
+        await open_chatwoot_conversation_after_failure(ctx, "timeout")
     except Exception:
-        await open_chatwoot_conversation_after_failure(
-            tenant_settings,
-            payload,
-            slug,
-            "failure",
-        )
-        log_chatwoot_webhook_failure(slug)
+        await open_chatwoot_conversation_after_failure(ctx, "failure")
+        log_chatwoot_webhook_failure(ctx)
     finally:
-        if should_count_usage and tenant_settings:
-            await increment_subscription_usage_after_processing(tenant_settings, slug)
+        await increment_subscription_usage_if_needed(ctx)
 
 
-async def process_chatwoot_bot_message(slug: str, tenant_settings, payload: dict):
-    current_message = await get_current_chatwoot_message(payload)
-    message_history = await get_last_ten_messages(tenant_settings, payload)
-    classification = await classify_chatwoot_message(message_history, current_message)
-    response, category = await build_chatwoot_response_for_classification(
-        tenant_settings,
-        message_history,
-        current_message,
-        classification,
+async def run_chatwoot_message_flow(ctx: ChatwootFlowContext):
+    await resolve_current_message(ctx)
+    await fetch_message_history(ctx)
+    await classify_current_message(ctx)
+    await build_bot_response(ctx)
+    await send_bot_response(ctx)
+    await run_handoff_flow_if_needed(ctx)
+
+
+def check_payload_should_respond(ctx: ChatwootFlowContext):
+    decision = process_chatwoot_payload(ctx.payload)
+    ctx.should_respond = decision["should_respond"]
+
+
+async def load_tenant_settings(ctx: ChatwootFlowContext):
+    ctx.tenant_settings = await svc_get_tenant_by_slug(ctx.slug)
+
+
+async def check_subscription_quota(ctx: ChatwootFlowContext):
+    ctx.should_count_usage = await svc_has_available_subscription_usage(
+        ctx.tenant_settings.tenant.id
     )
 
-    if response:
-        await send_message_to_chatwoot(tenant_settings, payload, response)
 
-    if category == "HANDOFF":
-        await handle_chatwoot_handoff(slug, tenant_settings, payload, message_history)
-
-
-async def get_current_chatwoot_message(payload: dict) -> str:
-    message_kind = get_message_kind(payload)
+async def resolve_current_message(ctx: ChatwootFlowContext):
+    message_kind = get_message_kind(ctx.payload)
 
     if message_kind == "audio":
-        return await transcribe_chatwoot_audio(payload)
+        ctx.current_message = await transcribe_chatwoot_audio(ctx.payload)
+        return
 
     if message_kind == "image":
-        return await analyze_chatwoot_image(payload)
+        ctx.current_message = await analyze_chatwoot_image(ctx.payload)
+        return
 
-    return get_text_message_content(payload)
+    ctx.current_message = get_text_message_content(ctx.payload)
 
 
-async def build_chatwoot_response_for_classification(
-    tenant_settings,
-    message_history,
-    current_message: str,
-    classification: dict,
-):
-    category = get_classification_category(classification)
-    handoff_reason = get_classification_data(classification).get("reason")
+async def fetch_message_history(ctx: ChatwootFlowContext):
+    ctx.message_history = await get_last_ten_messages(ctx.tenant_settings, ctx.payload)
 
-    if category == "CHITCHAT":
-        return await respond_to_chitchat(current_message), category
 
-    if category == "RETRIEVAL":
-        return await build_chatwoot_rag_response(
-            tenant_settings,
-            message_history,
-            current_message,
+async def classify_current_message(ctx: ChatwootFlowContext):
+    ctx.classification = await classify_chatwoot_message(
+        ctx.message_history,
+        ctx.current_message,
+    )
+    ctx.category = get_classification_category(ctx.classification)
+    ctx.handoff_reason = get_classification_data(ctx.classification).get("reason")
+
+
+async def build_bot_response(ctx: ChatwootFlowContext):
+    if ctx.category == "CHITCHAT":
+        ctx.response = await respond_to_chitchat(ctx.current_message)
+        return
+
+    if ctx.category == "RETRIEVAL":
+        await build_rag_response(ctx)
+        return
+
+    if ctx.category == "OUT_OF_SCOPE":
+        ctx.handoff_reason = (
+            ctx.handoff_reason
+            or "Request is outside basic approved business answers."
         )
 
-    if category == "OUT_OF_SCOPE":
-        handoff_reason = handoff_reason or "Request is outside basic approved business answers."
-
-    return await respond_to_handoff(
-        message_history,
-        current_message,
-        handoff_reason=handoff_reason,
-    ), "HANDOFF"
+    await build_handoff_response(ctx)
 
 
-async def build_chatwoot_rag_response(
-    tenant_settings,
-    message_history,
-    current_message: str,
-):
-    response = await respond_with_rag(tenant_settings, current_message)
+async def build_rag_response(ctx: ChatwootFlowContext):
+    response = await respond_with_rag(ctx.tenant_settings, ctx.current_message)
 
     if isinstance(response, dict) and response.get("handoff_required") is True:
-        return await respond_to_handoff(
-            message_history,
-            current_message,
-            handoff_reason=response.get("reason"),
-        ), "HANDOFF"
+        ctx.category = "HANDOFF"
+        ctx.handoff_required = True
+        ctx.handoff_reason = response.get("reason")
+        await build_handoff_response(ctx)
+        return
 
-    return response, "RETRIEVAL"
+    ctx.response = response
 
 
-async def handle_chatwoot_handoff(slug: str, tenant_settings, payload: dict, message_history):
-    await update_conversation_status_to_open(tenant_settings, payload)
-    await sync_crm_contact_after_handoff(slug, payload)
-    await add_crm_handoff_summary(tenant_settings, payload, message_history)
+async def build_handoff_response(ctx: ChatwootFlowContext):
+    ctx.category = "HANDOFF"
+    ctx.handoff_required = True
+    ctx.response = await respond_to_handoff(
+        ctx.message_history,
+        ctx.current_message,
+        handoff_reason=ctx.handoff_reason,
+    )
+
+
+async def send_bot_response(ctx: ChatwootFlowContext):
+    if not ctx.response:
+        return
+
+    sent_message = await send_message_to_chatwoot(
+        ctx.tenant_settings,
+        ctx.payload,
+        ctx.response,
+    )
+    ctx.response_sent = sent_message is not None
+
+
+async def run_handoff_flow_if_needed(ctx: ChatwootFlowContext):
+    if not ctx.handoff_required:
+        return
+
+    await open_chatwoot_conversation(ctx)
+    await sync_crm_contact_after_handoff(ctx)
+    await add_crm_handoff_summary(ctx)
+
+
+async def open_chatwoot_conversation(ctx: ChatwootFlowContext):
+    await update_conversation_status_to_open(ctx.tenant_settings, ctx.payload)
 
 
 def get_bot_processing_timeout_seconds() -> int:
@@ -191,61 +226,62 @@ def get_bot_processing_timeout_seconds() -> int:
 
 
 async def open_chatwoot_conversation_after_failure(
-    tenant_settings,
-    payload: dict,
-    slug: str,
+    ctx: ChatwootFlowContext,
     reason: str,
 ):
-    if not tenant_settings:
+    if not ctx.tenant_settings:
         return
 
     try:
-        await update_conversation_status_to_open(tenant_settings, payload)
+        await open_chatwoot_conversation(ctx)
         logger.info(
             "Opened Chatwoot conversation for tenant slug '%s' after bot %s",
-            slug,
+            ctx.slug,
             reason,
         )
     except Exception:
         logger.exception(
             "Failed to open Chatwoot conversation for tenant slug '%s' after bot %s",
-            slug,
+            ctx.slug,
             reason,
         )
 
 
-async def increment_subscription_usage_after_processing(tenant_settings, slug: str):
+async def increment_subscription_usage_if_needed(ctx: ChatwootFlowContext):
+    if not ctx.should_count_usage or not ctx.tenant_settings:
+        return
+
     try:
-        await svc_increment_subscription_usage(tenant_settings.tenant.id)
+        await svc_increment_subscription_usage(ctx.tenant_settings.tenant.id)
     except Exception:
         logger.exception(
             "Failed to increment subscription usage for tenant slug '%s'",
-            slug,
+            ctx.slug,
         )
 
 
-async def sync_crm_contact_after_handoff(slug: str, payload: dict):
+async def sync_crm_contact_after_handoff(ctx: ChatwootFlowContext):
     try:
-        await sync_chatwoot_contact_payload_to_crm(slug, payload)
+        await sync_chatwoot_contact_payload_to_crm(ctx.slug, ctx.payload)
     except Exception:
         logger.exception(
             "Failed to create or update CRM contact during Chatwoot handoff for tenant slug '%s'",
-            slug,
+            ctx.slug,
         )
 
 
-async def add_crm_handoff_summary(tenant_settings, payload: dict, message_history):
+async def add_crm_handoff_summary(ctx: ChatwootFlowContext):
     try:
-        summary = await summarize_chatwoot_messages(message_history)
+        summary = await summarize_chatwoot_messages(ctx.message_history)
         if not summary:
             return
 
-        crm_handler = get_conversation_summary_crm_handler(tenant_settings)
-        crm_target = await crm_handler.resolve_summary_target(payload)
+        crm_handler = get_conversation_summary_crm_handler(ctx.tenant_settings)
+        crm_target = await crm_handler.resolve_summary_target(ctx.payload)
         await crm_handler.send_summary(crm_target, summary)
     except Exception:
         logger.exception("Failed to add Chatwoot handoff summary to CRM")
 
 
-def log_chatwoot_webhook_failure(slug: str):
-    logger.exception("Failed to process Chatwoot webhook for tenant slug '%s'", slug)
+def log_chatwoot_webhook_failure(ctx: ChatwootFlowContext):
+    logger.exception("Failed to process Chatwoot webhook for tenant slug '%s'", ctx.slug)
