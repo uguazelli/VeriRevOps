@@ -5,7 +5,7 @@ from llama_index.core import QueryBundle
 from llama_index.core.postprocessor import LLMRerank
 from llama_index.core.schema import NodeWithScore, TextNode
 
-from src.modules.ai.factory import get_text_llm
+from src.modules.ai.factory import build_fresh_text_llm
 
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def rerank_documents(
     logger.info("Reranking %s documents using API-based LLM (%s)", len(documents), provider)
 
     try:
-        llm = get_text_llm(provider)
+        llm = build_fresh_text_llm(provider)
         reranker = LLMRerank(
             llm=llm,
             top_n=top_k,

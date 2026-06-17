@@ -57,9 +57,57 @@ class Tenant(TenantBase, table=True):
     documents: list["Document"] = Relationship(
         back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+    users: list["User"] = Relationship(
+        back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    invitations: list["Invitation"] = Relationship(
+        back_populates="tenant", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
     def __str__(self) -> str:
         return f"{self.slug}#{self.id}"
+
+
+# --- USER ---
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+    id: int | None = Field(default=None, primary_key=True)
+    email: str = Field(sa_column=Column(String(255), nullable=False, unique=True))
+    hashed_password: str = Field(sa_column=Column(String(255), nullable=False))
+    full_name: str | None = Field(default=None, max_length=255)
+    # Roles: "superadmin", "tenant_admin", "tenant_member"
+    role: str = Field(default="tenant_admin", sa_column=Column(String(50), nullable=False))
+    tenant_id: int | None = Field(default=None, foreign_key="tenants.id", ondelete="CASCADE")
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+    tenant: Tenant | None = Relationship(back_populates="users")
+
+    def __str__(self) -> str:
+        return f"user:{self.email}#{self.id} role:{self.role}"
+
+
+# --- INVITATION ---
+class Invitation(SQLModel, table=True):
+    __tablename__ = "invitations"
+    id: int | None = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="tenants.id", ondelete="CASCADE")
+    email: str = Field(sa_column=Column(String(255), nullable=False))
+    token: str = Field(sa_column=Column(String(255), nullable=False, unique=True))
+    role: str = Field(default="tenant_member", sa_column=Column(String(50), nullable=False))
+    expires_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    accepted_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    created_by_id: int = Field(foreign_key="users.id")
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+
+    tenant: Tenant | None = Relationship(back_populates="invitations")
+
+    def __str__(self) -> str:
+        return f"invitation:{self.email} tenant:{self.tenant_id} role:{self.role}"
 
 
 # --- SUBSCRIPTION ---

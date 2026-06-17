@@ -3,7 +3,7 @@ name: infrastructure
 services:
   tunnel:
     image: cloudflare/cloudflared:latest
-    container_name: veridata_tunnel
+    container_name: veridata_cloudflare_tunnel
     restart: unless-stopped
     command: tunnel run
     environment:

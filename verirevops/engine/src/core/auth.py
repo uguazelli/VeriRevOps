@@ -1,46 +1,68 @@
 import os
-import secrets
-from typing import Annotated
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import APIKeyCookie
+import secrets as std_secrets
+from fastapi import Depends, HTTPException, Request, status
 
-security = APIKeyCookie(name="session_token", auto_error=False)
+from src.core.security import decode_token
 
-def get_current_username(request: Request):
-    # Check cookie first
-    token = request.cookies.get("session_token")
 
-    # Check Authorization header if no cookie
+def _extract_token(request: Request) -> str | None:
+    token = request.cookies.get("access_token")
     if not token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth.split(" ", 1)[1]
+    return token
 
+
+async def get_current_user(request: Request):
+    """Extract and validate the current user from JWT cookie or Bearer header.
+
+    Also supports legacy ADMIN_TOKEN env var for backward-compatible API clients.
+    """
+    token = _extract_token(request)
     if not token:
-        # Redirect logic handled in web routes or return None
         return None
 
-    # Simple token validation (In real app, use better session management)
-    # Here we just check if the token matches a secret "admin_token"
-    # For simplicity in this "no logic" refactor, we just check a static token
-    correct_token = os.getenv("ADMIN_TOKEN")
+    # Legacy ADMIN_TOKEN: treated as superadmin for backward compat
+    admin_token = os.getenv("ADMIN_TOKEN")
+    if admin_token and std_secrets.compare_digest(token, admin_token):
+        from src.core.models import User
+        return User(id=0, email="admin@system", role="superadmin", is_active=True, hashed_password="")
 
-    if not secrets.compare_digest(token, correct_token):
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "access":
         return None
 
-    return "admin"
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
 
-def require_auth(request: Request, username: Annotated[str | None, Depends(get_current_username)]):
-    if not username:
-        # Check if it's an API request or expects JSON
-        if request.url.path.startswith("/api") or "application/json" in request.headers.get("accept", "").lower():
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authenticated. Provide 'session_token' cookie or 'Authorization: Bearer <token>' header."
-            )
+    from src.modules.auth.service import get_user_by_id
+    return await get_user_by_id(int(user_id))
 
+
+def require_auth(request: Request, user=Depends(get_current_user)):
+    """Require any authenticated, active user. Redirects UI to /login, returns 401 for API."""
+    if not user or not user.is_active:
+        is_api = request.url.path.startswith("/api") or "application/json" in request.headers.get("accept", "")
+        if is_api:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             headers={"Location": "/login"},
         )
-    return username
+    return user
+
+
+def require_superadmin(user=Depends(require_auth)):
+    """Require superadmin role."""
+    if user.role != "superadmin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Superadmin access required")
+    return user
+
+
+def require_tenant_admin(user=Depends(require_auth)):
+    """Require tenant_admin or superadmin role."""
+    if user.role not in ("superadmin", "tenant_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user

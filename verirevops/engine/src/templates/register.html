@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VeriRag — Login</title>
+    <title>VeriRag — Create Account</title>
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <style>
@@ -14,7 +14,6 @@
             --border-color: #e2e8f0;
             --text-muted: #64748b;
             --danger-color: #ef4444;
-            --success-color: #16a34a;
         }
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -24,7 +23,9 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 80vh;
+            min-height: 90vh;
+            padding: 2rem 1rem;
+            box-sizing: border-box;
         }
         .card {
             background: white;
@@ -33,72 +34,70 @@
             padding: 2rem;
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
             width: 100%;
-            max-width: 400px;
-            border-top: 6px solid var(--text-color);
+            max-width: 440px;
+            border-top: 6px solid var(--primary-color);
         }
         .form-control { display: flex; flex-direction: column; gap: 0.5rem; }
         label { font-size: 0.875rem; font-weight: 600; }
         input {
-            padding: 0.75rem;
-            border-radius: 0.5rem;
-            border: 1px solid var(--border-color);
-            background-color: #f8fafc;
-            color: var(--text-color);
-            font-size: 0.95rem;
+            padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color);
+            background-color: #f8fafc; color: var(--text-color); font-size: 0.95rem;
         }
         input:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
         .btn {
             display: inline-flex; align-items: center; justify-content: center;
             padding: 0.75rem; border-radius: 0.5rem; font-weight: 500; cursor: pointer;
-            border: none; background-color: var(--text-color); color: white; font-size: 1rem; margin-top: 0.5rem;
-            width: 100%;
+            border: none; background-color: var(--primary-color); color: white; font-size: 1rem;
+            margin-top: 0.5rem; width: 100%;
         }
         .btn:hover { opacity: 0.9; }
+        .hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem; }
         .alert-error {
             color: var(--danger-color); text-align: center; background: #fee2e2;
-            padding: 0.5rem; border-radius: 0.5rem;
-        }
-        .alert-success {
-            color: var(--success-color); text-align: center; background: #dcfce7;
             padding: 0.5rem; border-radius: 0.5rem;
         }
     </style>
 </head>
 <body>
     <div class="card">
-        <div style="text-align:center; margin-bottom:2rem;">
-            <img src="/static/logo.png" alt="VeriData" style="height:64px; width:auto; opacity:0.9;">
+        <div style="text-align:center; margin-bottom:1.5rem;">
+            <img src="/static/logo.png" alt="VeriData" style="height:52px; width:auto; opacity:0.9;">
         </div>
 
-        <div style="background-color:#f1f5f9; padding:0.5rem; border-radius:0.5rem; text-align:center; margin-bottom:2rem;">
-            <h1 style="margin:0; font-size:1.25rem;">Sign In</h1>
-            <p style="margin:0; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-muted); font-weight:600; margin-top:0.25rem;">
-                VeriRag Platform
-            </p>
-        </div>
+        <h1 style="margin:0 0 0.25rem; font-size:1.4rem;">Create your workspace</h1>
+        <p style="margin:0 0 1.5rem; font-size:0.875rem; color:var(--text-muted);">
+            Start your 30-day free trial — no credit card required.
+        </p>
 
-        {% if invited %}
-        <p class="alert-success" style="margin-bottom:1rem;">Account created! Please sign in.</p>
-        {% endif %}
-
-        <form action="/login" method="post" style="display:flex; flex-direction:column; gap:1.25rem;">
+        <form action="/register" method="post" style="display:flex; flex-direction:column; gap:1.1rem;">
             <div class="form-control">
-                <label>Email</label>
-                <input type="email" name="email" required autofocus autocomplete="email">
+                <label>Full Name</label>
+                <input type="text" name="full_name" placeholder="Jane Smith" autocomplete="name">
             </div>
             <div class="form-control">
-                <label>Password</label>
-                <input type="password" name="password" required autocomplete="current-password">
+                <label>Work Email <span style="color:red">*</span></label>
+                <input type="email" name="email" required autocomplete="email">
             </div>
-            <button type="submit" class="btn">Sign In</button>
+            <div class="form-control">
+                <label>Password <span style="color:red">*</span></label>
+                <input type="password" name="password" required minlength="8" autocomplete="new-password">
+                <span class="hint">Minimum 8 characters</span>
+            </div>
+            <div class="form-control">
+                <label>Workspace Name <span style="color:red">*</span></label>
+                <input type="text" name="tenant_slug" required placeholder="my-company"
+                    pattern="[a-z0-9\-]+" title="Lowercase letters, numbers and hyphens only">
+                <span class="hint">Lowercase letters, numbers and hyphens only (e.g. acme-corp)</span>
+            </div>
+            <button type="submit" class="btn">Create Workspace</button>
             {% if error %}
             <p class="alert-error">{{ error }}</p>
             {% endif %}
         </form>
 
         <div style="margin-top:1.5rem; text-align:center; font-size:0.875rem; color:var(--text-muted);">
-            Don't have an account?
-            <a href="/register" style="color:var(--primary-color); font-weight:600;">Create one</a>
+            Already have an account?
+            <a href="/login" style="color:var(--primary-color); font-weight:600;">Sign in</a>
         </div>
 
         <div style="margin-top:2rem; padding-top:1.5rem; border-top:1px solid var(--border-color); text-align:center; font-size:0.85rem; color:var(--text-muted);">
