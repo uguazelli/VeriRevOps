@@ -43,18 +43,22 @@ def _bootstrap_superadmin():
     try:
         with psycopg.connect(conninfo=db_url_sync) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM users WHERE role = 'superadmin'")
-                count = cur.fetchone()[0]
-                if count == 0:
-                    hashed = hash_password(password)
+                cur.execute("SELECT id FROM users WHERE role = 'superadmin' LIMIT 1")
+                row = cur.fetchone()
+                hashed = hash_password(password)
+                if row is None:
                     cur.execute(
                         "INSERT INTO users (email, hashed_password, role, is_active) VALUES (%s, %s, %s, %s)",
-                        [email, hashed, "superadmin", True],
+                        [email.lower(), hashed, "superadmin", True],
                     )
-                    conn.commit()
                     logger.info("Superadmin created: %s", email)
                 else:
-                    logger.info("Superadmin already exists, skipping bootstrap")
+                    cur.execute(
+                        "UPDATE users SET email = %s, hashed_password = %s WHERE id = %s",
+                        [email.lower(), hashed, row[0]],
+                    )
+                    logger.info("Superadmin credentials synced: %s", email)
+                conn.commit()
     except Exception as exc:
         logger.error("Superadmin bootstrap failed: %s", exc)
 
